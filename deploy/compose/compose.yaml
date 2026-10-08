@@ -1,0 +1,37 @@
+name: datepipette
+
+services:
+  metadata-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DATEPIPETTE_POSTGRES_DB:-datepipette}
+      POSTGRES_USER: ${DATEPIPETTE_POSTGRES_USER:-datepipette}
+      POSTGRES_PASSWORD: ${DATEPIPETTE_POSTGRES_PASSWORD:-datepipette_dev_only}
+    ports:
+      - "${DATEPIPETTE_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - metadata-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${DATEPIPETTE_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  metadata-data:
+  redis-data:
