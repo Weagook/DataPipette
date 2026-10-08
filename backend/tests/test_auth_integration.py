@@ -12,7 +12,10 @@ from redis.asyncio import Redis
 from sqlalchemy import select, text, update
 
 from datepipette import cli
-from datepipette.api.routes.auth import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
+from datepipette.api.dependencies.authentication import (
+    CSRF_COOKIE_NAME,
+    SESSION_COOKIE_NAME,
+)
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.config import Settings
 from datepipette.infrastructure.database import create_database_engine, create_session_factory

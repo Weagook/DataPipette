@@ -19,6 +19,9 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/auth/sessions
 /api/v1/auth/me
 /api/v1/auth/sessions/current
+/api/v1/users
+/api/v1/users/{user_id}
+/api/v1/users/{user_id}/sessions
 /api/v1/connections
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
@@ -45,6 +48,18 @@ Final endpoint names must be tested for consistency before implementation. Actio
 - Invalid and unknown credentials return the same public error. Redis limits attempts by normalized account and client address.
 
 The durable rationale and consequences are recorded in [ADR-0005](adr/0005-server-side-browser-sessions.md).
+
+## Local user administration
+
+- User-management endpoints require an active administrator session.
+- `POST /api/v1/users` creates an active local account. Passwords are write-only and never appear in a response.
+- `GET /api/v1/users` uses bounded cursor pagination; `GET /api/v1/users/{user_id}` returns one account.
+- `PATCH /api/v1/users/{user_id}` changes display name, system role, or active state. Email is immutable in MVP.
+- `DELETE /api/v1/users/{user_id}/sessions` revokes every active browser session and reports the number revoked without disabling the account.
+- Disabling an account revokes its sessions atomically. The API rejects an operation that would remove the last active administrator.
+- All state-changing operations require the session-bound CSRF cookie/header pair.
+
+The lifecycle rationale is recorded in [ADR-0006](adr/0006-local-account-lifecycle.md).
 
 ## Success responses
 

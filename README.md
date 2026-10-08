@@ -4,7 +4,7 @@
 
 DatePipette is an API-first, snapshot-based business intelligence platform for PostgreSQL. It is designed to work both as a standalone analytics application and as a headless BI backend embedded into other products.
 
-> **Project status:** pre-alpha. The backend foundation and first local-authentication slice are implemented; the analytical domain remains under active development.
+> **Project status:** pre-alpha. The backend foundation, local authentication, and administrator-managed local accounts are implemented; the analytical domain remains under active development.
 
 ## Why DatePipette?
 

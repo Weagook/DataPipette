@@ -46,9 +46,12 @@ The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 - `POST /api/v1/auth/sessions` for browser sign-in;
 - `GET /api/v1/auth/me` for the current local user;
 - `DELETE /api/v1/auth/sessions/current` for sign-out;
+- `GET /api/v1/users` for administrator-only local account management;
 - `/docs` and `/openapi.json` for the development API contract.
 
 Browser authentication uses an HTTP-only session cookie. State-changing requests also send the readable `datepipette_csrf` cookie value in the `X-CSRF-Token` header. Production forces secure cookies even if local configuration attempts to disable them.
+
+The bootstrap administrator creates further local accounts through `POST /api/v1/users`. User creation and mutations are administrator-only and CSRF-protected. DatePipette prevents supported API operations from disabling or demoting the final active administrator.
 
 Stop local dependencies without deleting their volumes:
 
