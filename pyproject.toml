@@ -1,15 +1,40 @@
 [project]
-name = "datepipette"
+name = "datepipette-workspace"
 version = "0.1.0"
-description = "API-first analytics platform"
+description = "DatePipette monorepo workspace"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 dependencies = []
 
-[project.scripts]
-datepipette = "datepipette:main"
+[tool.uv.workspace]
+members = ["backend"]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["backend/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["datepipette"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["backend/src", "backend/tests"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+addopts = ["--strict-config", "--strict-markers", "--cov=datepipette", "--cov-report=term-missing", "--cov-fail-under=90"]
+
+[tool.coverage.run]
+branch = true
+source = ["datepipette"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
