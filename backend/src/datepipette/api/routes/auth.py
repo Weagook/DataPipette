@@ -3,26 +3,27 @@
 from datetime import datetime
 from typing import Annotated, cast
 
-from fastapi import APIRouter, Header, Request, Response, Security, status
-from fastapi.security import APIKeyCookie
+from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, SecretStr
 
+from datepipette.api.dependencies.authentication import (
+    CSRF_COOKIE_NAME,
+    SESSION_COOKIE_NAME,
+    CsrfSession,
+    CurrentSession,
+    authentication_service,
+    request_id,
+)
 from datepipette.api.problems import ApiProblem, ProblemDetails
 from datepipette.application.auth_service import (
     AuthenticationService,
     InvalidCredentialsError,
-    InvalidCsrfError,
-    InvalidSessionError,
     RateLimitedError,
 )
 from datepipette.config import Settings
-from datepipette.domain.identity import AuthenticatedSession, User
-from datepipette.logging import request_id_context
+from datepipette.domain.identity import User
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-SESSION_COOKIE_NAME = "datepipette_session"
-CSRF_COOKIE_NAME = "datepipette_csrf"
-session_cookie_scheme = APIKeyCookie(name=SESSION_COOKIE_NAME, auto_error=False)
 
 
 class LoginRequest(BaseModel):
@@ -52,34 +53,11 @@ def _user_response(user: User) -> UserResponse:
 
 
 def _service(request: Request) -> AuthenticationService:
-    return cast(AuthenticationService, request.app.state.auth_service)
+    return authentication_service(request)
 
 
 def _settings(request: Request) -> Settings:
     return cast(Settings, request.app.state.settings)
-
-
-def _request_id() -> str:
-    return request_id_context.get() or "unavailable"
-
-
-def _unauthorized() -> ApiProblem:
-    return ApiProblem(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        code="authentication_required",
-        title="Authentication required",
-        detail="A valid browser session is required.",
-    )
-
-
-async def _current_session(
-    request: Request,
-    session_token: str | None,
-) -> AuthenticatedSession:
-    try:
-        return await _service(request).authenticate(session_token)
-    except InvalidSessionError as exc:
-        raise _unauthorized() from exc
 
 
 @router.post(
@@ -101,7 +79,7 @@ async def create_session(
             email=str(payload.email),
             password=payload.password.get_secret_value(),
             client_address=client_address,
-            request_id=_request_id(),
+            request_id=request_id(),
         )
     except InvalidCredentialsError as exc:
         raise ApiProblem(
@@ -150,9 +128,8 @@ async def create_session(
 async def read_current_user(
     request: Request,
     response: Response,
-    session_token: Annotated[str | None, Security(session_cookie_scheme)],
+    session: CurrentSession,
 ) -> UserResponse:
-    session = await _current_session(request, session_token)
     response.headers["Cache-Control"] = "no-store"
     return _user_response(session.user)
 
@@ -168,22 +145,10 @@ async def read_current_user(
 )
 async def delete_current_session(
     request: Request,
-    session_token: Annotated[str | None, Security(session_cookie_scheme)],
-    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    session: CsrfSession,
 ) -> Response:
     settings = _settings(request)
-    csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
-    session = await _current_session(request, session_token)
-    try:
-        _service(request).verify_csrf(session, csrf_cookie, csrf_header)
-    except InvalidCsrfError as exc:
-        raise ApiProblem(
-            status_code=status.HTTP_403_FORBIDDEN,
-            code="csrf_validation_failed",
-            title="CSRF validation failed",
-            detail="A matching CSRF cookie and header are required.",
-        ) from exc
-    await _service(request).logout(session, _request_id())
+    await _service(request).logout(session, request_id())
 
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(

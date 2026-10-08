@@ -18,7 +18,7 @@ from datepipette.domain.identity import (
 from datepipette.infrastructure.models import AuditEventModel, BrowserSessionModel, UserModel
 
 
-def _to_user(model: UserModel) -> User:
+def to_user(model: UserModel) -> User:
     return User(
         id=model.id,
         email=model.email,
@@ -42,7 +42,7 @@ class SqlAlchemyAuthenticationStore:
             )
         if model is None:
             return None
-        return UserCredentials(user=_to_user(model), password_hash=model.password_hash)
+        return UserCredentials(user=to_user(model), password_hash=model.password_hash)
 
     async def create_first_admin(
         self,
@@ -87,7 +87,7 @@ class SqlAlchemyAuthenticationStore:
                 )
             )
             await session.flush()
-            return _to_user(user_model)
+            return to_user(user_model)
 
     async def create_login_session(
         self,
@@ -171,7 +171,7 @@ class SqlAlchemyAuthenticationStore:
         session_model, user_model = row
         return AuthenticatedSession(
             id=session_model.id,
-            user=_to_user(user_model),
+            user=to_user(user_model),
             csrf_token_hash=session_model.csrf_token_hash,
             expires_at=session_model.expires_at,
             revoked_at=session_model.revoked_at,
