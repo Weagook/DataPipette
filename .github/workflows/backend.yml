@@ -1,0 +1,55 @@
+name: Backend
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/backend.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version-file: .python-version
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --all-packages --all-groups
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Check formatting
+        run: uv run --package datepipette ruff format --check backend
+
+      - name: Lint
+        run: uv run --package datepipette ruff check backend
+
+      - name: Type check
+        run: uv run --package datepipette mypy
+
+      - name: Test
+        run: uv run --package datepipette pytest
+
+      - name: Check migration graph
+        run: uv run --package datepipette alembic -c backend/alembic.ini heads

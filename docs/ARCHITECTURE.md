@@ -42,7 +42,7 @@ External applications ----------+---- HTTPS / REST
 Snapshot reads: API or worker -> DuckDB -> Parquet storage
 ```
 
-## Planned repository layout
+## Repository layout
 
 ```text
 DatePipette/
@@ -50,19 +50,16 @@ DatePipette/
 │   ├── src/datepipette/
 │   │   ├── api/
 │   │   ├── application/
-│   │   ├── domain/
 │   │   ├── infrastructure/
-│   │   └── workers/
 │   ├── migrations/
-│   └── tests/
-├── frontend/
-│   ├── src/
 │   └── tests/
 ├── deploy/
 │   └── compose/
 ├── docs/
-└── tools/
+└── pyproject.toml
 ```
+
+The current foundation creates directories only when they own working code. `domain/`, `workers/`, `frontend/`, and `tools/` will be added with the first feature that needs them rather than as empty placeholders.
 
 Dependencies point inward: infrastructure and API adapters may depend on application and domain interfaces; the domain must not depend on FastAPI, Celery, SQLAlchemy, Redis, S3, or DuckDB.
 
