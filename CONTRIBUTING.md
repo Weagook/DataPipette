@@ -12,7 +12,56 @@ Thank you for your interest in DatePipette. The project is pre-alpha and is esta
 
 ## Development setup
 
-The repository has not yet reached its runnable monorepo scaffold. Exact setup, test, lint, and migration commands will be added here as the first implementation milestone lands. Documentation-only contributors do not need to install runtime dependencies.
+Requirements:
+
+- uv with Python 3.12 support;
+- Docker with Compose v2 for PostgreSQL and Redis.
+
+Install the locked workspace, start local dependencies, and apply metadata migrations:
+
+```bash
+uv sync --locked --all-packages --all-groups
+docker compose -f deploy/compose/compose.yaml up -d --wait
+uv run --package datepipette alembic -c backend/alembic.ini upgrade head
+```
+
+Start the development API:
+
+```bash
+uv run --package datepipette datepipette
+```
+
+The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
+
+- `GET /api/v1/health/live` for process liveness;
+- `GET /api/v1/health/ready` for PostgreSQL and Redis readiness;
+- `/docs` and `/openapi.json` for the development API contract.
+
+Stop local dependencies without deleting their volumes:
+
+```bash
+docker compose -f deploy/compose/compose.yaml stop
+```
+
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, and `READINESS_TIMEOUT_SECONDS`.
+
+API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
+
+## Verification
+
+Run the same essential checks as CI from the repository root:
+
+```bash
+uv lock --check
+uv run --package datepipette ruff format --check backend
+uv run --package datepipette ruff check backend
+uv run --package datepipette mypy
+uv run --package datepipette pytest
+uv run --package datepipette alembic -c backend/alembic.ini heads
+docker compose -f deploy/compose/compose.yaml config --quiet
+```
+
+`pytest` enforces at least 90% backend coverage. Keep the lockfile synchronized whenever project dependencies change.
 
 ## Change expectations
 
