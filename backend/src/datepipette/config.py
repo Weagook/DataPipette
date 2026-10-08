@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, ge=1, le=65535)
     docs_enabled: bool | None = None
     readiness_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+    session_ttl_seconds: int = Field(default=43_200, ge=300, le=604_800)
+    session_cookie_secure: bool | None = None
+    login_rate_limit_attempts: int = Field(default=5, ge=1, le=100)
+    login_rate_limit_window_seconds: int = Field(default=900, ge=60, le=86_400)
     metadata_database_url: SecretStr = SecretStr(
         "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette"
     )
@@ -35,6 +39,14 @@ class Settings(BaseSettings):
         if self.docs_enabled is not None:
             return self.docs_enabled
         return self.environment == "development"
+
+    @property
+    def effective_session_cookie_secure(self) -> bool:
+        """Never allow insecure browser-session cookies in production."""
+
+        if self.environment == "production":
+            return True
+        return bool(self.session_cookie_secure)
 
 
 @lru_cache

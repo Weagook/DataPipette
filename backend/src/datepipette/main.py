@@ -5,13 +5,22 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from datepipette import __version__
 from datepipette.api.middleware import RequestContextMiddleware
+from datepipette.api.problems import (
+    ApiProblem,
+    api_problem_handler,
+    validation_problem_handler,
+)
 from datepipette.api.router import api_v1_router
+from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.health import ReadinessProbe
 from datepipette.config import Settings, get_settings
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
+from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
+from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.runtime import create_runtime_resources
 from datepipette.logging import configure_logging
 
@@ -19,6 +28,7 @@ from datepipette.logging import configure_logging
 def create_app(
     settings: Settings | None = None,
     readiness_probe: ReadinessProbe | None = None,
+    auth_service: AuthenticationService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -30,6 +40,8 @@ def create_app(
         app.state.settings = resolved_settings
         if readiness_probe is not None:
             app.state.readiness_probe = readiness_probe
+            if auth_service is not None:
+                app.state.auth_service = auth_service
             yield
             return
 
@@ -38,6 +50,15 @@ def create_app(
             database_engine=resources.database_engine,
             redis_client=resources.redis_client,
             timeout_seconds=resolved_settings.readiness_timeout_seconds,
+        )
+        app.state.auth_service = auth_service or await AuthenticationService.create(
+            store=SqlAlchemyAuthenticationStore(resources.session_factory),
+            rate_limiter=RedisLoginRateLimiter(
+                resources.redis_client,
+                resolved_settings.login_rate_limit_attempts,
+                resolved_settings.login_rate_limit_window_seconds,
+            ),
+            session_ttl_seconds=resolved_settings.session_ttl_seconds,
         )
         try:
             yield
@@ -55,6 +76,8 @@ def create_app(
         lifespan=lifespan,
     )
     application.add_middleware(RequestContextMiddleware)
+    application.add_exception_handler(ApiProblem, api_problem_handler)
+    application.add_exception_handler(RequestValidationError, validation_problem_handler)
     application.include_router(api_v1_router)
     return application
 

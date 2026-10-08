@@ -19,3 +19,13 @@ def test_api_docs_default_depends_on_environment() -> None:
     assert Settings(environment="development").api_docs_enabled is True
     assert Settings(environment="production").api_docs_enabled is False
     assert Settings(environment="production", docs_enabled=True).api_docs_enabled is True
+
+
+def test_production_always_uses_secure_session_cookies() -> None:
+    assert Settings(environment="development").effective_session_cookie_secure is False
+    assert Settings(
+        environment="development", session_cookie_secure=True
+    ).effective_session_cookie_secure
+    assert Settings(
+        environment="production", session_cookie_secure=False
+    ).effective_session_cookie_secure

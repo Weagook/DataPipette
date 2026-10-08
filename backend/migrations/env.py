@@ -8,7 +8,10 @@ from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from datepipette.config import Settings
+from datepipette.infrastructure import models as metadata_models
 from datepipette.infrastructure.database import metadata
+
+assert metadata_models.UserModel.__tablename__ == "users"
 
 config = context.config
 if config.config_file_name is not None:

@@ -4,7 +4,7 @@
 
 DatePipette is an API-first, snapshot-based business intelligence platform for PostgreSQL. It is designed to work both as a standalone analytics application and as a headless BI backend embedded into other products.
 
-> **Project status:** pre-alpha. The product contract and architecture are documented, and the first backend foundation is under active development.
+> **Project status:** pre-alpha. The backend foundation and first local-authentication slice are implemented; the analytical domain remains under active development.
 
 ## Why DatePipette?
 
@@ -82,6 +82,9 @@ To run the current backend foundation:
 uv sync --locked --all-packages --all-groups
 docker compose -f deploy/compose/compose.yaml up -d --wait
 uv run --package datepipette alembic -c backend/alembic.ini upgrade head
+uv run --package datepipette datepipette-admin bootstrap-admin \
+  --email admin@example.com \
+  --display-name "Local administrator"
 uv run --package datepipette datepipette
 ```
 

@@ -15,6 +15,7 @@ This directory is the source of truth for DatePipette's product and technical de
 9. [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — decisions intentionally left unresolved.
 10. [GIT_WORKFLOW.md](GIT_WORKFLOW.md) — branch, commit, review, and local planning conventions.
 11. [adr/](adr/README.md) — durable architecture decisions and their consequences.
+12. [openapi.json](openapi.json) — generated, reviewable API contract verified in CI.
 
 ## Documentation rules
 

@@ -16,6 +16,9 @@ The DatePipette backend is a public product surface. The official frontend and e
 ## Resource examples
 
 ```text
+/api/v1/auth/sessions
+/api/v1/auth/me
+/api/v1/auth/sessions/current
 /api/v1/connections
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
@@ -32,10 +35,16 @@ Final endpoint names must be tested for consistency before implementation. Actio
 
 ## Authentication
 
-- Browser clients use secure HTTP-only sessions.
+- Browser clients create opaque server-side sessions with `POST /api/v1/auth/sessions`.
+- Session and CSRF token plaintext exists only in the browser; metadata PostgreSQL stores SHA-256 digests.
+- The `datepipette_session` cookie is HTTP-only and the `datepipette_csrf` cookie is readable by the official frontend. Both are `SameSite=Strict`; production always adds `Secure`.
+- State-changing requests copy the CSRF cookie into `X-CSRF-Token`. The API verifies the cookie, header, and digest bound to the authenticated session.
+- `GET /api/v1/auth/me` resolves the current principal. `DELETE /api/v1/auth/sessions/current` revokes the session.
 - External systems use `Authorization: Bearer <token>`.
 - Authentication identifies a principal; authorization still evaluates role, token scope, ACL, and request context.
-- Cookie-authenticated state-changing requests require CSRF protection.
+- Invalid and unknown credentials return the same public error. Redis limits attempts by normalized account and client address.
+
+The durable rationale and consequences are recorded in [ADR-0005](adr/0005-server-side-browser-sessions.md).
 
 ## Success responses
 
