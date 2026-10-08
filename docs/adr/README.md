@@ -32,3 +32,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0002](0002-single-company-deployment.md): Single-company deployment model
 - [ADR-0003](0003-parquet-snapshot-query-model.md): Parquet snapshot query model
 - [ADR-0004](0004-safe-dataset-publication.md): Draft and atomic dataset publication
+- [ADR-0005](0005-server-side-browser-sessions.md): Server-side opaque browser sessions
