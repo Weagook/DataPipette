@@ -1,0 +1,118 @@
+# Security model
+
+## Scope
+
+This document describes the intended security architecture. Vulnerability reporting instructions are in the repository root [SECURITY.md](../SECURITY.md).
+
+## Trust boundaries
+
+```text
+Browser / external client
+        | untrusted input
+        v
+DatePipette API
+        | authenticated and authorized operations
+        +--> Metadata PostgreSQL
+        +--> Redis
+        +--> Private S3-compatible storage
+        +--> Celery workers
+                 |
+                 v
+          Source PostgreSQL
+```
+
+Source databases, SQL text, filter values, filenames, object metadata, API clients, and browser input are all treated as untrusted.
+
+## Authentication
+
+### Human users
+
+- MVP uses local accounts.
+- Passwords are stored using a modern memory-hard password hash with per-password salt.
+- Browser sessions use `Secure`, `HttpOnly`, and appropriate `SameSite` cookies in production.
+- State-changing cookie requests require CSRF protection.
+- Login endpoints require brute-force controls and audit both success and failure without recording passwords.
+- OIDC is deferred but identity-provider linkage must remain separable from domain authorization.
+
+### Service accounts
+
+- Each external integration uses a distinct service account.
+- Token plaintext is shown once and only a secure hash and non-secret identifier are retained.
+- Tokens may be expiring or non-expiring, are revocable, and support overlapping rotation.
+- Token scopes may only narrow service-account permissions.
+- Logs and traces must redact authorization headers and token-like values.
+
+## Authorization
+
+Authorization combines:
+
+1. principal status;
+2. system role;
+3. token scopes when applicable;
+4. direct and group ACL grants;
+5. resource state; and
+6. request context.
+
+New resources are private to their owner and administrators. Grants are additive in MVP. Direct dataset access is distinct from dashboard-context access to aggregated chart results.
+
+A viewer with dashboard access may receive chart results but must not use that route to browse dataset rows, create exports, infer unrestricted schema metadata, or execute arbitrary chart definitions.
+
+## PostgreSQL source safety
+
+- Administrators should configure a dedicated read-only PostgreSQL role.
+- Source operations use read-only transactions, statement timeouts, cancellation, and bounded fetch sizes.
+- Visual queries are generated only from validated structured definitions.
+- SQL values are parameterized; source identifiers are resolved from inspected and authorized metadata.
+- Advanced SQL accepts one `SELECT` or `WITH` statement and rejects multiple statements, DDL, and DML.
+- SQL parsing is defense in depth, not the primary security boundary. Database privileges and read-only transactions remain mandatory.
+- Schema/table allowlists are enforced during discovery, validation, preview, and refresh.
+
+## Connection secrets
+
+- Passwords and CA material are encrypted at rest using an installation key supplied outside the metadata database.
+- Secret values are write-only through the API.
+- Connection test errors are redacted before reaching users or logs.
+- Key storage, backup, and rotation procedures must be documented before production readiness.
+
+## Snapshot and query safety
+
+- Snapshots and exports are private storage objects.
+- Object keys are generated, not derived directly from user input.
+- Publication is atomic at the metadata reference level.
+- DuckDB queries use validated schema identifiers and bound filter values.
+- Query time, result rows, bytes, memory, and concurrency are limited.
+- Snapshot access is authorized before storage is touched.
+
+## Export safety
+
+- Export generation requires direct dataset export permission.
+- Export ownership and administrator access are checked before issuing a signed URL.
+- Signed URLs expire after five minutes; files expire after 24 hours.
+- Storage buckets disallow public access.
+- CSV generation must mitigate formula injection for values beginning with spreadsheet control characters.
+- XLSX generation must preserve types and must not embed executable macros.
+
+## Audit
+
+Audit events are stored separately from application logs in an append-only application table. The application exposes no mutation API for existing events. Events redact secrets and business payloads. This is not proof against a metadata-database administrator; external WORM or SIEM export is a future hardening option.
+
+## Network and deployment
+
+- Production endpoints require TLS at the ingress or application boundary.
+- Metadata PostgreSQL, Redis, and object storage must not be publicly reachable.
+- CORS defaults to the official frontend origin and is explicitly configured for integrations.
+- Debug mode and interactive API documentation require deliberate production configuration.
+- Containers run as non-root where supported and receive only required filesystem access.
+
+## Security verification
+
+Security-sensitive changes require tests for unauthorized access, cross-resource access, token expiry/revocation, scope narrowing, dashboard indirect access, SQL restrictions, secret redaction, export ownership, and stale session behavior.
+
+## Deferred hardening
+
+- Corporate OIDC/SAML
+- External immutable audit sink
+- PostgreSQL client certificates and cloud IAM
+- Per-installation key rotation workflow
+- Fine-grained rate policy by endpoint and integration tier
+- Automated security scanning policy beyond baseline dependency and static checks
