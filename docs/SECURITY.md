@@ -28,11 +28,15 @@ Source databases, SQL text, filter values, filenames, object metadata, API clien
 ### Human users
 
 - MVP uses local accounts.
-- Passwords are stored using a modern memory-hard password hash with per-password salt.
-- Browser sessions use `Secure`, `HttpOnly`, and appropriate `SameSite` cookies in production.
-- State-changing cookie requests require CSRF protection.
-- Login endpoints require brute-force controls and audit both success and failure without recording passwords.
+- Passwords are stored with Argon2id and a per-password salt.
+- Browser sessions are opaque, server-side, revocable, and stored only as SHA-256 token digests.
+- Session cookies use `HttpOnly` and `SameSite=Strict`; production forces `Secure`.
+- State-changing cookie requests use a session-bound double-submit CSRF token.
+- Redis limits login attempts independently by normalized account and client address.
+- Successful and failed login activity is audited without recording passwords or token plaintext.
 - OIDC is deferred but identity-provider linkage must remain separable from domain authorization.
+
+See [ADR-0005](adr/0005-server-side-browser-sessions.md) for the implemented browser-session design.
 
 ### Service accounts
 

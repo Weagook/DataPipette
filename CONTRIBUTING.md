@@ -25,6 +25,14 @@ docker compose -f deploy/compose/compose.yaml up -d --wait
 uv run --package datepipette alembic -c backend/alembic.ini upgrade head
 ```
 
+Create the first local administrator. The command prompts for the password twice and refuses to create another bootstrap administrator after the first account exists:
+
+```bash
+uv run --package datepipette datepipette-admin bootstrap-admin \
+  --email admin@example.com \
+  --display-name "Local administrator"
+```
+
 Start the development API:
 
 ```bash
@@ -35,7 +43,12 @@ The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 
 - `GET /api/v1/health/live` for process liveness;
 - `GET /api/v1/health/ready` for PostgreSQL and Redis readiness;
+- `POST /api/v1/auth/sessions` for browser sign-in;
+- `GET /api/v1/auth/me` for the current local user;
+- `DELETE /api/v1/auth/sessions/current` for sign-out;
 - `/docs` and `/openapi.json` for the development API contract.
+
+Browser authentication uses an HTTP-only session cookie. State-changing requests also send the readable `datepipette_csrf` cookie value in the `X-CSRF-Token` header. Production forces secure cookies even if local configuration attempts to disable them.
 
 Stop local dependencies without deleting their volumes:
 
@@ -43,7 +56,7 @@ Stop local dependencies without deleting their volumes:
 docker compose -f deploy/compose/compose.yaml stop
 ```
 
-Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, and `READINESS_TIMEOUT_SECONDS`.
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, and `LOGIN_RATE_LIMIT_WINDOW_SECONDS`.
 
 API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
 
@@ -58,6 +71,9 @@ uv run --package datepipette ruff check backend
 uv run --package datepipette mypy
 uv run --package datepipette pytest
 uv run --package datepipette alembic -c backend/alembic.ini heads
+uv run --package datepipette alembic -c backend/alembic.ini check
+uv run --package datepipette python tools/export_openapi.py
+git diff --exit-code -- docs/openapi.json
 docker compose -f deploy/compose/compose.yaml config --quiet
 ```
 
@@ -67,7 +83,7 @@ docker compose -f deploy/compose/compose.yaml config --quiet
 
 - Keep pull requests focused on one coherent outcome.
 - Add tests that fail before and pass after a behavioral change.
-- Update OpenAPI and generated clients together once generation is available.
+- Regenerate and commit `docs/openapi.json` whenever the public API changes.
 - Include database migrations for metadata schema changes.
 - Explain security, compatibility, and operational consequences.
 - Update affected product, architecture, API, or security documentation.

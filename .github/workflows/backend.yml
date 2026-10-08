@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - "docs/openapi.json"
       - "pyproject.toml"
+      - "tools/export_openapi.py"
       - "uv.lock"
       - ".python-version"
       - ".github/workflows/backend.yml"
@@ -12,7 +14,9 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "docs/openapi.json"
       - "pyproject.toml"
+      - "tools/export_openapi.py"
       - "uv.lock"
       - ".python-version"
       - ".github/workflows/backend.yml"
@@ -23,6 +27,29 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: datepipette
+          POSTGRES_USER: datepipette
+          POSTGRES_PASSWORD: datepipette_dev_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U datepipette -d datepipette"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,8 +75,19 @@ jobs:
       - name: Type check
         run: uv run --package datepipette mypy
 
+      - name: Apply migrations
+        run: uv run --package datepipette alembic -c backend/alembic.ini upgrade head
+
+      - name: Check migration drift
+        run: uv run --package datepipette alembic -c backend/alembic.ini check
+
       - name: Test
         run: uv run --package datepipette pytest
 
       - name: Check migration graph
         run: uv run --package datepipette alembic -c backend/alembic.ini heads
+
+      - name: Check OpenAPI contract drift
+        run: |
+          uv run --package datepipette python tools/export_openapi.py
+          git diff --exit-code -- docs/openapi.json
