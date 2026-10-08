@@ -34,9 +34,8 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## Security and operations
 
-- Choose the password hashing implementation and concrete parameters.
 - Define installation-key storage, backup, and rotation.
-- Define account recovery and initial administrator bootstrap.
+- Define account recovery beyond the implemented first-administrator bootstrap.
 - Define metadata PostgreSQL backup and disaster-recovery objectives.
 - Choose supported S3 server-side encryption modes.
 - Publish the private vulnerability-reporting contact before the first release.

@@ -17,7 +17,7 @@ Outcome: contributors can understand, run, verify, and safely change a small bac
 
 Outcome: an administrator connects PostgreSQL and an analyst publishes and browses one private single-table snapshot.
 
-- Bootstrap administrator and local authentication
+- Bootstrap administrator, local authentication, and administrator-managed local accounts
 - Create encrypted PostgreSQL connections and connection tests
 - Inspect schemas, tables, columns, and keys
 - Define a single-table visual dataset draft

@@ -34,9 +34,12 @@ Source databases, SQL text, filter values, filenames, object metadata, API clien
 - State-changing cookie requests use a session-bound double-submit CSRF token.
 - Redis limits login attempts independently by normalized account and client address.
 - Successful and failed login activity is audited without recording passwords or token plaintext.
+- User administration requires an active administrator session and CSRF validation for mutations.
+- Disabling an account atomically revokes its sessions; supported APIs preserve at least one active administrator.
+- Local accounts are disabled rather than deleted while ownership-transfer rules remain unresolved.
 - OIDC is deferred but identity-provider linkage must remain separable from domain authorization.
 
-See [ADR-0005](adr/0005-server-side-browser-sessions.md) for the implemented browser-session design.
+See [ADR-0005](adr/0005-server-side-browser-sessions.md) for the implemented browser-session design and [ADR-0006](adr/0006-local-account-lifecycle.md) for account lifecycle rules.
 
 ### Service accounts
 
