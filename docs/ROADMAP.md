@@ -36,6 +36,10 @@ Outcome: teams can safely build and share production-shaped datasets.
 - S3/MinIO result storage
 - Schedules, coalesced refresh, cancellation, retries, and cleanup
 - Draft/published versions, schema comparison, and impact analysis
+- Query Safety Advisor based on non-executing PostgreSQL `EXPLAIN (FORMAT JSON)`
+- Explainable warnings for large scans, missing or unsuitable indexes, expensive joins/sorts, stale statistics, and oversized results
+- Administrator policies that warn or block by estimated rows, planner cost, joins, timeout, result size, and concurrency, with audited privileged overrides
+- Read-only index/query recommendations and estimate-versus-actual execution metrics; DatePipette never applies source DDL
 - Audit events and administrator audit UI
 - Performance benchmark at the approved baseline
 
