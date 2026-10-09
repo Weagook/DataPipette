@@ -123,6 +123,29 @@ class DatasetStore(Protocol):
         occurred_at: datetime,
     ) -> None: ...
 
+    async def record_preview(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        expected_revision: int,
+        requested_limit: int,
+        returned_rows: int,
+        truncation_reason: str | None,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> bool: ...
+
+    async def record_preview_failure(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        attempted_revision: int,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> None: ...
+
 
 def _require_admin(actor: User) -> None:
     if actor.role is not SystemRole.ADMIN or actor.status is not AccountStatus.ACTIVE:

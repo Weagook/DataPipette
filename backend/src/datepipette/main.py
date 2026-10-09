@@ -18,6 +18,7 @@ from datepipette.api.router import api_v1_router
 from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.catalog import CatalogService
 from datepipette.application.connections import ConnectionService
+from datepipette.application.dataset_preview import DatasetPreviewService
 from datepipette.application.dataset_validation import DatasetValidationService
 from datepipette.application.datasets import DatasetService
 from datepipette.application.health import ReadinessProbe
@@ -25,6 +26,7 @@ from datepipette.application.user_administration import UserAdministrationServic
 from datepipette.config import Settings, get_settings
 from datepipette.infrastructure.catalog import PsycopgSourceCatalogInspector
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
+from datepipette.infrastructure.dataset_preview import PsycopgSourceDatasetPreviewer
 from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
@@ -48,6 +50,7 @@ def create_app(
     catalog_service: CatalogService | None = None,
     dataset_service: DatasetService | None = None,
     dataset_validation_service: DatasetValidationService | None = None,
+    dataset_preview_service: DatasetPreviewService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -71,6 +74,8 @@ def create_app(
                 app.state.dataset_service = dataset_service
             if dataset_validation_service is not None:
                 app.state.dataset_validation_service = dataset_validation_service
+            if dataset_preview_service is not None:
+                app.state.dataset_preview_service = dataset_preview_service
             yield
             return
 
@@ -128,6 +133,15 @@ def create_app(
                     resolved_settings.source_statement_timeout_seconds,
                 ),
             )
+        )
+        app.state.dataset_preview_service = dataset_preview_service or DatasetPreviewService(
+            dataset_store,
+            connection_store,
+            connection_cipher,
+            PsycopgSourceDatasetPreviewer(
+                resolved_settings.source_connect_timeout_seconds,
+                resolved_settings.source_statement_timeout_seconds,
+            ),
         )
         try:
             yield

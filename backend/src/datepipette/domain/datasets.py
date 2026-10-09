@@ -34,6 +34,11 @@ class ValidationFindingCode(StrEnum):
     LARGE_ESTIMATED_RESULT = "large_estimated_result"
 
 
+class PreviewTruncationReason(StrEnum):
+    ROW_LIMIT = "row_limit"
+    BYTE_LIMIT = "byte_limit"
+
+
 class FieldDisplayFormat(StrEnum):
     DATE_DD_MM_YYYY = "date_dd_mm_yyyy"
     DATE_YYYY_MM_DD = "date_yyyy_mm_dd"
@@ -334,3 +339,14 @@ class DatasetDraft:
     created_by: UUID
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetPreview:
+    revision: int
+    columns: tuple[ValidatedDatasetField, ...]
+    rows: tuple[dict[str, Any], ...]
+    requested_limit: int
+    returned_rows: int
+    truncated: bool
+    truncation_reason: PreviewTruncationReason | None
