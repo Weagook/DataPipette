@@ -171,3 +171,74 @@ class DatasetVersionModel(Base):
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetRefreshRunModel(Base):
+    __tablename__ = "dataset_refresh_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('queued', 'running', 'succeeded', 'failed')",
+            name="state_valid",
+        ),
+        CheckConstraint("requested_revision >= 1", name="requested_revision_positive"),
+        CheckConstraint("dispatch_attempts >= 0", name="dispatch_attempts_nonnegative"),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        Index(
+            "uq_dataset_refresh_runs_one_queued",
+            "dataset_id",
+            unique=True,
+            postgresql_where=text("state = 'queued'"),
+        ),
+        Index(
+            "uq_dataset_refresh_runs_one_running",
+            "dataset_id",
+            unique=True,
+            postgresql_where=text("state = 'running'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        index=True,
+    )
+    dataset_version_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dataset_versions.id", ondelete="RESTRICT")
+    )
+    requested_revision: Mapped[int] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(20))
+    requested_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    dispatch_attempts: Mapped[int] = mapped_column(Integer)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(Integer)
+    error_code: Mapped[str | None] = mapped_column(String(50))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetRefreshRequestModel(Base):
+    __tablename__ = "dataset_refresh_requests"
+    __table_args__ = (
+        Index(
+            "uq_dataset_refresh_requests_actor_dataset_key",
+            "actor_id",
+            "dataset_id",
+            "idempotency_key_hash",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        index=True,
+    )
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64))
+    refresh_run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dataset_refresh_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

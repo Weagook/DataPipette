@@ -83,6 +83,8 @@ The first validation slice is synchronous and single-table: it re-checks live ca
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
 
+The refresh-run foundation is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. Until snapshot writing is implemented, the production executor fails with `snapshot_writer_unavailable` instead of reporting a false success.
+
 ### Execution
 
 Source query execution, bounded streaming, Parquet writing, result statistics, cancellation, resource limits, snapshot publication, and cleanup.
@@ -108,7 +110,7 @@ Audit events, structured logs, metrics, trace propagation, health checks, and ad
 | Store | Owns | Must not own |
 |---|---|---|
 | Metadata PostgreSQL | identities, ACLs, connections, dataset definitions, chart/dashboard config, jobs, audit events | snapshot rows, token plaintext, connection plaintext |
-| Redis | Celery transport/results as configured, short-lived locks, coordination, ephemeral cache | authoritative metadata, large tabular results |
+| Redis | Celery transport, short-lived locks, coordination, ephemeral cache | authoritative job state, metadata, large tabular results |
 | S3-compatible storage | Parquet snapshots and temporary export files | authoritative ACLs or secrets |
 | Source PostgreSQL | company business data | DatePipette metadata |
 
@@ -119,8 +121,9 @@ Save draft
    -> validate structure and authorization
    -> preview with strict limits
    -> analyze chart impact
-   -> enqueue refresh
-   -> acquire per-dataset distributed lock
+   -> persist idempotent refresh run
+   -> enqueue run UUID through Redis/Celery
+   -> transactionally claim the per-dataset execution slot
    -> open read-only source transaction
    -> stream rows into candidate Parquet objects
    -> validate stored output and infer schema/statistics

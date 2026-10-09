@@ -64,6 +64,8 @@ New resources are private to their owner and administrators. Grants are additive
 
 Until connection grants exist, visual dataset draft APIs are administrator-only. A draft records its owner immediately, does not grant access to another principal, and can be saved while the source is unavailable. Saving validates the bounded document structure but does not imply source authorization or source-schema validity; those checks recur during explicit validation, preview, and publication.
 
+Refresh requests are administrator-only and CSRF-protected until connection grants define analyst scope. They require the current draft ETag and store only a SHA-256 digest of the client idempotency key. Celery messages contain only a refresh-run UUID; definitions, SQL, connection credentials, business rows, and idempotency-key plaintext remain outside Redis. Metadata PostgreSQL is authoritative for lifecycle state, and audit events use stable safe error codes rather than raw broker, driver, or source errors.
+
 A viewer with dashboard access may receive chart results but must not use that route to browse dataset rows, create exports, infer unrestricted schema metadata, or execute arbitrary chart definitions.
 
 ## PostgreSQL source safety
