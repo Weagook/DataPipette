@@ -33,6 +33,7 @@ addopts = ["--strict-config", "--strict-markers", "--cov=datepipette", "--cov-re
 
 [tool.coverage.run]
 branch = true
+concurrency = ["thread", "greenlet"]
 source = ["datepipette"]
 
 [tool.coverage.report]

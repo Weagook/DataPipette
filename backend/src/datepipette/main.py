@@ -16,16 +16,20 @@ from datepipette.api.problems import (
 )
 from datepipette.api.router import api_v1_router
 from datepipette.application.auth_service import AuthenticationService
+from datepipette.application.connections import ConnectionService
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
+from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
 from datepipette.infrastructure.repositories.user_administration import (
     SqlAlchemyUserAdministrationStore,
 )
 from datepipette.infrastructure.runtime import create_runtime_resources
+from datepipette.infrastructure.source_postgres import PsycopgSourceConnectionTester
 from datepipette.logging import configure_logging
 
 
@@ -34,6 +38,7 @@ def create_app(
     readiness_probe: ReadinessProbe | None = None,
     auth_service: AuthenticationService | None = None,
     user_administration_service: UserAdministrationService | None = None,
+    connection_service: ConnectionService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -49,6 +54,8 @@ def create_app(
                 app.state.auth_service = auth_service
             if user_administration_service is not None:
                 app.state.user_administration_service = user_administration_service
+            if connection_service is not None:
+                app.state.connection_service = connection_service
             yield
             return
 
@@ -72,6 +79,14 @@ def create_app(
             or UserAdministrationService(
                 SqlAlchemyUserAdministrationStore(resources.session_factory)
             )
+        )
+        app.state.connection_service = connection_service or ConnectionService(
+            SqlAlchemyConnectionStore(resources.session_factory),
+            AesGcmSecretCipher(resolved_settings.connection_encryption_key.get_secret_value()),
+            PsycopgSourceConnectionTester(
+                resolved_settings.source_connect_timeout_seconds,
+                resolved_settings.source_statement_timeout_seconds,
+            ),
         )
         try:
             yield

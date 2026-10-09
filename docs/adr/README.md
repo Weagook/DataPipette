@@ -34,3 +34,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0004](0004-safe-dataset-publication.md): Draft and atomic dataset publication
 - [ADR-0005](0005-server-side-browser-sessions.md): Server-side opaque browser sessions
 - [ADR-0006](0006-local-account-lifecycle.md): Administrator-managed local account lifecycle
+- [ADR-0007](0007-encrypted-postgresql-connections.md): Installation-key encryption for PostgreSQL connections

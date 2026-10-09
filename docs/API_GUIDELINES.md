@@ -23,6 +23,8 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/users/{user_id}
 /api/v1/users/{user_id}/sessions
 /api/v1/connections
+/api/v1/connections/{connection_id}
+/api/v1/connections/{connection_id}/tests
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
 /api/v1/datasets/{dataset_id}/refresh-runs
@@ -60,6 +62,17 @@ The durable rationale and consequences are recorded in [ADR-0005](adr/0005-serve
 - All state-changing operations require the session-bound CSRF cookie/header pair.
 
 The lifecycle rationale is recorded in [ADR-0006](adr/0006-local-account-lifecycle.md).
+
+## PostgreSQL connections
+
+- Connection management and testing require an active administrator session; mutations are CSRF-protected.
+- Password and optional CA certificate fields are write-only. Responses expose presence booleans, never secret values.
+- Lists use bounded cursor pagination. Connection names are unique within an installation.
+- Updating connection settings clears the previous test state until the connection is tested again.
+- `POST /api/v1/connections/{connection_id}/tests` returns a safe success/failure representation. It never returns raw Psycopg, network, TLS, or database errors.
+- Supported SSL modes are `disable`, `require`, `verify-ca`, and `verify-full`; verification modes require explicit CA material in the current implementation.
+
+Secret-envelope and connection-test decisions are recorded in [ADR-0007](adr/0007-encrypted-postgresql-connections.md).
 
 ## Success responses
 

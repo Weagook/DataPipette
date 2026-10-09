@@ -3,8 +3,10 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEVELOPMENT_CONNECTION_ENCRYPTION_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 
 class Settings(BaseSettings):
@@ -27,10 +29,23 @@ class Settings(BaseSettings):
     session_cookie_secure: bool | None = None
     login_rate_limit_attempts: int = Field(default=5, ge=1, le=100)
     login_rate_limit_window_seconds: int = Field(default=900, ge=60, le=86_400)
+    source_connect_timeout_seconds: int = Field(default=5, ge=1, le=30)
+    source_statement_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    connection_encryption_key: SecretStr = SecretStr(DEVELOPMENT_CONNECTION_ENCRYPTION_KEY)
     metadata_database_url: SecretStr = SecretStr(
         "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette"
     )
     redis_url: SecretStr = SecretStr("redis://localhost:6379/0")
+
+    @model_validator(mode="after")
+    def reject_development_encryption_key_in_production(self) -> "Settings":
+        if (
+            self.environment == "production"
+            and self.connection_encryption_key.get_secret_value()
+            == DEVELOPMENT_CONNECTION_ENCRYPTION_KEY
+        ):
+            raise ValueError("Production requires an explicit connection encryption key")
+        return self
 
     @property
     def api_docs_enabled(self) -> bool:
