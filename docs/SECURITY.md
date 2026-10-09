@@ -72,7 +72,10 @@ A viewer with dashboard access may receive chart results but must not use that r
 - SQL values are parameterized; source identifiers are resolved from inspected and authorized metadata.
 - Advanced SQL accepts one `SELECT` or `WITH` statement and rejects multiple statements, DDL, and DML.
 - SQL parsing is defense in depth, not the primary security boundary. Database privileges and read-only transactions remain mandatory.
-- Schema/table allowlists are enforced during discovery, validation, preview, and refresh.
+- Once connection grants are implemented, schema/table allowlists will be enforced during discovery, validation, preview, and refresh.
+- Until connection grants and allowlists are implemented, live catalog endpoints are administrator-only and expose no more than the configured PostgreSQL role can access.
+- Catalog discovery requires effective schema `USAGE` and relation `SELECT`; column metadata requires column-level `SELECT`. Foreign-key targets are omitted unless their schema and relation are also visible.
+- Catalog statements are static, names and cursors are bound as values, system schemas are hidden by default, and raw source failures are redacted.
 
 ## Connection secrets
 

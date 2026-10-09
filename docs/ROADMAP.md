@@ -17,14 +17,14 @@ Outcome: contributors can understand, run, verify, and safely change a small bac
 
 Outcome: an administrator connects PostgreSQL and an analyst publishes and browses one private single-table snapshot.
 
-- Bootstrap administrator, local authentication, and administrator-managed local accounts
-- Create encrypted PostgreSQL connections and connection tests
-- Inspect schemas, tables, columns, and keys
-- Define a single-table visual dataset draft
-- Validate, preview, and publish through Celery
-- Stream rows into local Parquet storage
-- Query snapshot rows with DuckDB and cursor pagination
-- Expose freshness and refresh errors through API and UI
+- [x] Bootstrap administrator, local authentication, and administrator-managed local accounts
+- [x] Create encrypted PostgreSQL connections and connection tests
+- [x] Inspect schemas, tables, columns, and keys
+- [ ] Define a single-table visual dataset draft
+- [ ] Validate, preview, and publish through Celery
+- [ ] Stream rows into local Parquet storage
+- [ ] Query snapshot rows with DuckDB and cursor pagination
+- [ ] Expose freshness and refresh errors through API and UI
 
 ## Phase 2 — Governed dataset engine
 

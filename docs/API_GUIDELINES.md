@@ -74,6 +74,18 @@ The lifecycle rationale is recorded in [ADR-0006](adr/0006-local-account-lifecyc
 
 Secret-envelope and connection-test decisions are recorded in [ADR-0007](adr/0007-encrypted-postgresql-connections.md).
 
+## PostgreSQL catalog
+
+- Live catalog reads require an active administrator session until connection grants are implemented.
+- `GET /api/v1/connections/{connection_id}/catalog/schemas` lists schemas for which the source role has `USAGE`. PostgreSQL system schemas are hidden by default and can be included explicitly.
+- `GET /api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations` lists selectable tables, partitioned tables, views, materialized views, and foreign tables.
+- `GET /api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations/{relation_name}` returns ordered columns, PostgreSQL-formatted data types, nullability, primary-key columns, and visible foreign-key mappings.
+- Schema and relation collections use opaque cursor pagination, stable name ordering, and a maximum page size of 100.
+- An absent object and an object hidden by source privileges produce the same `404 catalog_object_not_found` response. Source failures produce a redacted `502 source_catalog_unavailable` response.
+- Catalog requests read the source directly and do not persist or cache source metadata.
+
+The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-catalog.md).
+
 ## Success responses
 
 Ordinary resources use direct JSON objects. Collection responses include data and pagination metadata:
