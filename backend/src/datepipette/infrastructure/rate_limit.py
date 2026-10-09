@@ -45,7 +45,7 @@ class RedisLoginRateLimiter:
                 _CHECK_SCRIPT,
                 2,
                 *self._keys(account_key, client_key),
-                self._attempts,
+                str(self._attempts),
             ),
         )
         return result or None
@@ -57,8 +57,8 @@ class RedisLoginRateLimiter:
                 _FAILURE_SCRIPT,
                 2,
                 *self._keys(account_key, client_key),
-                self._attempts,
-                self._window_seconds,
+                str(self._attempts),
+                str(self._window_seconds),
             ),
         )
         return result or None

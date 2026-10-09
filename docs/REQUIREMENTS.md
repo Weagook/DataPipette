@@ -60,6 +60,8 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **REF-007:** A successful publication shall schedule deletion of the replaced snapshot.
 - **REF-008:** Manual and scheduled refresh requests shall be idempotent and coalesced to one running and at most one pending job per dataset.
 - **REF-009:** Result APIs shall expose freshness, last success, refresh state, and the latest safe error summary separately from result rows.
+- **REF-010:** Metadata PostgreSQL shall remain authoritative for refresh lifecycle state; broker messages shall contain only opaque identifiers and be safe to deliver more than once.
+- **REF-011:** A persisted run whose broker dispatch fails shall remain retryable through the original idempotent request.
 
 ### Data exploration and exports
 

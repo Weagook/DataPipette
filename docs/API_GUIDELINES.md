@@ -110,6 +110,18 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 
 Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md).
 
+## Refresh runs
+
+- `POST /api/v1/datasets/{dataset_id}/refresh-runs` requires administrator CSRF, the current draft ETag in `If-Match`, and an `Idempotency-Key` of at most 200 characters. The exact revision must have a current `valid` or `valid_with_warnings` validation artifact.
+- A successful request returns `202`, the durable run resource, `Location`, the draft `ETag`, and `X-DatePipette-Coalesced`. The latter is `true` when this request reused an existing run.
+- Idempotency is scoped to actor and dataset. Retrying the same key returns the same run. A different key coalesces into the one queued run when possible; metadata PostgreSQL retains each hashed request mapping.
+- At most one run is `running` and one is `queued` per dataset. A queued successor waits when another run is active. Duplicate Celery delivery does not restart a running or terminal run.
+- If Redis publication fails, the API returns `503 refresh_dispatch_unavailable` with `Location` and `Retry-After`. Retrying with the same key republishes the same saved run.
+- `GET /api/v1/datasets/{dataset_id}/refresh-runs/{run_id}` returns durable state, dispatch and execution attempt counts, timestamps, and a stable safe `error_code`.
+- The current foundation intentionally ends an executed production run as `failed` with `snapshot_writer_unavailable`; it does not claim success before Parquet storage and atomic publication exist.
+
+The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-refresh-run-orchestration.md).
+
 ## Success responses
 
 Ordinary resources use direct JSON objects. Collection responses include data and pagination metadata:

@@ -83,7 +83,7 @@ An immutable Parquet representation of one successful dataset execution. A datas
 
 A background execution that reads the source, writes a candidate snapshot, determines its schema and statistics, and attempts publication. Runs preserve operational history even though old snapshot data is deleted.
 
-Suggested states:
+Implemented foundation states:
 
 ```text
 queued -> running -> succeeded
@@ -92,6 +92,8 @@ queued -> running -> succeeded
 ```
 
 At most one run executes for a dataset and at most one additional run is coalesced as pending.
+
+Each manual request supplies an idempotency key. Metadata PostgreSQL stores its digest and mapping to the durable run; Redis carries only the run identifier. Dispatch and execution attempt counts are separate. A broker failure leaves the queued intent retryable, and duplicate task delivery cannot re-execute a running or terminal run. The initial executor fails explicitly until snapshot creation is implemented.
 
 ### Dataset table view
 

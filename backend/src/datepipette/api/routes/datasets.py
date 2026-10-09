@@ -1,6 +1,5 @@
 """Administrator endpoints for private visual dataset drafts."""
 
-import re
 from datetime import datetime
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
@@ -13,6 +12,7 @@ from datepipette.api.dependencies.authentication import (
     AdministratorSession,
     request_id,
 )
+from datepipette.api.draft_revisions import draft_etag, expected_draft_revision
 from datepipette.api.problems import ApiProblem, ProblemDetails
 from datepipette.application.dataset_preview import (
     MAX_PREVIEW_ROWS,
@@ -51,7 +51,6 @@ from datepipette.domain.datasets import (
 )
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
-_ETAG = re.compile(r'^"draft-([1-9][0-9]*)"$')
 
 
 class StrictModel(BaseModel):
@@ -323,29 +322,6 @@ def _preview_response(value: DatasetPreview) -> DatasetPreviewResponse:
     )
 
 
-def _etag(revision: int) -> str:
-    return f'"draft-{revision}"'
-
-
-def _expected_revision(value: str | None) -> int:
-    if value is None:
-        raise ApiProblem(
-            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
-            code="draft_revision_required",
-            title="Draft revision required",
-            detail="Supply the current draft ETag in the If-Match header.",
-        )
-    match = _ETAG.fullmatch(value)
-    if match is None:
-        raise ApiProblem(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            code="invalid_draft_revision",
-            title="Invalid draft revision",
-            detail="The If-Match header is not a valid dataset draft ETag.",
-        )
-    return int(match.group(1))
-
-
 def _not_found() -> ApiProblem:
     return ApiProblem(
         status_code=404,
@@ -420,7 +396,7 @@ async def create_dataset(
         ) from exc
     except ValueError as exc:
         raise _invalid_definition() from exc
-    response.headers["ETag"] = _etag(draft.revision)
+    response.headers["ETag"] = draft_etag(draft.revision)
     return _dataset_response(dataset)
 
 
@@ -512,7 +488,7 @@ async def read_dataset_draft(
         draft = await _service(request).get_draft(actor=session.user, dataset_id=dataset_id)
     except DatasetNotFoundError as exc:
         raise _not_found() from exc
-    response.headers["ETag"] = _etag(draft.revision)
+    response.headers["ETag"] = draft_etag(draft.revision)
     return _draft_response(draft)
 
 
@@ -539,7 +515,7 @@ async def replace_dataset_draft(
         draft = await _service(request).replace_draft(
             actor=session.user,
             dataset_id=dataset_id,
-            expected_revision=_expected_revision(if_match),
+            expected_revision=expected_draft_revision(if_match),
             definition=_definition(payload.definition),
             request_id=request_id(),
         )
@@ -554,7 +530,7 @@ async def replace_dataset_draft(
         raise _not_found() from exc
     except ValueError as exc:
         raise _invalid_definition() from exc
-    response.headers["ETag"] = _etag(draft.revision)
+    response.headers["ETag"] = draft_etag(draft.revision)
     return _draft_response(draft)
 
 
@@ -579,7 +555,7 @@ async def validate_dataset_draft(
         draft = await _validation_service(request).validate(
             actor=session.user,
             dataset_id=dataset_id,
-            expected_revision=_expected_revision(if_match),
+            expected_revision=expected_draft_revision(if_match),
             request_id=request_id(),
         )
     except DatasetRevisionConflictError as exc:
@@ -626,7 +602,7 @@ async def preview_dataset_draft(
         preview = await _preview_service(request).preview(
             actor=session.user,
             dataset_id=dataset_id,
-            expected_revision=_expected_revision(if_match),
+            expected_revision=expected_draft_revision(if_match),
             limit=payload.limit,
             request_id=request_id(),
         )
@@ -653,5 +629,5 @@ async def preview_dataset_draft(
             title="Source preview unavailable",
             detail="The PostgreSQL preview could not be completed safely.",
         ) from exc
-    response.headers["ETag"] = _etag(preview.revision)
+    response.headers["ETag"] = draft_etag(preview.revision)
     return _preview_response(preview)

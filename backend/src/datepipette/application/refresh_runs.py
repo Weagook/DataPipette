@@ -1,0 +1,104 @@
+"""Request and inspect durable dataset refresh runs."""
+
+from datetime import UTC, datetime
+from hashlib import sha256
+from typing import Protocol
+from uuid import UUID, uuid4
+
+from datepipette.application.datasets import _require_admin
+from datepipette.domain.identity import User
+from datepipette.domain.refresh import RefreshRequestOutcome, RefreshRun
+
+
+class RefreshRunNotFoundError(Exception):
+    pass
+
+
+class RefreshDraftNotValidatedError(Exception):
+    pass
+
+
+class RefreshDispatchError(Exception):
+    pass
+
+
+class RefreshDispatchUnavailableError(Exception):
+    def __init__(self, run_id: UUID) -> None:
+        self.run_id = run_id
+        super().__init__("The refresh run was persisted but could not be dispatched")
+
+
+class RefreshRunStore(Protocol):
+    async def request(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        expected_revision: int,
+        idempotency_key_hash: str,
+        refresh_run_id: UUID,
+        occurred_at: datetime,
+        request_id: str,
+    ) -> RefreshRequestOutcome | None: ...
+
+    async def get(self, *, dataset_id: UUID, run_id: UUID) -> RefreshRun | None: ...
+
+    async def record_dispatch_attempt(self, run_id: UUID, occurred_at: datetime) -> None: ...
+
+    async def mark_dispatched(self, run_id: UUID, occurred_at: datetime) -> None: ...
+
+
+class RefreshDispatcher(Protocol):
+    def dispatch(self, run_id: UUID) -> None: ...
+
+
+class RefreshRunService:
+    def __init__(self, store: RefreshRunStore, dispatcher: RefreshDispatcher) -> None:
+        self._store = store
+        self._dispatcher = dispatcher
+
+    async def request(
+        self,
+        *,
+        actor: User,
+        dataset_id: UUID,
+        expected_revision: int,
+        idempotency_key: str,
+        request_id: str,
+    ) -> RefreshRequestOutcome:
+        _require_admin(actor)
+        now = datetime.now(UTC)
+        outcome = await self._store.request(
+            dataset_id=dataset_id,
+            actor_id=actor.id,
+            expected_revision=expected_revision,
+            idempotency_key_hash=sha256(idempotency_key.encode()).hexdigest(),
+            refresh_run_id=uuid4(),
+            occurred_at=now,
+            request_id=request_id,
+        )
+        if outcome is None:
+            raise RefreshRunNotFoundError
+        if outcome.dispatch_required:
+            await self._store.record_dispatch_attempt(outcome.run.id, datetime.now(UTC))
+            try:
+                self._dispatcher.dispatch(outcome.run.id)
+            except Exception as exc:
+                raise RefreshDispatchUnavailableError(outcome.run.id) from exc
+            await self._store.mark_dispatched(outcome.run.id, datetime.now(UTC))
+            refreshed = await self._store.get(dataset_id=dataset_id, run_id=outcome.run.id)
+            if refreshed is None:  # pragma: no cover - persistence contract guard
+                raise RuntimeError("Dispatched refresh run disappeared")
+            outcome = RefreshRequestOutcome(
+                run=refreshed,
+                coalesced=outcome.coalesced,
+                dispatch_required=False,
+            )
+        return outcome
+
+    async def get(self, *, actor: User, dataset_id: UUID, run_id: UUID) -> RefreshRun:
+        _require_admin(actor)
+        run = await self._store.get(dataset_id=dataset_id, run_id=run_id)
+        if run is None:
+            raise RefreshRunNotFoundError
+        return run

@@ -22,17 +22,21 @@ from datepipette.application.dataset_preview import DatasetPreviewService
 from datepipette.application.dataset_validation import DatasetValidationService
 from datepipette.application.datasets import DatasetService
 from datepipette.application.health import ReadinessProbe
+from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
 from datepipette.infrastructure.catalog import PsycopgSourceCatalogInspector
+from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.dataset_preview import PsycopgSourceDatasetPreviewer
 from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
+from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
+from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.infrastructure.repositories.user_administration import (
     SqlAlchemyUserAdministrationStore,
 )
@@ -51,6 +55,7 @@ def create_app(
     dataset_service: DatasetService | None = None,
     dataset_validation_service: DatasetValidationService | None = None,
     dataset_preview_service: DatasetPreviewService | None = None,
+    refresh_run_service: RefreshRunService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -76,6 +81,8 @@ def create_app(
                 app.state.dataset_validation_service = dataset_validation_service
             if dataset_preview_service is not None:
                 app.state.dataset_preview_service = dataset_preview_service
+            if refresh_run_service is not None:
+                app.state.refresh_run_service = refresh_run_service
             yield
             return
 
@@ -142,6 +149,10 @@ def create_app(
                 resolved_settings.source_connect_timeout_seconds,
                 resolved_settings.source_statement_timeout_seconds,
             ),
+        )
+        app.state.refresh_run_service = refresh_run_service or RefreshRunService(
+            SqlAlchemyRefreshRunStore(resources.session_factory),
+            CeleryRefreshDispatcher(celery_app),
         )
         try:
             yield

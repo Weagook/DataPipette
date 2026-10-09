@@ -39,6 +39,16 @@ Start the development API:
 uv run --package datepipette datepipette
 ```
 
+Compose also starts a single-concurrency Celery worker on the `refresh` queue. To run a worker directly while developing:
+
+```bash
+uv run --package datepipette celery \
+  --app datepipette.infrastructure.celery_app:celery_app \
+  worker --queues refresh --concurrency 1 --loglevel INFO
+```
+
+Refresh state is durable in metadata PostgreSQL. Redis is only the transport, and current production runs fail explicitly with `snapshot_writer_unavailable` until the next Parquet-writing slice lands.
+
 The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 
 - `GET /api/v1/health/live` for process liveness;
