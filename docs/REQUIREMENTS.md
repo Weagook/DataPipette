@@ -34,6 +34,16 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **DAT-008:** Breaking schema changes shall be blocked by default and shall identify affected charts.
 - **DAT-009:** Explicitly forced breaking publication shall mark incompatible charts invalid instead of deleting them.
 
+### Query safety advisor
+
+- **QSA-001:** Before a potentially expensive source query, the system shall obtain a PostgreSQL plan with `EXPLAIN (FORMAT JSON)` without `ANALYZE` and without executing the business query.
+- **QSA-002:** The advisor shall combine planner estimates with visible catalog statistics such as approximate relation rows, relation and index sizes, available indexes, and statistics freshness.
+- **QSA-003:** The advisor shall return explainable findings with stable codes and `info`, `warning`, or `blocked` severity. Findings may include large sequential scans, high estimated rows or cost, expensive sorts, Cartesian joins, type-mismatched joins, and stale statistics.
+- **QSA-004:** Administrators shall configure separate safety limits for interactive preview and background refresh, including estimated rows, planner cost, join count, execution timeout, result size, and concurrency.
+- **QSA-005:** Policy overrides shall require explicit permission and create a redacted audit event. A warning shall not be presented as certainty because PostgreSQL planner estimates can be inaccurate.
+- **QSA-006:** DatePipette may recommend an index or query change but shall never execute DDL or create an index in the source database.
+- **QSA-007:** Completed source executions shall capture bounded operational metrics so estimates can be compared with actual duration, result rows, transferred bytes, and snapshot size.
+
 ### Refresh and snapshots
 
 - **REF-001:** Source PostgreSQL shall be queried for preview and refresh, not for ordinary table, chart, or dashboard reads.
