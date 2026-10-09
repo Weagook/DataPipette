@@ -47,11 +47,20 @@ The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 - `GET /api/v1/auth/me` for the current local user;
 - `DELETE /api/v1/auth/sessions/current` for sign-out;
 - `GET /api/v1/users` for administrator-only local account management;
+- `GET /api/v1/connections` for administrator-only PostgreSQL source management;
 - `/docs` and `/openapi.json` for the development API contract.
 
 Browser authentication uses an HTTP-only session cookie. State-changing requests also send the readable `datepipette_csrf` cookie value in the `X-CSRF-Token` header. Production forces secure cookies even if local configuration attempts to disable them.
 
 The bootstrap administrator creates further local accounts through `POST /api/v1/users`. User creation and mutations are administrator-only and CSRF-protected. DatePipette prevents supported API operations from disabling or demoting the final active administrator.
+
+PostgreSQL connection passwords and optional CA certificates require `DATEPIPETTE_CONNECTION_ENCRYPTION_KEY`, a URL-safe base64 encoding of exactly 32 random bytes. The built-in default is only for local development and is rejected in production. Generate a key without storing it in shell history:
+
+```bash
+uv run --package datepipette python -c 'import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("="))'
+```
+
+Back up this key separately from metadata PostgreSQL. Losing it makes stored source credentials unrecoverable.
 
 Stop local dependencies without deleting their volumes:
 
@@ -59,7 +68,7 @@ Stop local dependencies without deleting their volumes:
 docker compose -f deploy/compose/compose.yaml stop
 ```
 
-Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, and `LOGIN_RATE_LIMIT_WINDOW_SECONDS`.
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, and `SOURCE_STATEMENT_TIMEOUT_SECONDS`.
 
 API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
 

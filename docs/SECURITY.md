@@ -76,9 +76,11 @@ A viewer with dashboard access may receive chart results but must not use that r
 
 ## Connection secrets
 
-- Passwords and CA material are encrypted at rest using an installation key supplied outside the metadata database.
+- Passwords and CA material are encrypted at rest with AES-256-GCM using an installation key supplied outside the metadata database.
+- Ciphertext is bound to its connection UUID and field name; production refuses the documented development key.
 - Secret values are write-only through the API.
 - Connection test errors are redacted before reaching users or logs.
+- `verify-full` is recommended for production; custom CA material exists as a restricted temporary file only while libpq establishes a connection.
 - Key storage, backup, and rotation procedures must be documented before production readiness.
 
 ## Snapshot and query safety
