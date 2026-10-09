@@ -18,6 +18,7 @@ from datepipette.api.router import api_v1_router
 from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.catalog import CatalogService
 from datepipette.application.connections import ConnectionService
+from datepipette.application.datasets import DatasetService
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
@@ -27,6 +28,7 @@ from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
+from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.user_administration import (
     SqlAlchemyUserAdministrationStore,
 )
@@ -42,6 +44,7 @@ def create_app(
     user_administration_service: UserAdministrationService | None = None,
     connection_service: ConnectionService | None = None,
     catalog_service: CatalogService | None = None,
+    dataset_service: DatasetService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -61,6 +64,8 @@ def create_app(
                 app.state.connection_service = connection_service
             if catalog_service is not None:
                 app.state.catalog_service = catalog_service
+            if dataset_service is not None:
+                app.state.dataset_service = dataset_service
             yield
             return
 
@@ -104,6 +109,9 @@ def create_app(
                 resolved_settings.source_connect_timeout_seconds,
                 resolved_settings.source_statement_timeout_seconds,
             ),
+        )
+        app.state.dataset_service = dataset_service or DatasetService(
+            SqlAlchemyDatasetStore(resources.session_factory)
         )
         try:
             yield
