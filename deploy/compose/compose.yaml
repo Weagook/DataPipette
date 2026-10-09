@@ -36,35 +36,26 @@ services:
     image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
     working_dir: /workspace
     command:
-      - uv
-      - run
-      - --frozen
-      - --package
-      - datepipette
-      - celery
-      - --app
-      - datepipette.infrastructure.celery_app:celery_app
-      - worker
-      - --uid
-      - nobody
-      - --gid
-      - nogroup
-      - --queues
-      - refresh
-      - --concurrency
-      - "1"
-      - --loglevel
-      - INFO
+      - sh
+      - -c
+      - >-
+        install -d -o nobody -g nogroup /var/lib/datepipette/snapshots &&
+        exec uv run --frozen --package datepipette celery
+        --app datepipette.infrastructure.celery_app:celery_app worker
+        --uid nobody --gid nogroup --queues refresh --concurrency 1 --loglevel INFO
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/datepipette/.venv
+      UV_LINK_MODE: copy
       DATEPIPETTE_ENVIRONMENT: development
       DATEPIPETTE_METADATA_DATABASE_URL: postgresql+psycopg://datepipette:${DATEPIPETTE_POSTGRES_PASSWORD:-datepipette_dev_only}@metadata-db:5432/${DATEPIPETTE_POSTGRES_DB:-datepipette}
       DATEPIPETTE_REDIS_URL: redis://redis:6379/0
       DATEPIPETTE_CONNECTION_ENCRYPTION_KEY: ${DATEPIPETTE_CONNECTION_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
+      DATEPIPETTE_SNAPSHOT_STORAGE_PATH: /var/lib/datepipette/snapshots
     volumes:
       - ../../:/workspace:ro
       - worker-venv:/opt/datepipette/.venv
       - uv-cache:/root/.cache/uv
+      - snapshot-data:/var/lib/datepipette/snapshots
     depends_on:
       metadata-db:
         condition: service_healthy
@@ -86,3 +77,4 @@ volumes:
   redis-data:
   worker-venv:
   uv-cache:
+  snapshot-data:

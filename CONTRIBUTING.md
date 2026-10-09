@@ -47,7 +47,7 @@ uv run --package datepipette celery \
   worker --queues refresh --concurrency 1 --loglevel INFO
 ```
 
-Refresh state is durable in metadata PostgreSQL. Redis is only the transport, and current production runs fail explicitly with `snapshot_writer_unavailable` until the next Parquet-writing slice lands.
+Refresh state is durable in metadata PostgreSQL and Redis is only the transport. The development worker streams validated source rows into `.local/snapshots` by default; Compose uses its private `snapshot-data` volume. Never commit, share, or serve these files directly because they contain business data.
 
 The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 
@@ -78,7 +78,7 @@ Stop local dependencies without deleting their volumes:
 docker compose -f deploy/compose/compose.yaml stop
 ```
 
-Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, and `SOURCE_STATEMENT_TIMEOUT_SECONDS`.
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, and `SNAPSHOT_STORAGE_PATH`.
 
 API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
 

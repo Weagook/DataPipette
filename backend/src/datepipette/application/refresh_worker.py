@@ -6,12 +6,14 @@ from typing import Protocol
 from uuid import UUID
 
 from datepipette.domain.refresh import RefreshClaimOutcome, RefreshRun
+from datepipette.domain.snapshots import SnapshotArtifact
 
 
 @dataclass(frozen=True, slots=True)
 class RefreshExecutionResult:
     succeeded: bool
     error_code: str | None = None
+    snapshot: SnapshotArtifact | None = None
 
 
 class RefreshWorkerStore(Protocol):

@@ -134,6 +134,14 @@ class DatasetModel(Base):
             use_alter=True,
         )
     )
+    active_snapshot_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey(
+            "dataset_snapshots.id",
+            name="fk_datasets_active_snapshot_id_dataset_snapshots",
+            ondelete="RESTRICT",
+            use_alter=True,
+        )
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -242,3 +250,44 @@ class DatasetRefreshRequestModel(Base):
         index=True,
     )
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetSnapshotModel(Base):
+    __tablename__ = "dataset_snapshots"
+    __table_args__ = (
+        CheckConstraint("state IN ('active', 'superseded')", name="state_valid"),
+        CheckConstraint("row_count >= 0", name="row_count_nonnegative"),
+        CheckConstraint("byte_size > 0", name="byte_size_positive"),
+        CheckConstraint("storage_backend IN ('local')", name="storage_backend_valid"),
+        CheckConstraint("jsonb_typeof(schema_document) = 'object'", name="schema_object"),
+        Index(
+            "uq_dataset_snapshots_one_active",
+            "dataset_id",
+            unique=True,
+            postgresql_where=text("state = 'active'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        index=True,
+    )
+    dataset_version_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dataset_versions.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    refresh_run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dataset_refresh_runs.id", ondelete="RESTRICT"),
+        unique=True,
+    )
+    state: Mapped[str] = mapped_column(String(20))
+    storage_backend: Mapped[str] = mapped_column(String(20))
+    object_key: Mapped[str] = mapped_column(String(1024), unique=True)
+    row_count: Mapped[int] = mapped_column(Integer)
+    byte_size: Mapped[int] = mapped_column(Integer)
+    checksum_sha256: Mapped[str] = mapped_column(String(64))
+    schema_document: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    activated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

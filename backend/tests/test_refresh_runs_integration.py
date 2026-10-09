@@ -21,6 +21,7 @@ from datepipette.application.refresh_worker import (
 )
 from datepipette.config import Settings
 from datepipette.domain.refresh import RefreshClaimOutcome, RefreshRun, RefreshRunState
+from datepipette.domain.snapshots import SnapshotArtifact
 from datepipette.infrastructure.celery_app import create_celery_app
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
 from datepipette.infrastructure.models import (
@@ -51,8 +52,20 @@ class RecordingDispatcher:
 
 
 class SuccessfulExecutor:
-    async def execute(self, _run: RefreshRun) -> RefreshExecutionResult:
-        return RefreshExecutionResult(succeeded=True)
+    async def execute(self, run: RefreshRun) -> RefreshExecutionResult:
+        snapshot_id = uuid4()
+        return RefreshExecutionResult(
+            succeeded=True,
+            snapshot=SnapshotArtifact(
+                id=snapshot_id,
+                storage_backend="local",
+                object_key=f"datasets/{run.dataset_id}/snapshots/{snapshot_id}.parquet",
+                row_count=1,
+                byte_size=100,
+                checksum_sha256="0" * 64,
+                schema_document={"schema_version": 1, "fields": []},
+            ),
+        )
 
 
 class FailingExecutor:
@@ -338,7 +351,7 @@ def test_worker_defers_successor_and_can_complete_with_injected_writer() -> None
             asyncio.run(
                 store.complete(
                     UUID(first["id"]),
-                    RefreshExecutionResult(succeeded=True),
+                    RefreshExecutionResult(succeeded=False, error_code="test_completed"),
                     datetime.now(UTC),
                 )
             )

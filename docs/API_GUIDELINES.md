@@ -92,7 +92,7 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 
 - Dataset draft endpoints require an active administrator session until connection grants define analyst scope; mutations are CSRF-protected.
 - `POST /api/v1/datasets` creates a private dataset and its first draft for one existing PostgreSQL connection. Saving does not contact the source database.
-- `GET /api/v1/datasets` uses bounded cursor pagination; `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata.
+- `GET /api/v1/datasets` uses bounded cursor pagination; `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata, including nullable `active_version_id` and `active_snapshot_id`.
 - `GET /api/v1/datasets/{dataset_id}/draft` returns the complete schema-versioned visual definition, its latest revision-bound validation artifact when one exists, and an ETag such as `"draft-3"`.
 - `PUT /api/v1/datasets/{dataset_id}/draft` atomically replaces the complete definition and requires its current ETag in `If-Match`. A stale revision returns `409 dataset_revision_conflict`; a missing precondition returns `428 draft_revision_required`.
 - `POST /api/v1/datasets/{dataset_id}/draft/validations` requires the current draft ETag and explicitly re-checks the live relation and selected columns. It returns `valid`, `valid_with_warnings`, or `invalid`, the PostgreSQL-formatted result schema, safely generated SQL, a compact planner summary, and stable findings.
@@ -117,10 +117,11 @@ Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-
 - Idempotency is scoped to actor and dataset. Retrying the same key returns the same run. A different key coalesces into the one queued run when possible; metadata PostgreSQL retains each hashed request mapping.
 - At most one run is `running` and one is `queued` per dataset. A queued successor waits when another run is active. Duplicate Celery delivery does not restart a running or terminal run.
 - If Redis publication fails, the API returns `503 refresh_dispatch_unavailable` with `Location` and `Retry-After`. Retrying with the same key republishes the same saved run.
-- `GET /api/v1/datasets/{dataset_id}/refresh-runs/{run_id}` returns durable state, dispatch and execution attempt counts, timestamps, and a stable safe `error_code`.
-- The current foundation intentionally ends an executed production run as `failed` with `snapshot_writer_unavailable`; it does not claim success before Parquet storage and atomic publication exist.
+- `GET /api/v1/datasets/{dataset_id}/refresh-runs/{run_id}` returns durable state, dispatch and execution attempt counts, timestamps, nullable `snapshot_id`, and a stable safe `error_code`.
+- A successful run has a completely written and validated Parquet object before `snapshot_id` is exposed. Local execution streams fixed-size source batches and atomically activates snapshot metadata; it never buffers the complete result.
+- Stable execution errors currently include `draft_changed`, `unsupported_source_type`, `connection_secret_unavailable`, `source_unavailable`, `snapshot_write_failed`, and `refresh_execution_failed`. A failure leaves the previous active snapshot unchanged.
 
-The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-refresh-run-orchestration.md).
+The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-refresh-run-orchestration.md); local Parquet publication is recorded in [ADR-0013](adr/0013-local-parquet-snapshot-publication.md).
 
 ## Success responses
 

@@ -655,6 +655,18 @@
       },
       "DatasetResponse": {
         "properties": {
+          "active_snapshot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Snapshot Id"
+          },
           "active_version_id": {
             "anyOf": [
               {
@@ -707,6 +719,7 @@
           "owner_id",
           "connection_id",
           "active_version_id",
+          "active_snapshot_id",
           "draft_revision",
           "created_at",
           "updated_at"
@@ -1158,6 +1171,18 @@
             "title": "Requested Revision",
             "type": "integer"
           },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -1190,6 +1215,7 @@
           "dispatched_at",
           "attempt_count",
           "error_code",
+          "snapshot_id",
           "requested_at",
           "started_at",
           "finished_at",

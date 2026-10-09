@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
@@ -31,6 +32,9 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = Field(default=900, ge=60, le=86_400)
     source_connect_timeout_seconds: int = Field(default=5, ge=1, le=30)
     source_statement_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    refresh_statement_timeout_seconds: int = Field(default=1800, ge=1, le=86_400)
+    refresh_batch_rows: int = Field(default=50_000, ge=1_000, le=100_000)
+    snapshot_storage_path: Path = Path(".local/snapshots")
     connection_encryption_key: SecretStr = SecretStr(DEVELOPMENT_CONNECTION_ENCRYPTION_KEY)
     metadata_database_url: SecretStr = SecretStr(
         "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette"

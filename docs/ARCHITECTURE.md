@@ -83,11 +83,11 @@ The first validation slice is synchronous and single-table: it re-checks live ca
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
 
-The refresh-run foundation is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. Until snapshot writing is implemented, the production executor fails with `snapshot_writer_unavailable` instead of reporting a false success.
+Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The local executor recompiles the structured definition, streams named-cursor batches into typed Parquet, validates the completed object, and only then atomically activates snapshot metadata.
 
 ### Execution
 
-Source query execution, bounded streaming, Parquet writing, result statistics, cancellation, resource limits, snapshot publication, and cleanup.
+Source query execution, bounded streaming, local Parquet writing, basic result statistics, and snapshot publication are implemented for one-table visual definitions. S3 storage, cancellation, progress, cleanup, and broader resource policies remain later execution capabilities.
 
 ### Query
 

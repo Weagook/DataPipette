@@ -62,6 +62,8 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **REF-009:** Result APIs shall expose freshness, last success, refresh state, and the latest safe error summary separately from result rows.
 - **REF-010:** Metadata PostgreSQL shall remain authoritative for refresh lifecycle state; broker messages shall contain only opaque identifiers and be safe to deliver more than once.
 - **REF-011:** A persisted run whose broker dispatch fails shall remain retryable through the original idempotent request.
+- **REF-012:** Snapshot writers shall derive a fixed output schema before reading rows and shall validate the completed object's schema, row count, byte size, and checksum before metadata activation.
+- **REF-013:** Snapshot metadata shall store portable relative object keys; local filesystem storage shall not be treated as horizontally scalable production storage.
 
 ### Data exploration and exports
 
