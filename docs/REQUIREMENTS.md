@@ -37,6 +37,7 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **DAT-011:** Draft replacement shall use optimistic revision control and shall never mutate the currently published definition.
 - **DAT-012:** Explicit validation shall re-check live source objects, capture output types, and store a derived artifact bound to the exact draft revision.
 - **DAT-013:** Changing a draft definition shall invalidate prior validation; a concurrent change shall prevent stale validation from being attached.
+- **DAT-014:** Synchronous draft preview shall require validation of the same revision and enforce server-side row, response-size, statement-time, and memory bounds without creating a snapshot.
 
 ### Query safety advisor
 

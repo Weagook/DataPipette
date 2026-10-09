@@ -22,7 +22,8 @@ Outcome: an administrator connects PostgreSQL and an analyst publishes and brows
 - [x] Inspect schemas, tables, columns, and keys
 - [x] Define a single-table visual dataset draft
 - [x] Validate one-table drafts and compile a non-executing PostgreSQL plan
-- [ ] Preview and publish through Celery
+- [x] Preview a bounded set of source rows for the validated draft
+- [ ] Publish through Celery
 - [ ] Stream rows into local Parquet storage
 - [ ] Query snapshot rows with DuckDB and cursor pagination
 - [ ] Expose freshness and refresh errors through API and UI

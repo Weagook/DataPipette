@@ -81,6 +81,8 @@ Visual and SQL definitions, validation, compilation, draft/publish lifecycle, re
 
 The first validation slice is synchronous and single-table: it re-checks live catalog visibility, composes identifiers safely, obtains a non-executing PostgreSQL JSON plan, and stores a compact artifact tied to the draft revision. It neither previews rows nor replaces the later background refresh/publication pipeline.
 
+The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
+
 ### Execution
 
 Source query execution, bounded streaming, Parquet writing, result statistics, cancellation, resource limits, snapshot publication, and cleanup.
