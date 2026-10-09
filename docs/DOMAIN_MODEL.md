@@ -59,9 +59,13 @@ One of two forms:
 
 Generated SQL is an execution artifact of a visual definition, not its source of truth.
 
+Visual definitions are schema-versioned JSON documents. Source relations and output fields have stable UUIDs; labels and output names may change without changing those identities. The first implemented definition version contains exactly one source relation, one or more selected fields, display metadata, and no joins. Metadata PostgreSQL stores the complete document in JSONB and the application replaces it atomically rather than updating nested paths.
+
 ### Draft and published versions
 
 The published definition and snapshot serve readers. Editing creates or updates a draft. Publication succeeds only when validation, impact analysis, refresh, storage, and activation complete successfully.
+
+Drafts are mutable through optimistic revision checks. A future published version is immutable; editing it creates or resumes a separate draft instead of modifying the definition used by readers.
 
 ### Snapshot
 
