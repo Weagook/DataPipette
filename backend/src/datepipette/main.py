@@ -18,12 +18,14 @@ from datepipette.api.router import api_v1_router
 from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.catalog import CatalogService
 from datepipette.application.connections import ConnectionService
+from datepipette.application.dataset_validation import DatasetValidationService
 from datepipette.application.datasets import DatasetService
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
 from datepipette.infrastructure.catalog import PsycopgSourceCatalogInspector
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
+from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
@@ -45,6 +47,7 @@ def create_app(
     connection_service: ConnectionService | None = None,
     catalog_service: CatalogService | None = None,
     dataset_service: DatasetService | None = None,
+    dataset_validation_service: DatasetValidationService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -66,6 +69,8 @@ def create_app(
                 app.state.catalog_service = catalog_service
             if dataset_service is not None:
                 app.state.dataset_service = dataset_service
+            if dataset_validation_service is not None:
+                app.state.dataset_validation_service = dataset_validation_service
             yield
             return
 
@@ -110,8 +115,19 @@ def create_app(
                 resolved_settings.source_statement_timeout_seconds,
             ),
         )
-        app.state.dataset_service = dataset_service or DatasetService(
-            SqlAlchemyDatasetStore(resources.session_factory)
+        dataset_store = SqlAlchemyDatasetStore(resources.session_factory)
+        app.state.dataset_service = dataset_service or DatasetService(dataset_store)
+        app.state.dataset_validation_service = (
+            dataset_validation_service
+            or DatasetValidationService(
+                dataset_store,
+                connection_store,
+                connection_cipher,
+                PsycopgSourceDatasetValidator(
+                    resolved_settings.source_connect_timeout_seconds,
+                    resolved_settings.source_statement_timeout_seconds,
+                ),
+            )
         )
         try:
             yield

@@ -17,6 +17,23 @@ class DatasetVersionState(StrEnum):
     SUPERSEDED = "superseded"
 
 
+class DatasetValidationState(StrEnum):
+    VALID = "valid"
+    VALID_WITH_WARNINGS = "valid_with_warnings"
+    INVALID = "invalid"
+
+
+class ValidationSeverity(StrEnum):
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class ValidationFindingCode(StrEnum):
+    SOURCE_RELATION_NOT_FOUND = "source_relation_not_found"
+    SOURCE_FIELD_NOT_FOUND = "source_field_not_found"
+    LARGE_ESTIMATED_RESULT = "large_estimated_result"
+
+
 class FieldDisplayFormat(StrEnum):
     DATE_DD_MM_YYYY = "date_dd_mm_yyyy"
     DATE_YYYY_MM_DD = "date_yyyy_mm_dd"
@@ -199,11 +216,121 @@ class Dataset:
 
 
 @dataclass(frozen=True, slots=True)
+class DatasetValidationFinding:
+    code: ValidationFindingCode
+    severity: ValidationSeverity
+    field_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedDatasetField:
+    field_id: UUID
+    name: str
+    data_type: str
+    nullable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetPlanSummary:
+    node_type: str
+    estimated_rows: int
+    startup_cost: float
+    total_cost: float
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetValidation:
+    state: DatasetValidationState
+    validated_revision: int
+    validated_at: datetime
+    compiled_sql: str | None
+    result_schema: tuple[ValidatedDatasetField, ...]
+    plan: DatasetPlanSummary | None
+    findings: tuple[DatasetValidationFinding, ...]
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "state": self.state.value,
+            "validated_revision": self.validated_revision,
+            "validated_at": self.validated_at.isoformat(),
+            "compiled_sql": self.compiled_sql,
+            "result_schema": [
+                {
+                    "field_id": str(field.field_id),
+                    "name": field.name,
+                    "data_type": field.data_type,
+                    "nullable": field.nullable,
+                }
+                for field in self.result_schema
+            ],
+            "plan": (
+                {
+                    "node_type": self.plan.node_type,
+                    "estimated_rows": self.plan.estimated_rows,
+                    "startup_cost": self.plan.startup_cost,
+                    "total_cost": self.plan.total_cost,
+                }
+                if self.plan is not None
+                else None
+            ),
+            "findings": [
+                {
+                    "code": finding.code.value,
+                    "severity": finding.severity.value,
+                    "field_id": str(finding.field_id) if finding.field_id else None,
+                }
+                for finding in self.findings
+            ],
+        }
+
+    @classmethod
+    def from_document(cls, document: dict[str, Any]) -> "DatasetValidation":
+        try:
+            plan_value = document["plan"]
+            return cls(
+                state=DatasetValidationState(document["state"]),
+                validated_revision=int(document["validated_revision"]),
+                validated_at=datetime.fromisoformat(document["validated_at"]),
+                compiled_sql=document["compiled_sql"],
+                result_schema=tuple(
+                    ValidatedDatasetField(
+                        field_id=UUID(field["field_id"]),
+                        name=field["name"],
+                        data_type=field["data_type"],
+                        nullable=field["nullable"],
+                    )
+                    for field in document["result_schema"]
+                ),
+                plan=(
+                    DatasetPlanSummary(
+                        node_type=plan_value["node_type"],
+                        estimated_rows=int(plan_value["estimated_rows"]),
+                        startup_cost=float(plan_value["startup_cost"]),
+                        total_cost=float(plan_value["total_cost"]),
+                    )
+                    if plan_value is not None
+                    else None
+                ),
+                findings=tuple(
+                    DatasetValidationFinding(
+                        code=ValidationFindingCode(finding["code"]),
+                        severity=ValidationSeverity(finding["severity"]),
+                        field_id=(UUID(finding["field_id"]) if finding["field_id"] else None),
+                    )
+                    for finding in document["findings"]
+                ),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("Stored dataset validation is invalid") from exc
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetDraft:
     id: UUID
     dataset_id: UUID
     revision: int
     definition: VisualDatasetDefinition
+    validation: DatasetValidation | None
     created_by: UUID
     created_at: datetime
     updated_at: datetime

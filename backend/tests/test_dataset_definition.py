@@ -1,13 +1,21 @@
 """Visual dataset definition invariants."""
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 
 from datepipette.domain.datasets import (
+    DatasetPlanSummary,
+    DatasetValidation,
+    DatasetValidationFinding,
+    DatasetValidationState,
     FieldDisplay,
     FieldDisplayFormat,
     FieldSource,
+    ValidatedDatasetField,
+    ValidationFindingCode,
+    ValidationSeverity,
     VisualDatasetDefinition,
     VisualField,
     VisualRelation,
@@ -113,3 +121,42 @@ def test_stored_definition_rejects_joins_and_unknown_versions() -> None:
     document["schema_version"] = 2
     with pytest.raises(ValueError, match="Stored visual definition"):
         VisualDatasetDefinition.from_document(document)
+
+
+def test_dataset_validation_round_trips_as_revision_bound_json() -> None:
+    validation = DatasetValidation(
+        state=DatasetValidationState.VALID_WITH_WARNINGS,
+        validated_revision=3,
+        validated_at=datetime(2026, 10, 9, 8, 0, tzinfo=UTC),
+        compiled_sql='SELECT "source"."id" AS "record_id" FROM "crm"."customers" AS "source"',
+        result_schema=(
+            ValidatedDatasetField(
+                field_id=uuid4(),
+                name="record_id",
+                data_type="bigint",
+                nullable=False,
+            ),
+        ),
+        plan=DatasetPlanSummary(
+            node_type="Seq Scan",
+            estimated_rows=1_000_000,
+            startup_cost=0.0,
+            total_cost=10_000.0,
+        ),
+        findings=(
+            DatasetValidationFinding(
+                code=ValidationFindingCode.LARGE_ESTIMATED_RESULT,
+                severity=ValidationSeverity.WARNING,
+            ),
+        ),
+    )
+
+    document = validation.to_document()
+
+    assert document["validated_revision"] == 3
+    assert document["findings"][0]["code"] == "large_estimated_result"
+    assert DatasetValidation.from_document(document) == validation
+
+    document["state"] = "unknown"
+    with pytest.raises(ValueError, match="Stored dataset validation"):
+        DatasetValidation.from_document(document)

@@ -7,7 +7,12 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from datepipette.domain.datasets import Dataset, DatasetDraft, VisualDatasetDefinition
+from datepipette.domain.datasets import (
+    Dataset,
+    DatasetDraft,
+    DatasetValidation,
+    VisualDatasetDefinition,
+)
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 
 MAX_DEFINITION_BYTES = 262_144
@@ -97,6 +102,26 @@ class DatasetStore(Protocol):
         occurred_at: datetime,
         request_id: str,
     ) -> DatasetDraft | None: ...
+
+    async def record_validation(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        expected_revision: int,
+        validation: DatasetValidation,
+        request_id: str,
+    ) -> DatasetDraft | None: ...
+
+    async def record_validation_failure(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        attempted_revision: int,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> None: ...
 
 
 def _require_admin(actor: User) -> None:

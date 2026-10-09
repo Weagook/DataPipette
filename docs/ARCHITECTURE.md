@@ -79,6 +79,8 @@ Catalog discovery is currently a live adapter query rather than a metadata repli
 
 Visual and SQL definitions, validation, compilation, draft/publish lifecycle, result schema, display settings, dependency analysis, and schedules.
 
+The first validation slice is synchronous and single-table: it re-checks live catalog visibility, composes identifiers safely, obtains a non-executing PostgreSQL JSON plan, and stores a compact artifact tied to the draft revision. It neither previews rows nor replaces the later background refresh/publication pipeline.
+
 ### Execution
 
 Source query execution, bounded streaming, Parquet writing, result statistics, cancellation, resource limits, snapshot publication, and cleanup.

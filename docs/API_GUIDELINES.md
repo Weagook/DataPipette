@@ -27,6 +27,7 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/connections/{connection_id}/tests
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
+/api/v1/datasets/{dataset_id}/draft/validations
 /api/v1/datasets/{dataset_id}/refresh-runs
 /api/v1/datasets/{dataset_id}/rows:query
 /api/v1/charts
@@ -91,13 +92,17 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 - Dataset draft endpoints require an active administrator session until connection grants define analyst scope; mutations are CSRF-protected.
 - `POST /api/v1/datasets` creates a private dataset and its first draft for one existing PostgreSQL connection. Saving does not contact the source database.
 - `GET /api/v1/datasets` uses bounded cursor pagination; `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata.
-- `GET /api/v1/datasets/{dataset_id}/draft` returns the complete schema-versioned visual definition and an ETag such as `"draft-3"`.
+- `GET /api/v1/datasets/{dataset_id}/draft` returns the complete schema-versioned visual definition, its latest revision-bound validation artifact when one exists, and an ETag such as `"draft-3"`.
 - `PUT /api/v1/datasets/{dataset_id}/draft` atomically replaces the complete definition and requires its current ETag in `If-Match`. A stale revision returns `409 dataset_revision_conflict`; a missing precondition returns `428 draft_revision_required`.
+- `POST /api/v1/datasets/{dataset_id}/draft/validations` requires the current draft ETag and explicitly re-checks the live relation and selected columns. It returns `valid`, `valid_with_warnings`, or `invalid`, the PostgreSQL-formatted result schema, safely generated SQL, a compact planner summary, and stable findings.
+- Missing source objects are `200` validation results with error findings. A network, TLS, credential, timeout, or unexpected source response returns the redacted `502 source_validation_unavailable` problem and does not erase the previous artifact.
+- Validation uses `EXPLAIN (FORMAT JSON)` without `ANALYZE`; no business rows are executed, previewed, or stored. A plan estimate of at least one million output rows currently produces the advisory `large_estimated_result` warning.
+- Replacing a definition clears its validation artifact. A concurrent edit during validation produces `409 dataset_revision_conflict` rather than attaching stale derived metadata.
 - `PATCH /api/v1/datasets/{dataset_id}` currently renames the stable dataset resource without changing its draft.
 - Dataset names are unique per owner without case sensitivity. Definitions contain exactly one relation, 1–500 fields with stable UUIDs, and no joins in the first slice.
-- Source validation, SQL compilation, preview, and publication are explicit later operations; a saved draft is not evidence that its source objects currently exist.
+- Saving remains offline and is not evidence that source objects exist. Validation is explicit and does not imply that preview, refresh, or publication has succeeded.
 
-Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md).
+Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md).
 
 ## Success responses
 

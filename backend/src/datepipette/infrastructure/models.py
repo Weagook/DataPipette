@@ -147,6 +147,10 @@ class DatasetVersionModel(Base):
         ),
         CheckConstraint("revision >= 1", name="revision_positive"),
         CheckConstraint("jsonb_typeof(definition) = 'object'", name="definition_object"),
+        CheckConstraint(
+            "validation IS NULL OR jsonb_typeof(validation) = 'object'",
+            name="validation_object",
+        ),
         Index(
             "uq_dataset_versions_one_draft",
             "dataset_id",
@@ -163,6 +167,7 @@ class DatasetVersionModel(Base):
     state: Mapped[str] = mapped_column(String(20))
     revision: Mapped[int] = mapped_column(Integer)
     definition: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    validation: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -35,6 +35,8 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **DAT-009:** Explicitly forced breaking publication shall mark incompatible charts invalid instead of deleting them.
 - **DAT-010:** A visual definition shall be a schema-versioned structured document whose source relations and output fields have stable identifiers.
 - **DAT-011:** Draft replacement shall use optimistic revision control and shall never mutate the currently published definition.
+- **DAT-012:** Explicit validation shall re-check live source objects, capture output types, and store a derived artifact bound to the exact draft revision.
+- **DAT-013:** Changing a draft definition shall invalidate prior validation; a concurrent change shall prevent stale validation from being attached.
 
 ### Query safety advisor
 
