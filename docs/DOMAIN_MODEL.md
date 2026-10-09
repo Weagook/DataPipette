@@ -67,6 +67,10 @@ The published definition and snapshot serve readers. Editing creates or updates 
 
 Drafts are mutable through optimistic revision checks. A future published version is immutable; editing it creates or resumes a separate draft instead of modifying the definition used by readers.
 
+### Draft validation
+
+An explicit, derived artifact bound to one draft revision. It records structural validity, PostgreSQL-formatted output types and nullability, safely compiled SQL, a compact planner estimate, stable findings, and validation time. It contains neither source rows nor a raw execution plan. Editing the definition invalidates the artifact. A missing relation or field is an ordinary invalid result; source connectivity failure is operational failure and does not overwrite the previous artifact.
+
 ### Snapshot
 
 An immutable Parquet representation of one successful dataset execution. A dataset exposes one active snapshot. The previous snapshot remains readable until a replacement is fully published, then becomes eligible for cleanup.

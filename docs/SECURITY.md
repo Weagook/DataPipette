@@ -78,6 +78,9 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Until connection grants and allowlists are implemented, live catalog endpoints are administrator-only and expose no more than the configured PostgreSQL role can access.
 - Catalog discovery requires effective schema `USAGE` and relation `SELECT`; column metadata requires column-level `SELECT`. Foreign-key targets are omitted unless their schema and relation are also visible.
 - Catalog statements are static, names and cursors are bound as values, system schemas are hidden by default, and raw source failures are redacted.
+- Single-table draft validation composes every schema, relation, alias, source-column, and output-column name with Psycopg identifiers; it never interpolates definition text into SQL.
+- Validation runs plain `EXPLAIN (FORMAT JSON)` inside the bounded read-only source transaction. It never enables `ANALYZE`, returns source rows, or stores the raw plan.
+- Stored validation artifacts contain generated SQL and structural metadata but no credentials, values, or rows. Audit events contain only revision, outcome, counts, and stable finding codes.
 
 ## Connection secrets
 
