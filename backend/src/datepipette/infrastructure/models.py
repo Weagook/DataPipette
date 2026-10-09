@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -70,3 +70,30 @@ class AuditEventModel(Base):
     resource_id: Mapped[UUID | None]
     request_id: Mapped[str | None] = mapped_column(String(128), index=True)
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+
+
+class PostgresConnectionModel(Base):
+    __tablename__ = "postgresql_connections"
+    __table_args__ = (
+        CheckConstraint("port BETWEEN 1 AND 65535", name="port_valid"),
+        CheckConstraint(
+            "ssl_mode IN ('disable', 'require', 'verify-ca', 'verify-full')",
+            name="ssl_mode_valid",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    host: Mapped[str] = mapped_column(String(253))
+    port: Mapped[int] = mapped_column(Integer)
+    database_name: Mapped[str] = mapped_column(String(255))
+    username: Mapped[str] = mapped_column(String(255))
+    encrypted_password: Mapped[str] = mapped_column(Text)
+    encrypted_ca_certificate: Mapped[str | None] = mapped_column(Text)
+    ssl_mode: Mapped[str] = mapped_column(String(20))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_test_succeeded: Mapped[bool | None] = mapped_column(Boolean)
+    last_test_error_code: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
