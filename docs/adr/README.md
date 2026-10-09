@@ -38,3 +38,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0008](0008-live-postgresql-catalog.md): Live privilege-filtered PostgreSQL catalog discovery
 - [ADR-0009](0009-versioned-visual-dataset-definitions.md): Versioned JSONB visual dataset definitions
 - [ADR-0010](0010-revision-bound-dataset-validation.md): Revision-bound non-executing dataset validation
+- [ADR-0011](0011-bounded-dataset-draft-preview.md): Bounded synchronous dataset draft preview

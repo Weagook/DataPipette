@@ -81,6 +81,9 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Single-table draft validation composes every schema, relation, alias, source-column, and output-column name with Psycopg identifiers; it never interpolates definition text into SQL.
 - Validation runs plain `EXPLAIN (FORMAT JSON)` inside the bounded read-only source transaction. It never enables `ANALYZE`, returns source rows, or stores the raw plan.
 - Stored validation artifacts contain generated SQL and structural metadata but no credentials, values, or rows. Audit events contain only revision, outcome, counts, and stable finding codes.
+- Draft preview never executes stored SQL text: it recompiles the structured definition, binds the row limit separately, and runs inside the bounded read-only source transaction.
+- Preview uses a server-side cursor, returns at most 200 rows, and applies a one-MiB encoded-row budget. One individual source value can still be transferred before its encoded size is known; source permissions and statement timeout remain required defenses.
+- Preview audit events contain revision, requested/returned counts, truncation reason, and a stable failure code only. SQL and business values are excluded.
 
 ## Connection secrets
 

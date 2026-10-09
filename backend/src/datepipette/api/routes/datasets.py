@@ -14,6 +14,12 @@ from datepipette.api.dependencies.authentication import (
     request_id,
 )
 from datepipette.api.problems import ApiProblem, ProblemDetails
+from datepipette.application.dataset_preview import (
+    MAX_PREVIEW_ROWS,
+    DatasetDraftNotValidatedError,
+    DatasetPreviewService,
+    SourceDatasetPreviewUnavailableError,
+)
 from datepipette.application.dataset_validation import (
     DatasetValidationService,
     SourceDatasetValidationUnavailableError,
@@ -30,11 +36,13 @@ from datepipette.application.datasets import (
 from datepipette.domain.datasets import (
     Dataset,
     DatasetDraft,
+    DatasetPreview,
     DatasetValidation,
     DatasetValidationState,
     FieldDisplay,
     FieldDisplayFormat,
     FieldSource,
+    PreviewTruncationReason,
     ValidationFindingCode,
     ValidationSeverity,
     VisualDatasetDefinition,
@@ -116,6 +124,10 @@ class ReplaceDraftRequest(StrictModel):
     definition: VisualDefinitionPayload
 
 
+class PreviewDatasetDraftRequest(StrictModel):
+    limit: int = Field(default=100, ge=1, le=MAX_PREVIEW_ROWS)
+
+
 class DatasetResponse(BaseModel):
     id: UUID
     name: str
@@ -168,6 +180,16 @@ class DatasetDraftResponse(BaseModel):
     updated_at: datetime
 
 
+class DatasetPreviewResponse(BaseModel):
+    revision: int
+    columns: list[ValidatedFieldResponse]
+    rows: list[dict[str, Any]]
+    requested_limit: int
+    returned_rows: int
+    truncated: bool
+    truncation_reason: PreviewTruncationReason | None
+
+
 class CursorMeta(BaseModel):
     next_cursor: str | None
 
@@ -183,6 +205,10 @@ def _service(request: Request) -> DatasetService:
 
 def _validation_service(request: Request) -> DatasetValidationService:
     return cast(DatasetValidationService, request.app.state.dataset_validation_service)
+
+
+def _preview_service(request: Request) -> DatasetPreviewService:
+    return cast(DatasetPreviewService, request.app.state.dataset_preview_service)
 
 
 def _definition(payload: VisualDefinitionPayload) -> VisualDatasetDefinition:
@@ -274,6 +300,26 @@ def _validation_response(value: DatasetValidation) -> DatasetValidationResponse:
             )
             for finding in value.findings
         ],
+    )
+
+
+def _preview_response(value: DatasetPreview) -> DatasetPreviewResponse:
+    return DatasetPreviewResponse(
+        revision=value.revision,
+        columns=[
+            ValidatedFieldResponse(
+                field_id=field.field_id,
+                name=field.name,
+                data_type=field.data_type,
+                nullable=field.nullable,
+            )
+            for field in value.columns
+        ],
+        rows=list(value.rows),
+        requested_limit=value.requested_limit,
+        returned_rows=value.returned_rows,
+        truncated=value.truncated,
+        truncation_reason=value.truncation_reason,
     )
 
 
@@ -555,3 +601,57 @@ async def validate_dataset_draft(
     if draft.validation is None:  # pragma: no cover - persistence contract guard
         raise RuntimeError("Dataset validation was not persisted")
     return _validation_response(draft.validation)
+
+
+@router.post(
+    "/{dataset_id}/draft/previews",
+    response_model=DatasetPreviewResponse,
+    responses={
+        **_COMMON_RESPONSES,
+        400: {"model": ProblemDetails},
+        409: {"model": ProblemDetails},
+        428: {"model": ProblemDetails},
+        502: {"model": ProblemDetails},
+    },
+)
+async def preview_dataset_draft(
+    dataset_id: UUID,
+    payload: PreviewDatasetDraftRequest,
+    request: Request,
+    response: Response,
+    session: AdministratorCsrfSession,
+    if_match: Annotated[str | None, Header(alias="If-Match", max_length=64)] = None,
+) -> DatasetPreviewResponse:
+    try:
+        preview = await _preview_service(request).preview(
+            actor=session.user,
+            dataset_id=dataset_id,
+            expected_revision=_expected_revision(if_match),
+            limit=payload.limit,
+            request_id=request_id(),
+        )
+    except DatasetRevisionConflictError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dataset_revision_conflict",
+            title="Dataset draft changed",
+            detail="Refetch and validate the latest draft before previewing it.",
+        ) from exc
+    except DatasetDraftNotValidatedError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dataset_draft_not_validated",
+            title="Dataset draft is not validated",
+            detail="Validate the current draft successfully before requesting a preview.",
+        ) from exc
+    except DatasetNotFoundError as exc:
+        raise _not_found() from exc
+    except SourceDatasetPreviewUnavailableError as exc:
+        raise ApiProblem(
+            status_code=502,
+            code="source_preview_unavailable",
+            title="Source preview unavailable",
+            detail="The PostgreSQL preview could not be completed safely.",
+        ) from exc
+    response.headers["ETag"] = _etag(preview.revision)
+    return _preview_response(preview)

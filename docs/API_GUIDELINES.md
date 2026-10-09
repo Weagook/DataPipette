@@ -28,6 +28,7 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
 /api/v1/datasets/{dataset_id}/draft/validations
+/api/v1/datasets/{dataset_id}/draft/previews
 /api/v1/datasets/{dataset_id}/refresh-runs
 /api/v1/datasets/{dataset_id}/rows:query
 /api/v1/charts
@@ -98,11 +99,16 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 - Missing source objects are `200` validation results with error findings. A network, TLS, credential, timeout, or unexpected source response returns the redacted `502 source_validation_unavailable` problem and does not erase the previous artifact.
 - Validation uses `EXPLAIN (FORMAT JSON)` without `ANALYZE`; no business rows are executed, previewed, or stored. A plan estimate of at least one million output rows currently produces the advisory `large_estimated_result` warning.
 - Replacing a definition clears its validation artifact. A concurrent edit during validation produces `409 dataset_revision_conflict` rather than attaching stale derived metadata.
+- `POST /api/v1/datasets/{dataset_id}/draft/previews` synchronously returns at most 200 rows from the exact current draft revision. It requires the current ETag, CSRF, and a `valid` or `valid_with_warnings` artifact for that revision.
+- Preview recompiles structured JSON rather than executing stored SQL text. It binds a server-side `LIMIT`, streams through a named source cursor, keeps the source statement timeout, and applies a one-MiB encoded-row budget. `truncated` and `truncation_reason` distinguish `row_limit` and `byte_limit` from a complete result.
+- Preview order is unspecified until an explicit sort is added. Repeated requests may return a different subset even when the source data is unchanged.
+- JSON preview values preserve `null`, booleans, integers, finite floats, strings, arrays, and objects. PostgreSQL `numeric`/`decimal` becomes a string to avoid precision loss; dates/times use ISO text; UUID and interval values use text; `bytea` uses base64.
+- Source preview failure returns redacted `502 source_preview_unavailable`. A concurrent edit discards the fetched rows and returns `409 dataset_revision_conflict`.
 - `PATCH /api/v1/datasets/{dataset_id}` currently renames the stable dataset resource without changing its draft.
 - Dataset names are unique per owner without case sensitivity. Definitions contain exactly one relation, 1–500 fields with stable UUIDs, and no joins in the first slice.
 - Saving remains offline and is not evidence that source objects exist. Validation is explicit and does not imply that preview, refresh, or publication has succeeded.
 
-Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md).
+Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md).
 
 ## Success responses
 

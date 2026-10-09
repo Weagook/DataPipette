@@ -19,6 +19,7 @@ from datepipette.domain.datasets import (
     ValidationSeverity,
     VisualDatasetDefinition,
 )
+from datepipette.infrastructure.dataset_sql import compile_visual_select
 from datepipette.infrastructure.source_postgres import open_read_only_source
 
 LARGE_ESTIMATED_RESULT_ROWS = 1_000_000
@@ -123,7 +124,7 @@ class PsycopgSourceDatasetValidator:
                         findings=missing,
                     )
 
-                select_query = self._select(definition)
+                select_query = compile_visual_select(definition)
                 compiled_sql = select_query.as_string(source)
                 explain_query = sql.SQL("EXPLAIN (FORMAT JSON) {}").format(select_query)
                 await cursor.execute(explain_query)
@@ -139,23 +140,6 @@ class PsycopgSourceDatasetValidator:
                 )
         except (TimeoutError, psycopg.Error, IndexError, KeyError, TypeError, ValueError) as exc:
             raise SourceDatasetValidationUnavailableError from exc
-
-    @staticmethod
-    def _select(definition: VisualDatasetDefinition) -> sql.Composed:
-        relation = definition.relation
-        fields = sql.SQL(", ").join(
-            sql.SQL("{alias}.{column} AS {output}").format(
-                alias=sql.Identifier(relation.alias),
-                column=sql.Identifier(field.source.column),
-                output=sql.Identifier(field.name),
-            )
-            for field in definition.fields
-        )
-        return sql.SQL("SELECT {fields} FROM {relation} AS {alias}").format(
-            fields=fields,
-            relation=sql.Identifier(relation.schema_name, relation.relation_name),
-            alias=sql.Identifier(relation.alias),
-        )
 
     @staticmethod
     def _plan_summary(explain_row: tuple[Any, ...] | None) -> DatasetPlanSummary:

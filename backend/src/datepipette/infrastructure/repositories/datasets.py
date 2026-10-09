@@ -345,6 +345,73 @@ class SqlAlchemyDatasetStore:
                 )
             )
 
+    async def record_preview(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        expected_revision: int,
+        requested_limit: int,
+        returned_rows: int,
+        truncation_reason: str | None,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> bool:
+        async with self._session_factory() as session, session.begin():
+            model = await session.scalar(
+                select(DatasetVersionModel)
+                .where(
+                    DatasetVersionModel.dataset_id == dataset_id,
+                    DatasetVersionModel.state == DatasetVersionState.DRAFT.value,
+                )
+                .with_for_update()
+            )
+            if model is None:
+                return False
+            if model.revision != expected_revision:
+                raise DatasetRevisionConflictError
+            session.add(
+                self._audit(
+                    actor_id=actor_id,
+                    action="dataset.draft_previewed",
+                    resource_id=dataset_id,
+                    occurred_at=occurred_at,
+                    request_id=request_id,
+                    details={
+                        "revision": expected_revision,
+                        "requested_limit": requested_limit,
+                        "returned_rows": returned_rows,
+                        "truncation_reason": truncation_reason,
+                    },
+                )
+            )
+            return True
+
+    async def record_preview_failure(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        attempted_revision: int,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> None:
+        async with self._session_factory() as session, session.begin():
+            session.add(
+                self._audit(
+                    actor_id=actor_id,
+                    action="dataset.draft_preview_failed",
+                    resource_id=dataset_id,
+                    occurred_at=occurred_at,
+                    request_id=request_id,
+                    details={
+                        "revision": attempted_revision,
+                        "error_code": "source_unavailable",
+                    },
+                    outcome=AuditOutcome.FAILURE,
+                )
+            )
+
     @staticmethod
     def _translate_integrity_error(exc: IntegrityError) -> None:
         constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
