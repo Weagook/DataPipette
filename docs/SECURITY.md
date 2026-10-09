@@ -66,6 +66,8 @@ Until connection grants exist, visual dataset draft APIs are administrator-only.
 
 Refresh requests are administrator-only and CSRF-protected until connection grants define analyst scope. They require the current draft ETag and store only a SHA-256 digest of the client idempotency key. Celery messages contain only a refresh-run UUID; definitions, SQL, connection credentials, business rows, and idempotency-key plaintext remain outside Redis. Metadata PostgreSQL is authoritative for lifecycle state, and audit events use stable safe error codes rather than raw broker, driver, or source errors.
 
+Local Parquet files contain business data and therefore belong under a private runtime directory or volume, never the repository or a publicly served path. Metadata and audit events store only relative object keys, schema/type metadata, identifiers, counts, checksums, and safe error codes—not row values or host-specific absolute paths. Production must replace the local adapter with private encrypted S3-compatible storage and least-privilege credentials.
+
 A viewer with dashboard access may receive chart results but must not use that route to browse dataset rows, create exports, infer unrestricted schema metadata, or execute arbitrary chart definitions.
 
 ## PostgreSQL source safety

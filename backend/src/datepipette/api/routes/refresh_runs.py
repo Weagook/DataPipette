@@ -38,6 +38,7 @@ class RefreshRunResponse(BaseModel):
     dispatched_at: datetime | None
     attempt_count: int
     error_code: str | None
+    snapshot_id: UUID | None
     requested_at: datetime
     started_at: datetime | None
     finished_at: datetime | None

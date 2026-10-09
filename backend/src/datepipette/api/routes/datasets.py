@@ -133,6 +133,7 @@ class DatasetResponse(BaseModel):
     owner_id: UUID
     connection_id: UUID
     active_version_id: UUID | None
+    active_snapshot_id: UUID | None
     draft_revision: int
     created_at: datetime
     updated_at: datetime
@@ -247,6 +248,7 @@ def _dataset_response(value: Dataset) -> DatasetResponse:
         owner_id=value.owner_id,
         connection_id=value.connection_id,
         active_version_id=value.active_version_id,
+        active_snapshot_id=value.active_snapshot_id,
         draft_revision=value.draft_revision,
         created_at=value.created_at,
         updated_at=value.updated_at,

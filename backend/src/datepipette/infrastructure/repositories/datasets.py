@@ -36,6 +36,7 @@ def _to_dataset(model: DatasetModel, draft_revision: int) -> Dataset:
         owner_id=model.owner_id,
         connection_id=model.connection_id,
         active_version_id=model.active_version_id,
+        active_snapshot_id=model.active_snapshot_id,
         draft_revision=draft_revision,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -97,6 +98,7 @@ class SqlAlchemyDatasetStore:
             owner_id=actor_id,
             connection_id=value.connection_id,
             active_version_id=None,
+            active_snapshot_id=None,
             created_at=occurred_at,
             updated_at=occurred_at,
         )

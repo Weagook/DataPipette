@@ -19,7 +19,7 @@ The snapshot writer is not implemented yet. Introducing the queue before storage
 - Send only the run UUID through Redis, use it as the deterministic Celery task identifier, and reload all authoritative state in the worker.
 - Configure JSON-only messages, late acknowledgement, rejection on worker loss, and a prefetch multiplier of one. The database claim operation makes duplicate delivery a no-op and defers a queued successor while another run is active.
 - Audit lifecycle transitions without idempotency-key plaintext, SQL, source rows, or raw infrastructure errors.
-- Until the Parquet writer exists, the production executor moves a claimed run to `failed` with `snapshot_writer_unavailable`. Test executors may prove the successful terminal transition, but the product never reports a snapshot success it did not produce.
+- Until the Parquet writer exists, the foundation executor moves a claimed run to `failed` with `snapshot_writer_unavailable`. Test executors may prove the successful terminal transition, but the product never reports a snapshot success it did not produce. ADR-0013 subsequently replaces this temporary executor with validated local Parquet publication.
 
 ## Consequences
 

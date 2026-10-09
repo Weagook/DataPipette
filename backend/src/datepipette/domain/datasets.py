@@ -215,6 +215,7 @@ class Dataset:
     owner_id: UUID
     connection_id: UUID
     active_version_id: UUID | None
+    active_snapshot_id: UUID | None
     draft_revision: int
     created_at: datetime
     updated_at: datetime

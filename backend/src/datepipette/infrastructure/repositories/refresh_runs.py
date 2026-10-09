@@ -1,5 +1,6 @@
-"""Transactional persistence for durable dataset refresh runs."""
+"""Transactional persistence and publication for dataset refresh runs."""
 
+from copy import deepcopy
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -22,16 +23,21 @@ from datepipette.domain.refresh import (
     RefreshRun,
     RefreshRunState,
 )
+from datepipette.domain.snapshots import SnapshotArtifact, SnapshotState
 from datepipette.infrastructure.models import (
     AuditEventModel,
     DatasetModel,
     DatasetRefreshRequestModel,
     DatasetRefreshRunModel,
+    DatasetSnapshotModel,
     DatasetVersionModel,
 )
 
 
-def _to_run(model: DatasetRefreshRunModel) -> RefreshRun:
+def _to_run(
+    model: DatasetRefreshRunModel,
+    snapshot_id: UUID | None = None,
+) -> RefreshRun:
     return RefreshRun(
         id=model.id,
         dataset_id=model.dataset_id,
@@ -43,6 +49,7 @@ def _to_run(model: DatasetRefreshRunModel) -> RefreshRun:
         dispatched_at=model.dispatched_at,
         attempt_count=model.attempt_count,
         error_code=model.error_code,
+        snapshot_id=snapshot_id,
         requested_at=model.requested_at,
         started_at=model.started_at,
         finished_at=model.finished_at,
@@ -95,8 +102,13 @@ class SqlAlchemyRefreshRunStore:
                 )
                 if existing_run is None:  # pragma: no cover - protected by foreign key
                     raise RuntimeError("Refresh request points to a missing run")
+                snapshot_id = await session.scalar(
+                    select(DatasetSnapshotModel.id).where(
+                        DatasetSnapshotModel.refresh_run_id == existing_run.id
+                    )
+                )
                 return RefreshRequestOutcome(
-                    run=_to_run(existing_run),
+                    run=_to_run(existing_run, snapshot_id),
                     coalesced=True,
                     dispatch_required=(
                         existing_run.state == RefreshRunState.QUEUED.value
@@ -195,13 +207,20 @@ class SqlAlchemyRefreshRunStore:
 
     async def get(self, *, dataset_id: UUID, run_id: UUID) -> RefreshRun | None:
         async with self._session_factory() as session:
-            model = await session.scalar(
-                select(DatasetRefreshRunModel).where(
-                    DatasetRefreshRunModel.id == run_id,
-                    DatasetRefreshRunModel.dataset_id == dataset_id,
+            row = (
+                await session.execute(
+                    select(DatasetRefreshRunModel, DatasetSnapshotModel.id)
+                    .outerjoin(
+                        DatasetSnapshotModel,
+                        DatasetSnapshotModel.refresh_run_id == DatasetRefreshRunModel.id,
+                    )
+                    .where(
+                        DatasetRefreshRunModel.id == run_id,
+                        DatasetRefreshRunModel.dataset_id == dataset_id,
+                    )
                 )
-            )
-        return _to_run(model) if model is not None else None
+            ).one_or_none()
+        return _to_run(*row) if row is not None else None
 
     async def record_dispatch_attempt(self, run_id: UUID, occurred_at: datetime) -> None:
         async with self._session_factory() as session, session.begin():
@@ -285,14 +304,19 @@ class SqlAlchemyRefreshRunStore:
             model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
             if model is None or model.state != RefreshRunState.RUNNING.value:
                 return
-            model.state = (
-                RefreshRunState.SUCCEEDED.value
-                if result.succeeded
-                else RefreshRunState.FAILED.value
-            )
-            model.error_code = result.error_code
-            model.finished_at = occurred_at
-            model.updated_at = occurred_at
+            if result.succeeded and result.snapshot is not None:
+                published = await self._publish_snapshot(
+                    session,
+                    model,
+                    result.snapshot,
+                    occurred_at,
+                )
+                if not published:
+                    result = RefreshExecutionResult(False, "draft_changed")
+            elif result.succeeded:
+                result = RefreshExecutionResult(False, "snapshot_write_failed")
+            if not result.succeeded:
+                self._fail(model, result.error_code or "refresh_execution_failed", occurred_at)
             session.add(
                 self._audit(
                     actor_id=None,
@@ -305,10 +329,110 @@ class SqlAlchemyRefreshRunStore:
                     run_id=model.id,
                     occurred_at=occurred_at,
                     request_id="worker",
-                    details={"error_code": result.error_code},
+                    details={
+                        "error_code": result.error_code,
+                        "snapshot_id": (
+                            str(result.snapshot.id)
+                            if result.succeeded and result.snapshot is not None
+                            else None
+                        ),
+                        "row_count": (
+                            result.snapshot.row_count
+                            if result.succeeded and result.snapshot is not None
+                            else None
+                        ),
+                    },
                     outcome=(AuditOutcome.SUCCESS if result.succeeded else AuditOutcome.FAILURE),
                 )
             )
+
+    async def _publish_snapshot(
+        self,
+        session: AsyncSession,
+        run: DatasetRefreshRunModel,
+        artifact: SnapshotArtifact,
+        occurred_at: datetime,
+    ) -> bool:
+        dataset = await session.get(DatasetModel, run.dataset_id, with_for_update=True)
+        version = await session.get(
+            DatasetVersionModel,
+            run.dataset_version_id,
+            with_for_update=True,
+        )
+        if dataset is None or version is None or version.revision != run.requested_revision:
+            return False
+        if version.state == DatasetVersionState.DRAFT.value:
+            if not _validation_is_current(version):
+                return False
+            if dataset.active_version_id is not None:
+                active_version = await session.get(
+                    DatasetVersionModel,
+                    dataset.active_version_id,
+                    with_for_update=True,
+                )
+                if active_version is not None and active_version.id != version.id:
+                    active_version.state = DatasetVersionState.SUPERSEDED.value
+                    active_version.updated_at = occurred_at
+            version.state = DatasetVersionState.PUBLISHED.value
+            version.updated_at = occurred_at
+            await session.flush()
+            session.add(
+                DatasetVersionModel(
+                    id=uuid4(),
+                    dataset_id=dataset.id,
+                    state=DatasetVersionState.DRAFT.value,
+                    revision=version.revision,
+                    definition=deepcopy(version.definition),
+                    validation=deepcopy(version.validation),
+                    created_by=run.requested_by,
+                    created_at=occurred_at,
+                    updated_at=occurred_at,
+                )
+            )
+        elif not (
+            version.state == DatasetVersionState.PUBLISHED.value
+            and dataset.active_version_id == version.id
+        ):
+            return False
+
+        previous_snapshot = await session.scalar(
+            select(DatasetSnapshotModel)
+            .where(
+                DatasetSnapshotModel.dataset_id == dataset.id,
+                DatasetSnapshotModel.state == SnapshotState.ACTIVE.value,
+            )
+            .with_for_update()
+        )
+        if previous_snapshot is not None:
+            previous_snapshot.state = SnapshotState.SUPERSEDED.value
+            previous_snapshot.superseded_at = occurred_at
+            await session.flush()
+        snapshot = DatasetSnapshotModel(
+            id=artifact.id,
+            dataset_id=dataset.id,
+            dataset_version_id=version.id,
+            refresh_run_id=run.id,
+            state=SnapshotState.ACTIVE.value,
+            storage_backend=artifact.storage_backend,
+            object_key=artifact.object_key,
+            row_count=artifact.row_count,
+            byte_size=artifact.byte_size,
+            checksum_sha256=artifact.checksum_sha256,
+            schema_document=artifact.schema_document,
+            created_at=occurred_at,
+            activated_at=occurred_at,
+            superseded_at=None,
+        )
+        session.add(snapshot)
+        await session.flush()
+        dataset.active_version_id = version.id
+        dataset.active_snapshot_id = snapshot.id
+        dataset.updated_at = occurred_at
+        run.state = RefreshRunState.SUCCEEDED.value
+        run.error_code = None
+        run.finished_at = occurred_at
+        run.updated_at = occurred_at
+        return True
 
     @staticmethod
     def _fail(model: DatasetRefreshRunModel, error_code: str, occurred_at: datetime) -> None:

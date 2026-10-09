@@ -17,6 +17,7 @@ htmlcov/
 
 # Runtime output
 *.log
+.local/snapshots/
 
 # Operating system metadata
 .DS_Store

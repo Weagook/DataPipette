@@ -5,20 +5,31 @@ from uuid import UUID
 
 from celery import Task  # type: ignore[import-untyped]
 
-from datepipette.application.refresh_worker import RefreshWorkerService, UnavailableSnapshotWriter
+from datepipette.application.refresh_worker import RefreshWorkerService
 from datepipette.config import get_settings
 from datepipette.domain.refresh import RefreshClaimOutcome
 from datepipette.infrastructure.celery_app import celery_app
+from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
+from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 
 
 async def _execute(run_id: UUID) -> RefreshClaimOutcome:
-    engine = create_database_engine(get_settings())
+    settings = get_settings()
+    engine = create_database_engine(settings)
     try:
+        session_factory = create_session_factory(engine)
         service = RefreshWorkerService(
-            SqlAlchemyRefreshRunStore(create_session_factory(engine)),
-            UnavailableSnapshotWriter(),
+            SqlAlchemyRefreshRunStore(session_factory),
+            LocalParquetSnapshotExecutor(
+                session_factory,
+                AesGcmSecretCipher(settings.connection_encryption_key.get_secret_value()),
+                settings.snapshot_storage_path,
+                settings.source_connect_timeout_seconds,
+                settings.refresh_statement_timeout_seconds,
+                settings.refresh_batch_rows,
+            ),
         )
         return await service.execute(run_id)
     finally:
