@@ -4,7 +4,17 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -95,5 +105,64 @@ class PostgresConnectionModel(Base):
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_test_succeeded: Mapped[bool | None] = mapped_column(Boolean)
     last_test_error_code: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetModel(Base):
+    __tablename__ = "datasets"
+    __table_args__ = (
+        Index(
+            "uq_datasets_owner_name_normalized",
+            "owner_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    connection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("postgresql_connections.id", ondelete="RESTRICT")
+    )
+    active_version_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey(
+            "dataset_versions.id",
+            name="fk_datasets_active_version_id_dataset_versions",
+            ondelete="RESTRICT",
+            use_alter=True,
+        )
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetVersionModel(Base):
+    __tablename__ = "dataset_versions"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('draft', 'published', 'superseded')",
+            name="state_valid",
+        ),
+        CheckConstraint("revision >= 1", name="revision_positive"),
+        CheckConstraint("jsonb_typeof(definition) = 'object'", name="definition_object"),
+        Index(
+            "uq_dataset_versions_one_draft",
+            "dataset_id",
+            unique=True,
+            postgresql_where=text("state = 'draft'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        index=True,
+    )
+    state: Mapped[str] = mapped_column(String(20))
+    revision: Mapped[int] = mapped_column(Integer)
+    definition: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
