@@ -17,6 +17,7 @@ from datepipette.domain.audit import AuditActorType, AuditOutcome
 from datepipette.domain.datasets import (
     Dataset,
     DatasetDraft,
+    DatasetValidation,
     DatasetVersionState,
     VisualDatasetDefinition,
 )
@@ -47,6 +48,11 @@ def _to_draft(model: DatasetVersionModel) -> DatasetDraft:
         dataset_id=model.dataset_id,
         revision=model.revision,
         definition=VisualDatasetDefinition.from_document(model.definition),
+        validation=(
+            DatasetValidation.from_document(model.validation)
+            if model.validation is not None
+            else None
+        ),
         created_by=model.created_by,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -100,6 +106,7 @@ class SqlAlchemyDatasetStore:
             state=DatasetVersionState.DRAFT.value,
             revision=1,
             definition=definition,
+            validation=None,
             created_by=actor_id,
             created_at=occurred_at,
             updated_at=occurred_at,
@@ -247,6 +254,7 @@ class SqlAlchemyDatasetStore:
                 raise DatasetRevisionConflictError
             if model.definition != definition:
                 model.definition = definition
+                model.validation = None
                 model.revision += 1
                 model.updated_at = occurred_at
                 dataset_model = await session.get(DatasetModel, dataset_id)
@@ -266,6 +274,77 @@ class SqlAlchemyDatasetStore:
                 await session.flush()
             return _to_draft(model)
 
+    async def record_validation(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        expected_revision: int,
+        validation: DatasetValidation,
+        request_id: str,
+    ) -> DatasetDraft | None:
+        async with self._session_factory() as session, session.begin():
+            model = await session.scalar(
+                select(DatasetVersionModel)
+                .where(
+                    DatasetVersionModel.dataset_id == dataset_id,
+                    DatasetVersionModel.state == DatasetVersionState.DRAFT.value,
+                )
+                .with_for_update()
+            )
+            if model is None:
+                return None
+            if model.revision != expected_revision:
+                raise DatasetRevisionConflictError
+            model.validation = validation.to_document()
+            session.add(
+                self._audit(
+                    actor_id=actor_id,
+                    action="dataset.draft_validated",
+                    resource_id=dataset_id,
+                    occurred_at=validation.validated_at,
+                    request_id=request_id,
+                    details={
+                        "revision": validation.validated_revision,
+                        "state": validation.state.value,
+                        "field_count": len(validation.result_schema),
+                        "finding_codes": [item.code.value for item in validation.findings],
+                    },
+                    outcome=(
+                        AuditOutcome.FAILURE
+                        if validation.state.value == "invalid"
+                        else AuditOutcome.SUCCESS
+                    ),
+                )
+            )
+            await session.flush()
+            return _to_draft(model)
+
+    async def record_validation_failure(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        attempted_revision: int,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> None:
+        async with self._session_factory() as session, session.begin():
+            session.add(
+                self._audit(
+                    actor_id=actor_id,
+                    action="dataset.draft_validation_failed",
+                    resource_id=dataset_id,
+                    occurred_at=occurred_at,
+                    request_id=request_id,
+                    details={
+                        "revision": attempted_revision,
+                        "error_code": "source_unavailable",
+                    },
+                    outcome=AuditOutcome.FAILURE,
+                )
+            )
+
     @staticmethod
     def _translate_integrity_error(exc: IntegrityError) -> None:
         constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
@@ -281,6 +360,7 @@ class SqlAlchemyDatasetStore:
         occurred_at: datetime,
         request_id: str,
         details: dict[str, Any],
+        outcome: AuditOutcome = AuditOutcome.SUCCESS,
     ) -> AuditEventModel:
         return AuditEventModel(
             id=uuid4(),
@@ -288,7 +368,7 @@ class SqlAlchemyDatasetStore:
             actor_type=AuditActorType.USER.value,
             actor_id=actor_id,
             action=action,
-            outcome=AuditOutcome.SUCCESS.value,
+            outcome=outcome.value,
             resource_type="dataset",
             resource_id=resource_id,
             request_id=request_id,
