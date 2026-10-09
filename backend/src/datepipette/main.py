@@ -16,10 +16,12 @@ from datepipette.api.problems import (
 )
 from datepipette.api.router import api_v1_router
 from datepipette.application.auth_service import AuthenticationService
+from datepipette.application.catalog import CatalogService
 from datepipette.application.connections import ConnectionService
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
+from datepipette.infrastructure.catalog import PsycopgSourceCatalogInspector
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
@@ -39,6 +41,7 @@ def create_app(
     auth_service: AuthenticationService | None = None,
     user_administration_service: UserAdministrationService | None = None,
     connection_service: ConnectionService | None = None,
+    catalog_service: CatalogService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -56,6 +59,8 @@ def create_app(
                 app.state.user_administration_service = user_administration_service
             if connection_service is not None:
                 app.state.connection_service = connection_service
+            if catalog_service is not None:
+                app.state.catalog_service = catalog_service
             yield
             return
 
@@ -80,10 +85,22 @@ def create_app(
                 SqlAlchemyUserAdministrationStore(resources.session_factory)
             )
         )
+        connection_store = SqlAlchemyConnectionStore(resources.session_factory)
+        connection_cipher = AesGcmSecretCipher(
+            resolved_settings.connection_encryption_key.get_secret_value()
+        )
         app.state.connection_service = connection_service or ConnectionService(
-            SqlAlchemyConnectionStore(resources.session_factory),
-            AesGcmSecretCipher(resolved_settings.connection_encryption_key.get_secret_value()),
+            connection_store,
+            connection_cipher,
             PsycopgSourceConnectionTester(
+                resolved_settings.source_connect_timeout_seconds,
+                resolved_settings.source_statement_timeout_seconds,
+            ),
+        )
+        app.state.catalog_service = catalog_service or CatalogService(
+            connection_store,
+            connection_cipher,
+            PsycopgSourceCatalogInspector(
                 resolved_settings.source_connect_timeout_seconds,
                 resolved_settings.source_statement_timeout_seconds,
             ),

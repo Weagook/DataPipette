@@ -73,6 +73,8 @@ Users, groups, roles, service accounts, token lifecycle, sessions, scopes, ACL e
 
 Encrypted PostgreSQL connection configuration, health checks, schema introspection, table and column metadata, foreign-key suggestions, and connection visibility policies.
 
+Catalog discovery is currently a live adapter query rather than a metadata replica. The API opens a bounded read-only source transaction, queries static `pg_catalog` statements, filters results with the connected role's effective schema/table/column privileges, and returns only structural metadata. System schemas are hidden by default. Connection-grant allowlists will narrow this database-visible set when that later authorization slice is implemented.
+
 ### Datasets
 
 Visual and SQL definitions, validation, compilation, draft/publish lifecycle, result schema, display settings, dependency analysis, and schedules.

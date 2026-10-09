@@ -10,6 +10,194 @@
         "title": "AccountStatus",
         "type": "string"
       },
+      "CatalogColumnResponse": {
+        "properties": {
+          "data_type": {
+            "title": "Data Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          },
+          "ordinal_position": {
+            "title": "Ordinal Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "ordinal_position",
+          "data_type",
+          "nullable"
+        ],
+        "title": "CatalogColumnResponse",
+        "type": "object"
+      },
+      "CatalogForeignKeyResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Columns",
+            "type": "array"
+          },
+          "target_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Columns",
+            "type": "array"
+          },
+          "target_relation": {
+            "title": "Target Relation",
+            "type": "string"
+          },
+          "target_schema": {
+            "title": "Target Schema",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_columns",
+          "target_schema",
+          "target_relation",
+          "target_columns"
+        ],
+        "title": "CatalogForeignKeyResponse",
+        "type": "object"
+      },
+      "CatalogRelationCollectionResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogRelationResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "CatalogRelationCollectionResponse",
+        "type": "object"
+      },
+      "CatalogRelationDetailResponse": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogColumnResponse"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "foreign_keys": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogForeignKeyResponse"
+            },
+            "title": "Foreign Keys",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RelationKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "primary_key": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Primary Key",
+            "type": "array"
+          },
+          "schema_name": {
+            "title": "Schema Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_name",
+          "name",
+          "kind",
+          "columns",
+          "primary_key",
+          "foreign_keys"
+        ],
+        "title": "CatalogRelationDetailResponse",
+        "type": "object"
+      },
+      "CatalogRelationResponse": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RelationKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "schema_name": {
+            "title": "Schema Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_name",
+          "name",
+          "kind"
+        ],
+        "title": "CatalogRelationResponse",
+        "type": "object"
+      },
+      "CatalogSchemaCollectionResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogSchemaResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "CatalogSchemaCollectionResponse",
+        "type": "object"
+      },
+      "CatalogSchemaResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CatalogSchemaResponse",
+        "type": "object"
+      },
       "ConnectionCollectionResponse": {
         "properties": {
           "data": {
@@ -488,6 +676,17 @@
         ],
         "title": "ReadinessResponse",
         "type": "object"
+      },
+      "RelationKind": {
+        "enum": [
+          "table",
+          "partitioned_table",
+          "view",
+          "materialized_view",
+          "foreign_table"
+        ],
+        "title": "RelationKind",
+        "type": "string"
       },
       "SessionRevocationResponse": {
         "properties": {
@@ -1321,6 +1520,431 @@
         "summary": "Update Connection",
         "tags": [
           "connections"
+        ]
+      }
+    },
+    "/api/v1/connections/{connection_id}/catalog/schemas": {
+      "get": {
+        "operationId": "list_catalog_schemas_api_v1_connections__connection_id__catalog_schemas_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_system",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include System",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogSchemaCollectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "List Catalog Schemas",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations": {
+      "get": {
+        "operationId": "list_catalog_relations_api_v1_connections__connection_id__catalog_schemas__schema_name__relations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Schema Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRelationCollectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "List Catalog Relations",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations/{relation_name}": {
+      "get": {
+        "operationId": "inspect_catalog_relation_api_v1_connections__connection_id__catalog_schemas__schema_name__relations__relation_name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Schema Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "relation_name",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Relation Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRelationDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Inspect Catalog Relation",
+        "tags": [
+          "catalog"
         ]
       }
     },

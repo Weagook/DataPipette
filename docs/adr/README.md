@@ -35,3 +35,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0005](0005-server-side-browser-sessions.md): Server-side opaque browser sessions
 - [ADR-0006](0006-local-account-lifecycle.md): Administrator-managed local account lifecycle
 - [ADR-0007](0007-encrypted-postgresql-connections.md): Installation-key encryption for PostgreSQL connections
+- [ADR-0008](0008-live-postgresql-catalog.md): Live privilege-filtered PostgreSQL catalog discovery
