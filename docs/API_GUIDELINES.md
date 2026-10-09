@@ -86,6 +86,19 @@ Secret-envelope and connection-test decisions are recorded in [ADR-0007](adr/000
 
 The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-catalog.md).
 
+## Visual dataset drafts
+
+- Dataset draft endpoints require an active administrator session until connection grants define analyst scope; mutations are CSRF-protected.
+- `POST /api/v1/datasets` creates a private dataset and its first draft for one existing PostgreSQL connection. Saving does not contact the source database.
+- `GET /api/v1/datasets` uses bounded cursor pagination; `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata.
+- `GET /api/v1/datasets/{dataset_id}/draft` returns the complete schema-versioned visual definition and an ETag such as `"draft-3"`.
+- `PUT /api/v1/datasets/{dataset_id}/draft` atomically replaces the complete definition and requires its current ETag in `If-Match`. A stale revision returns `409 dataset_revision_conflict`; a missing precondition returns `428 draft_revision_required`.
+- `PATCH /api/v1/datasets/{dataset_id}` currently renames the stable dataset resource without changing its draft.
+- Dataset names are unique per owner without case sensitivity. Definitions contain exactly one relation, 1–500 fields with stable UUIDs, and no joins in the first slice.
+- Source validation, SQL compilation, preview, and publication are explicit later operations; a saved draft is not evidence that its source objects currently exist.
+
+Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md).
+
 ## Success responses
 
 Ordinary resources use direct JSON objects. Collection responses include data and pagination metadata:

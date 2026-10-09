@@ -62,6 +62,8 @@ Authorization combines:
 
 New resources are private to their owner and administrators. Grants are additive in MVP. Direct dataset access is distinct from dashboard-context access to aggregated chart results.
 
+Until connection grants exist, visual dataset draft APIs are administrator-only. A draft records its owner immediately, does not grant access to another principal, and can be saved while the source is unavailable. Saving validates the bounded document structure but does not imply source authorization or source-schema validity; those checks recur during explicit validation, preview, and publication.
+
 A viewer with dashboard access may receive chart results but must not use that route to browse dataset rows, create exports, infer unrestricted schema metadata, or execute arbitrary chart definitions.
 
 ## PostgreSQL source safety

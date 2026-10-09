@@ -33,6 +33,8 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **DAT-007:** Publication shall require validation, a successful refresh, and atomic activation of the definition and snapshot.
 - **DAT-008:** Breaking schema changes shall be blocked by default and shall identify affected charts.
 - **DAT-009:** Explicitly forced breaking publication shall mark incompatible charts invalid instead of deleting them.
+- **DAT-010:** A visual definition shall be a schema-versioned structured document whose source relations and output fields have stable identifiers.
+- **DAT-011:** Draft replacement shall use optimistic revision control and shall never mutate the currently published definition.
 
 ### Query safety advisor
 

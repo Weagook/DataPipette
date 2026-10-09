@@ -20,7 +20,7 @@ Outcome: an administrator connects PostgreSQL and an analyst publishes and brows
 - [x] Bootstrap administrator, local authentication, and administrator-managed local accounts
 - [x] Create encrypted PostgreSQL connections and connection tests
 - [x] Inspect schemas, tables, columns, and keys
-- [ ] Define a single-table visual dataset draft
+- [x] Define a single-table visual dataset draft
 - [ ] Validate, preview, and publish through Celery
 - [ ] Stream rows into local Parquet storage
 - [ ] Query snapshot rows with DuckDB and cursor pagination
