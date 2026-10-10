@@ -10,8 +10,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from datepipette.api.dependencies.authentication import (
-    AdministratorCsrfSession,
-    AdministratorSession,
+    CsrfSession,
+    CurrentSession,
     request_id,
 )
 from datepipette.api.problems import ApiProblem, ProblemDetails
@@ -146,7 +146,7 @@ async def create_export(
     payload: ExportCreateRequest,
     request: Request,
     response: Response,
-    session: AdministratorCsrfSession,
+    session: CsrfSession,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=200),
 ) -> ExportResponse:
     if not idempotency_key:
@@ -171,6 +171,13 @@ async def create_export(
             code="dataset_not_found",
             title="Dataset not found",
             detail="The requested dataset does not exist.",
+        ) from exc
+    except ExportNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dataset_not_found",
+            title="Dataset not found",
+            detail="The requested dataset does not exist or is not accessible.",
         ) from exc
     except DatasetSnapshotNotPublishedError as exc:
         raise ApiProblem(
@@ -207,12 +214,20 @@ async def create_export(
 async def list_exports(
     dataset_id: UUID,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
     limit: int = Query(default=50, ge=1, le=100),
 ) -> ExportCollectionResponse:
-    jobs = await _export_service(request).list(
-        actor=session.user, dataset_id=dataset_id, limit=limit
-    )
+    try:
+        jobs = await _export_service(request).list(
+            actor=session.user, dataset_id=dataset_id, limit=limit
+        )
+    except ExportNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dataset_not_found",
+            title="Dataset not found",
+            detail="The requested dataset does not exist or is not accessible.",
+        ) from exc
     return ExportCollectionResponse(data=[_response(job) for job in jobs], meta={"limit": limit})
 
 
@@ -222,7 +237,7 @@ async def list_exports(
     responses=_RESPONSES,
 )
 async def read_export(
-    dataset_id: UUID, export_id: UUID, request: Request, session: AdministratorSession
+    dataset_id: UUID, export_id: UUID, request: Request, session: CurrentSession
 ) -> ExportResponse:
     try:
         return _response(
@@ -245,7 +260,7 @@ async def read_export(
     responses=_RESPONSES,
 )
 async def issue_download_link(
-    dataset_id: UUID, export_id: UUID, request: Request, session: AdministratorCsrfSession
+    dataset_id: UUID, export_id: UUID, request: Request, session: CsrfSession
 ) -> ExportDownloadLinkResponse:
     try:
         token, expires_at = await _download_service(request).issue(

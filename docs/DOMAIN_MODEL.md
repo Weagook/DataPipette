@@ -28,6 +28,8 @@ A role answers “what kind of action may this identity perform?” An ACL grant
 
 An additive permission assigned to one user or group for one resource. New resources are private to their owner and administrators. MVP has no explicit deny rule.
 
+Implemented dataset permissions are `view_rows`, `export`, and `manage`. An active analyst receives the union of direct and group grants; the dataset owner and administrators receive all three. `Viewer` is a hard role ceiling and never permits detailed rows, exports, or grant management. Creating an export requires both `view_rows` and `export`. `manage` allows its holder to delegate and revoke dataset grants.
+
 ### Connection
 
 An administrator-managed PostgreSQL data source. It stores encrypted credentials and metadata required to connect. A connection is never itself a query result.

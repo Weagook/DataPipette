@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 
 from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datepipette.application.access_control import DatasetAccessAuthorizer
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.application.exports import (
     DatasetExportService,
@@ -31,6 +32,7 @@ from datepipette.infrastructure.models import (
     PostgresConnectionModel,
     UserModel,
 )
+from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
 from datepipette.main import create_app
@@ -232,13 +234,16 @@ def test_export_api_worker_history_and_reissued_download(tmp_path: Path) -> None
     asyncio.run(_reset(settings))
     dataset_id, snapshot_id, field_id, _ = _seed(settings, tmp_path)
     engine = create_database_engine(settings)
-    store = SqlAlchemyExportStore(create_session_factory(engine))
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyExportStore(session_factory)
+    authorizer = DatasetAccessAuthorizer(SqlAlchemyAccessControlStore(session_factory))
     dispatcher = RecordingDispatcher()
-    export_service = DatasetExportService(store, dispatcher)
+    export_service = DatasetExportService(store, dispatcher, authorizer)
     download_service = ExportDownloadService(
         store,
         EncryptedExportDownloadTokenCodec(settings.connection_encryption_key.get_secret_value()),
         LocalExportStorage(tmp_path),
+        authorizer,
     )
     app = create_app(
         settings=settings,

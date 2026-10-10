@@ -69,6 +69,8 @@ Dependencies point inward: infrastructure and API adapters may depend on applica
 
 Users, groups, roles, service accounts, token lifecycle, sessions, scopes, ACL evaluation, and object ownership.
 
+Groups, human-user memberships, and additive dataset grants are stored in metadata PostgreSQL. Protected dataset operations evaluate authoritative grants per request: administrators and owners have full access, analysts receive the union of direct and group permissions, and the viewer role is denied detailed rows and exports regardless of grants. The implemented permissions separate row browsing, export, and grant management. Redis is not an authorization cache, so revocation applies to the next request.
+
 ### Connections and catalog
 
 Encrypted PostgreSQL connection configuration, health checks, schema introspection, table and column metadata, foreign-key suggestions, and connection visibility policies.
@@ -152,7 +154,7 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 3. Enqueue only the export UUID through Redis/Celery and atomically claim it in the worker.
 4. Stream the deterministic DuckDB result into a private CSV or XLSX candidate under row and resource limits.
 5. Atomically publish file metadata, retain it logically for 24 hours, and expose safe job history.
-6. Issue a reissuable encrypted five-minute download capability after owner authorization.
+6. Issue a reissuable encrypted five-minute download capability after dataset export authorization and export-job ownership checks.
 
 ## Failure model
 

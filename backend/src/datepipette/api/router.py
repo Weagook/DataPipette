@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from datepipette.api.routes.access_control import router as access_control_router
 from datepipette.api.routes.auth import router as auth_router
 from datepipette.api.routes.catalog import router as catalog_router
 from datepipette.api.routes.connections import router as connections_router
@@ -13,6 +14,7 @@ from datepipette.api.routes.snapshot_queries import router as snapshot_queries_r
 from datepipette.api.routes.users import router as users_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
+api_v1_router.include_router(access_control_router)
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(catalog_router)
 api_v1_router.include_router(connections_router)

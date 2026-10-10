@@ -11,6 +11,7 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
+from datepipette.application.access_control import DatasetAccessAuthorizer
 from datepipette.application.snapshot_queries import (
     DatasetSnapshotNotFoundError,
     DatasetSnapshotQueryService,
@@ -20,6 +21,7 @@ from datepipette.application.snapshot_queries import (
     InvalidSnapshotCursorError,
     InvalidSnapshotQueryError,
 )
+from datepipette.domain.access_control import DatasetAccess, DatasetPermission
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
@@ -98,6 +100,11 @@ class FakeStore:
     async def get_active_context(self, dataset_id: UUID) -> ActiveSnapshotQueryContext | None:
         return self.context if dataset_id == DATASET_ID else None
 
+    async def get_dataset_access(self, *, actor_id: UUID, dataset_id: UUID) -> DatasetAccess | None:
+        if dataset_id != DATASET_ID:
+            return None
+        return DatasetAccess(dataset_id, False, frozenset(DatasetPermission))
+
     async def record_query(self, **values: Any) -> None:
         self.audit.append(values)
 
@@ -130,6 +137,7 @@ def _service(
             resolved_executor,
             EncryptedSnapshotCursorCodec("test-key"),
             maximum_bytes,
+            DatasetAccessAuthorizer(resolved_store),
         ),
         resolved_store,
         resolved_executor,

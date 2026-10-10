@@ -62,6 +62,8 @@ Authorization combines:
 
 New resources are private to their owner and administrators. Grants are additive in MVP. Direct dataset access is distinct from dashboard-context access to aggregated chart results.
 
+Dataset authorization is evaluated from metadata PostgreSQL for every protected request. Administrators and dataset owners receive all dataset permissions. Active analysts receive the union of their direct grants and group grants. `view_rows`, `export`, and `manage` are separate; export creation requires both `view_rows` and `export`, while `manage` permits grant delegation. The `Viewer` role is a hard ceiling and cannot be raised to detailed-row, export, or dataset-grant access through group membership. Grant and membership revocation therefore affects the next request without waiting for a permission cache.
+
 Until connection grants exist, visual dataset draft APIs are administrator-only. A draft records its owner immediately, does not grant access to another principal, and can be saved while the source is unavailable. Saving validates the bounded document structure but does not imply source authorization or source-schema validity; those checks recur during explicit validation, preview, and publication.
 
 Refresh requests are administrator-only and CSRF-protected until connection grants define analyst scope. They require the current draft ETag and store only a SHA-256 digest of the client idempotency key. Celery messages contain only a refresh-run UUID; definitions, SQL, connection credentials, business rows, and idempotency-key plaintext remain outside Redis. Metadata PostgreSQL is authoritative for lifecycle state, and audit events use stable safe error codes rather than raw broker, driver, or source errors.
@@ -113,16 +115,15 @@ A viewer with dashboard access may receive chart results but must not use that r
 
 ## Export safety
 
-- Export generation requires direct dataset export permission.
-- Export ownership and administrator access are checked before issuing a signed URL.
+- Export generation requires effective `view_rows` and `export` permissions.
+- Export history, job reads, and download-link issuance require effective `export`; non-administrators may access only export jobs they requested.
 - Signed URLs expire after five minutes; files expire after 24 hours.
 - Storage buckets disallow public access.
 - CSV generation must mitigate formula injection for values beginning with spreadsheet control characters.
 - XLSX generation must preserve types and must not embed executable macros.
 - Implemented exports are bound to the immutable snapshot selected at creation; Celery receives only the export UUID and duplicate delivery cannot rerun a terminal job.
 - CSV and XLSX string cells beginning with spreadsheet formula/control prefixes are escaped with a leading apostrophe. Precision-sensitive decimal values remain text.
-- Download capabilities are issued only after administrator authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
-- Until object ACLs exist, export creation/history/link issuance require an administrator; this is a temporary stricter boundary, not analyst authorization.
+- Download capabilities are issued only after dataset and job-ownership authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. A capability already issued before grant revocation remains valid until this short expiry. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
 
 ## Audit
 
