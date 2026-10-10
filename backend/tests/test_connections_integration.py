@@ -337,6 +337,6 @@ def test_connection_api_requires_admin_csrf_and_valid_tls_configuration() -> Non
             },
         )
         assert login.status_code == 201
-        forbidden = analyst_client.get("/api/v1/connections")
-        assert forbidden.status_code == 403
-        assert forbidden.json()["code"] == "administrator_required"
+        visible = analyst_client.get("/api/v1/connections")
+        assert visible.status_code == 200
+        assert visible.json()["data"] == []

@@ -31,6 +31,7 @@ FROM pg_catalog.pg_namespace AS namespace
 WHERE pg_catalog.has_schema_privilege(namespace.oid, 'USAGE')
   AND (%s OR (namespace.nspname !~ '^pg_' AND namespace.nspname <> 'information_schema'))
   AND (%s::text IS NULL OR namespace.nspname > %s::text)
+  AND (%s::text[] IS NULL OR namespace.nspname = ANY(%s::text[]))
 ORDER BY namespace.nspname
 LIMIT %s
 """
@@ -44,6 +45,7 @@ WHERE namespace.nspname = %s
   AND pg_catalog.has_schema_privilege(namespace.oid, 'USAGE')
   AND pg_catalog.has_table_privilege(relation.oid, 'SELECT')
   AND (%s::text IS NULL OR relation.relname > %s::text)
+  AND (%s::text[] IS NULL OR relation.relname = ANY(%s::text[]))
 ORDER BY relation.relname
 LIMIT %s
 """
@@ -122,6 +124,7 @@ class PsycopgSourceCatalogInspector:
         after_name: str | None,
         limit: int,
         include_system: bool,
+        allowed_schemas: tuple[str, ...] | None,
     ) -> list[str]:
         try:
             async with (
@@ -130,7 +133,14 @@ class PsycopgSourceCatalogInspector:
             ):
                 await cursor.execute(
                     _SCHEMAS_SQL,
-                    (include_system, after_name, after_name, limit),
+                    (
+                        include_system,
+                        after_name,
+                        after_name,
+                        list(allowed_schemas) if allowed_schemas is not None else None,
+                        list(allowed_schemas) if allowed_schemas is not None else None,
+                        limit,
+                    ),
                 )
                 return [str(row[0]) for row in await cursor.fetchall()]
         except (TimeoutError, psycopg.Error) as exc:
@@ -145,6 +155,7 @@ class PsycopgSourceCatalogInspector:
         schema_name: str,
         after_name: str | None,
         limit: int,
+        allowed_relations: tuple[str, ...] | None,
     ) -> list[CatalogRelation]:
         try:
             async with (
@@ -153,7 +164,14 @@ class PsycopgSourceCatalogInspector:
             ):
                 await cursor.execute(
                     _RELATIONS_SQL,
-                    (schema_name, after_name, after_name, limit),
+                    (
+                        schema_name,
+                        after_name,
+                        after_name,
+                        list(allowed_relations) if allowed_relations is not None else None,
+                        list(allowed_relations) if allowed_relations is not None else None,
+                        limit,
+                    ),
                 )
                 return [
                     CatalogRelation(

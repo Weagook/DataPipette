@@ -44,3 +44,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0014](0014-typed-snapshot-row-queries.md): Typed snapshot row queries
 - [ADR-0015](0015-snapshot-bound-background-exports.md): Snapshot-bound background exports
 - [ADR-0016](0016-additive-dataset-access-control.md): Additive dataset access control with role ceilings
+- [ADR-0017](0017-scoped-connection-access.md): Scoped connection access and analyst dataset ownership

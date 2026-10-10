@@ -18,6 +18,7 @@ from sqlalchemy import select, text
 from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.access_control import DatasetAccessAuthorizer
 from datepipette.application.auth_service import bootstrap_first_admin
+from datepipette.application.connection_access import ConnectionAccessAuthorizer
 from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.refresh_worker import RefreshWorkerService
 from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
@@ -35,6 +36,10 @@ from datepipette.infrastructure.models import (
 from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
 from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datepipette.infrastructure.repositories.connection_access import (
+    SqlAlchemyConnectionAccessStore,
+)
+from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.infrastructure.repositories.snapshot_queries import (
     SqlAlchemySnapshotQueryStore,
@@ -247,7 +252,15 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
     session_factory = create_session_factory(engine)
     store = SqlAlchemyRefreshRunStore(session_factory)
     dispatcher = RecordingDispatcher()
-    refresh_service = RefreshRunService(store, dispatcher)
+    connection_authorizer = ConnectionAccessAuthorizer(
+        SqlAlchemyConnectionAccessStore(session_factory)
+    )
+    refresh_service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        connection_authorizer,
+    )
     executor = LocalParquetSnapshotExecutor(
         session_factory,
         AesGcmSecretCipher(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
@@ -255,6 +268,7 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
         connect_timeout_seconds=5,
         statement_timeout_seconds=30,
         batch_rows=1,
+        authorizer=connection_authorizer,
     )
     worker = RefreshWorkerService(store, executor)
     try:
@@ -560,6 +574,9 @@ def test_empty_source_publishes_typed_zero_row_parquet(tmp_path: Path) -> None:
     session_factory = create_session_factory(engine)
     store = SqlAlchemyRefreshRunStore(session_factory)
     dispatcher = RecordingDispatcher()
+    connection_authorizer = ConnectionAccessAuthorizer(
+        SqlAlchemyConnectionAccessStore(session_factory)
+    )
     executor = LocalParquetSnapshotExecutor(
         session_factory,
         AesGcmSecretCipher(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
@@ -567,12 +584,18 @@ def test_empty_source_publishes_typed_zero_row_parquet(tmp_path: Path) -> None:
         connect_timeout_seconds=5,
         statement_timeout_seconds=30,
         batch_rows=1_000,
+        authorizer=connection_authorizer,
     )
     try:
         with TestClient(
             create_app(
                 settings=TEST_SETTINGS,
-                refresh_run_service=RefreshRunService(store, dispatcher),
+                refresh_run_service=RefreshRunService(
+                    store,
+                    dispatcher,
+                    SqlAlchemyDatasetStore(session_factory),
+                    connection_authorizer,
+                ),
             )
         ) as client:
             _login(client)

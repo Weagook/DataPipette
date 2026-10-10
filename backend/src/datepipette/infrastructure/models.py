@@ -431,3 +431,85 @@ class DatasetAclGrantModel(Base):
     permission: Mapped[str] = mapped_column(String(30))
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConnectionAccessGrantModel(Base):
+    __tablename__ = "connection_access_grants"
+    __table_args__ = (
+        CheckConstraint("principal_type IN ('user', 'group')", name="principal_type_valid"),
+        CheckConstraint(
+            "(principal_type = 'user' AND user_id IS NOT NULL AND group_id IS NULL) OR "
+            "(principal_type = 'group' AND group_id IS NOT NULL AND user_id IS NULL)",
+            name="principal_shape_valid",
+        ),
+        CheckConstraint("scope_type IN ('all', 'schema', 'table')", name="scope_type_valid"),
+        CheckConstraint(
+            "(scope_type = 'all' AND schema_name IS NULL AND relation_name IS NULL) OR "
+            "(scope_type = 'schema' AND schema_name IS NOT NULL AND relation_name IS NULL) OR "
+            "(scope_type = 'table' AND schema_name IS NOT NULL AND relation_name IS NOT NULL)",
+            name="scope_shape_valid",
+        ),
+        Index(
+            "uq_connection_access_user_all",
+            "connection_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("principal_type = 'user' AND scope_type = 'all'"),
+        ),
+        Index(
+            "uq_connection_access_group_all",
+            "connection_id",
+            "group_id",
+            unique=True,
+            postgresql_where=text("principal_type = 'group' AND scope_type = 'all'"),
+        ),
+        Index(
+            "uq_connection_access_user_schema",
+            "connection_id",
+            "user_id",
+            "schema_name",
+            unique=True,
+            postgresql_where=text("principal_type = 'user' AND scope_type = 'schema'"),
+        ),
+        Index(
+            "uq_connection_access_group_schema",
+            "connection_id",
+            "group_id",
+            "schema_name",
+            unique=True,
+            postgresql_where=text("principal_type = 'group' AND scope_type = 'schema'"),
+        ),
+        Index(
+            "uq_connection_access_user_table",
+            "connection_id",
+            "user_id",
+            "schema_name",
+            "relation_name",
+            unique=True,
+            postgresql_where=text("principal_type = 'user' AND scope_type = 'table'"),
+        ),
+        Index(
+            "uq_connection_access_group_table",
+            "connection_id",
+            "group_id",
+            "schema_name",
+            "relation_name",
+            unique=True,
+            postgresql_where=text("principal_type = 'group' AND scope_type = 'table'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    connection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("postgresql_connections.id", ondelete="CASCADE"), index=True
+    )
+    principal_type: Mapped[str] = mapped_column(String(20))
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    group_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("identity_groups.id", ondelete="CASCADE")
+    )
+    scope_type: Mapped[str] = mapped_column(String(20))
+    schema_name: Mapped[str | None] = mapped_column(String(255))
+    relation_name: Mapped[str | None] = mapped_column(String(255))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

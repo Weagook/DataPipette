@@ -8,8 +8,8 @@ from fastapi import APIRouter, Header, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from datepipette.api.dependencies.authentication import (
-    AdministratorCsrfSession,
-    AdministratorSession,
+    CsrfSession,
+    CurrentSession,
     request_id,
 )
 from datepipette.api.draft_revisions import draft_etag, expected_draft_revision
@@ -370,7 +370,7 @@ async def create_dataset(
     payload: CreateDatasetRequest,
     request: Request,
     response: Response,
-    session: AdministratorCsrfSession,
+    session: CsrfSession,
 ) -> DatasetResponse:
     try:
         dataset, draft = await _service(request).create(
@@ -409,7 +409,7 @@ async def create_dataset(
 )
 async def list_datasets(
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> DatasetCollectionResponse:
@@ -436,7 +436,7 @@ async def list_datasets(
 async def read_dataset(
     dataset_id: UUID,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
 ) -> DatasetResponse:
     try:
         value = await _service(request).get(actor=session.user, dataset_id=dataset_id)
@@ -454,7 +454,7 @@ async def rename_dataset(
     dataset_id: UUID,
     payload: UpdateDatasetRequest,
     request: Request,
-    session: AdministratorCsrfSession,
+    session: CsrfSession,
 ) -> DatasetResponse:
     try:
         value = await _service(request).rename(
@@ -484,7 +484,7 @@ async def read_dataset_draft(
     dataset_id: UUID,
     request: Request,
     response: Response,
-    session: AdministratorSession,
+    session: CurrentSession,
 ) -> DatasetDraftResponse:
     try:
         draft = await _service(request).get_draft(actor=session.user, dataset_id=dataset_id)
@@ -510,7 +510,7 @@ async def replace_dataset_draft(
     payload: ReplaceDraftRequest,
     request: Request,
     response: Response,
-    session: AdministratorCsrfSession,
+    session: CsrfSession,
     if_match: Annotated[str | None, Header(alias="If-Match", max_length=64)] = None,
 ) -> DatasetDraftResponse:
     try:
@@ -550,7 +550,7 @@ async def replace_dataset_draft(
 async def validate_dataset_draft(
     dataset_id: UUID,
     request: Request,
-    session: AdministratorCsrfSession,
+    session: CsrfSession,
     if_match: Annotated[str | None, Header(alias="If-Match", max_length=64)] = None,
 ) -> DatasetValidationResponse:
     try:
@@ -597,7 +597,7 @@ async def preview_dataset_draft(
     payload: PreviewDatasetDraftRequest,
     request: Request,
     response: Response,
-    session: AdministratorCsrfSession,
+    session: CsrfSession,
     if_match: Annotated[str | None, Header(alias="If-Match", max_length=64)] = None,
 ) -> DatasetPreviewResponse:
     try:

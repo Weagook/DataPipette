@@ -1,4 +1,4 @@
-"""Administrator-managed single-table visual dataset drafts."""
+"""Owner-authorized single-table visual dataset drafts."""
 
 import base64
 import json
@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from datepipette.application.connection_access import (
+    ConnectionAccessAuthorizer,
+    ConnectionAccessDeniedError,
+)
 from datepipette.domain.datasets import (
     Dataset,
     DatasetDraft,
@@ -16,10 +20,6 @@ from datepipette.domain.datasets import (
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 
 MAX_DEFINITION_BYTES = 262_144
-
-
-class DatasetAdministratorRequiredError(Exception):
-    pass
 
 
 class DatasetAlreadyExistsError(Exception):
@@ -75,6 +75,7 @@ class DatasetStore(Protocol):
         *,
         after_created_at: datetime | None,
         after_id: UUID | None,
+        owner_id: UUID | None,
         limit: int,
     ) -> list[Dataset]: ...
 
@@ -147,9 +148,14 @@ class DatasetStore(Protocol):
     ) -> None: ...
 
 
-def _require_admin(actor: User) -> None:
-    if actor.role is not SystemRole.ADMIN or actor.status is not AccountStatus.ACTIVE:
-        raise DatasetAdministratorRequiredError
+def require_dataset_owner(actor: User, dataset: Dataset) -> None:
+    if actor.status is not AccountStatus.ACTIVE:
+        raise DatasetNotFoundError
+    if actor.role is SystemRole.ADMIN:
+        return
+    if actor.role is SystemRole.ANALYST and dataset.owner_id == actor.id:
+        return
+    raise DatasetNotFoundError
 
 
 def _name(value: str) -> str:
@@ -194,8 +200,9 @@ def _decode_cursor(value: str | None) -> tuple[datetime | None, UUID | None]:
 
 
 class DatasetService:
-    def __init__(self, store: DatasetStore) -> None:
+    def __init__(self, store: DatasetStore, authorizer: ConnectionAccessAuthorizer) -> None:
         self._store = store
+        self._authorizer = authorizer
 
     async def create(
         self,
@@ -204,13 +211,26 @@ class DatasetService:
         value: DatasetCreate,
         request_id: str,
     ) -> tuple[Dataset, DatasetDraft]:
-        _require_admin(actor)
+        if actor.status is not AccountStatus.ACTIVE or actor.role not in {
+            SystemRole.ADMIN,
+            SystemRole.ANALYST,
+        }:
+            raise DatasetConnectionNotFoundError
         normalized = DatasetCreate(
             name=_name(value.name),
             connection_id=value.connection_id,
             definition=value.definition,
         )
         definition = _definition_document(value.definition)
+        try:
+            await self._authorizer.require_relation(
+                actor=actor,
+                connection_id=value.connection_id,
+                schema_name=value.definition.relation.schema_name,
+                relation_name=value.definition.relation.relation_name,
+            )
+        except ConnectionAccessDeniedError as exc:
+            raise DatasetConnectionNotFoundError from exc
         if not await self._store.connection_exists(value.connection_id):
             raise DatasetConnectionNotFoundError
         return await self._store.create(
@@ -224,11 +244,13 @@ class DatasetService:
         )
 
     async def list(self, *, actor: User, cursor: str | None, limit: int) -> DatasetPage:
-        _require_admin(actor)
+        if actor.status is not AccountStatus.ACTIVE or actor.role is SystemRole.VIEWER:
+            return DatasetPage([], None)
         after_created_at, after_id = _decode_cursor(cursor)
         items = await self._store.list(
             after_created_at=after_created_at,
             after_id=after_id,
+            owner_id=None if actor.role is SystemRole.ADMIN else actor.id,
             limit=limit + 1,
         )
         visible = items[:limit]
@@ -238,14 +260,17 @@ class DatasetService:
         )
 
     async def get(self, *, actor: User, dataset_id: UUID) -> Dataset:
-        _require_admin(actor)
         dataset = await self._store.get(dataset_id)
         if dataset is None:
             raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
         return dataset
 
     async def get_draft(self, *, actor: User, dataset_id: UUID) -> DatasetDraft:
-        _require_admin(actor)
+        dataset = await self._store.get(dataset_id)
+        if dataset is None:
+            raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
         draft = await self._store.get_draft(dataset_id)
         if draft is None:
             raise DatasetNotFoundError
@@ -259,7 +284,10 @@ class DatasetService:
         name: str,
         request_id: str,
     ) -> Dataset:
-        _require_admin(actor)
+        current = await self._store.get(dataset_id)
+        if current is None:
+            raise DatasetNotFoundError
+        require_dataset_owner(actor, current)
         dataset = await self._store.rename(
             dataset_id=dataset_id,
             actor_id=actor.id,
@@ -280,9 +308,21 @@ class DatasetService:
         definition: VisualDatasetDefinition,
         request_id: str,
     ) -> DatasetDraft:
-        _require_admin(actor)
+        dataset = await self._store.get(dataset_id)
+        if dataset is None:
+            raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
         if expected_revision < 1:
             raise ValueError("Expected revision must be positive")
+        try:
+            await self._authorizer.require_relation(
+                actor=actor,
+                connection_id=dataset.connection_id,
+                schema_name=definition.relation.schema_name,
+                relation_name=definition.relation.relation_name,
+            )
+        except ConnectionAccessDeniedError as exc:
+            raise DatasetNotFoundError from exc
         draft = await self._store.replace_draft(
             dataset_id=dataset_id,
             actor_id=actor.id,

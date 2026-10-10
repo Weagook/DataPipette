@@ -1,18 +1,25 @@
-"""Administrator-managed PostgreSQL source connection endpoints."""
+"""PostgreSQL source connection and administrator grant endpoints."""
 
 from datetime import datetime
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request, status
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from datepipette.api.dependencies.authentication import (
     AdministratorCsrfSession,
     AdministratorSession,
+    CurrentSession,
     request_id,
 )
 from datepipette.api.problems import ApiProblem, ProblemDetails
+from datepipette.application.connection_access import (
+    ConnectionAccessDeniedError,
+    ConnectionGrantNotFoundError,
+    ConnectionGrantPrincipalNotFoundError,
+    ConnectionGrantService,
+)
 from datepipette.application.connections import (
     ConnectionAlreadyExistsError,
     ConnectionCreate,
@@ -21,6 +28,12 @@ from datepipette.application.connections import (
     ConnectionService,
     ConnectionUpdate,
     InvalidConnectionCursorError,
+)
+from datepipette.domain.access_control import GrantPrincipalType
+from datepipette.domain.connection_access import (
+    ConnectionGrant,
+    ConnectionScope,
+    ConnectionScopeType,
 )
 from datepipette.domain.connections import ConnectionTestResult, PostgresConnection, PostgresSslMode
 
@@ -112,8 +125,40 @@ class ConnectionTestResponse(BaseModel):
     server_version: int | None
 
 
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConnectionGrantCreateRequest(StrictModel):
+    principal_type: GrantPrincipalType
+    principal_id: UUID
+    scope_type: ConnectionScopeType
+    schema_name: str | None = Field(default=None, max_length=255)
+    relation_name: str | None = Field(default=None, max_length=255)
+
+
+class ConnectionGrantResponse(BaseModel):
+    id: UUID
+    connection_id: UUID
+    principal_type: GrantPrincipalType
+    principal_id: UUID
+    scope_type: ConnectionScopeType
+    schema_name: str | None
+    relation_name: str | None
+    created_by: UUID
+    created_at: datetime
+
+
+class ConnectionGrantCollectionResponse(BaseModel):
+    data: list[ConnectionGrantResponse]
+
+
 def _service(request: Request) -> ConnectionService:
     return cast(ConnectionService, request.app.state.connection_service)
+
+
+def _grant_service(request: Request) -> ConnectionGrantService:
+    return cast(ConnectionGrantService, request.app.state.connection_grant_service)
 
 
 def _response(value: PostgresConnection) -> ConnectionResponse:
@@ -141,6 +186,20 @@ def _test_response(value: ConnectionTestResult) -> ConnectionTestResponse:
         tested_at=value.tested_at,
         error_code=value.error_code,
         server_version=value.server_version,
+    )
+
+
+def _grant_response(value: ConnectionGrant) -> ConnectionGrantResponse:
+    return ConnectionGrantResponse(
+        id=value.id,
+        connection_id=value.connection_id,
+        principal_type=value.principal_type,
+        principal_id=value.principal_id,
+        scope_type=value.scope.type,
+        schema_name=value.scope.schema_name,
+        relation_name=value.scope.relation_name,
+        created_by=value.created_by,
+        created_at=value.created_at,
     )
 
 
@@ -230,7 +289,7 @@ async def create_connection(
 )
 async def list_connections(
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> ConnectionCollectionResponse:
@@ -262,7 +321,7 @@ async def list_connections(
 async def read_connection(
     connection_id: UUID,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
 ) -> ConnectionResponse:
     try:
         value = await _service(request).get(actor=session.user, connection_id=connection_id)
@@ -351,3 +410,108 @@ async def test_connection(
     except ConnectionNotFoundError as exc:
         raise _not_found() from exc
     return _test_response(result)
+
+
+@router.get(
+    "/{connection_id}/grants",
+    response_model=ConnectionGrantCollectionResponse,
+    responses={
+        401: {"model": ProblemDetails},
+        403: {"model": ProblemDetails},
+        404: {"model": ProblemDetails},
+    },
+)
+async def list_connection_grants(
+    connection_id: UUID,
+    request: Request,
+    session: AdministratorSession,
+) -> ConnectionGrantCollectionResponse:
+    try:
+        values = await _grant_service(request).list(
+            actor=session.user,
+            connection_id=connection_id,
+        )
+    except ConnectionAccessDeniedError as exc:
+        raise _not_found() from exc
+    return ConnectionGrantCollectionResponse(data=[_grant_response(value) for value in values])
+
+
+@router.post(
+    "/{connection_id}/grants",
+    response_model=ConnectionGrantResponse,
+    status_code=201,
+    responses={
+        401: {"model": ProblemDetails},
+        403: {"model": ProblemDetails},
+        404: {"model": ProblemDetails},
+        422: {"model": ProblemDetails},
+    },
+)
+async def create_connection_grant(
+    connection_id: UUID,
+    payload: ConnectionGrantCreateRequest,
+    request: Request,
+    session: AdministratorCsrfSession,
+) -> ConnectionGrantResponse:
+    try:
+        value = await _grant_service(request).create(
+            actor=session.user,
+            connection_id=connection_id,
+            principal_type=payload.principal_type,
+            principal_id=payload.principal_id,
+            scope=ConnectionScope(
+                payload.scope_type,
+                payload.schema_name,
+                payload.relation_name,
+            ),
+            request_id=request_id(),
+        )
+    except ConnectionGrantPrincipalNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="connection_or_principal_not_found",
+            title="Connection or principal not found",
+            detail="The connection, active analyst, or group does not exist.",
+        ) from exc
+    except ValueError as exc:
+        raise ApiProblem(
+            status_code=422,
+            code="connection_scope_invalid",
+            title="Connection scope invalid",
+            detail=str(exc),
+        ) from exc
+    return _grant_response(value)
+
+
+@router.delete(
+    "/{connection_id}/grants/{grant_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"model": ProblemDetails},
+        403: {"model": ProblemDetails},
+        404: {"model": ProblemDetails},
+    },
+)
+async def revoke_connection_grant(
+    connection_id: UUID,
+    grant_id: UUID,
+    request: Request,
+    session: AdministratorCsrfSession,
+) -> Response:
+    try:
+        await _grant_service(request).revoke(
+            actor=session.user,
+            connection_id=connection_id,
+            grant_id=grant_id,
+            request_id=request_id(),
+        )
+    except ConnectionAccessDeniedError as exc:
+        raise _not_found() from exc
+    except ConnectionGrantNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="connection_grant_not_found",
+            title="Connection grant not found",
+            detail="The requested connection grant does not exist.",
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

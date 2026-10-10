@@ -5,7 +5,15 @@ from hashlib import sha256
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from datepipette.application.datasets import _require_admin
+from datepipette.application.connection_access import (
+    ConnectionAccessAuthorizer,
+    ConnectionAccessDeniedError,
+)
+from datepipette.application.datasets import (
+    DatasetNotFoundError,
+    DatasetStore,
+    require_dataset_owner,
+)
 from datepipette.domain.identity import User
 from datepipette.domain.refresh import RefreshRequestOutcome, RefreshRun
 
@@ -53,9 +61,17 @@ class RefreshDispatcher(Protocol):
 
 
 class RefreshRunService:
-    def __init__(self, store: RefreshRunStore, dispatcher: RefreshDispatcher) -> None:
+    def __init__(
+        self,
+        store: RefreshRunStore,
+        dispatcher: RefreshDispatcher,
+        dataset_store: DatasetStore,
+        authorizer: ConnectionAccessAuthorizer,
+    ) -> None:
         self._store = store
         self._dispatcher = dispatcher
+        self._dataset_store = dataset_store
+        self._authorizer = authorizer
 
     async def request(
         self,
@@ -66,7 +82,20 @@ class RefreshRunService:
         idempotency_key: str,
         request_id: str,
     ) -> RefreshRequestOutcome:
-        _require_admin(actor)
+        dataset = await self._dataset_store.get(dataset_id)
+        draft = await self._dataset_store.get_draft(dataset_id)
+        if dataset is None or draft is None:
+            raise RefreshRunNotFoundError
+        try:
+            require_dataset_owner(actor, dataset)
+            await self._authorizer.require_relation(
+                actor=actor,
+                connection_id=dataset.connection_id,
+                schema_name=draft.definition.relation.schema_name,
+                relation_name=draft.definition.relation.relation_name,
+            )
+        except (ConnectionAccessDeniedError, DatasetNotFoundError) as exc:
+            raise RefreshRunNotFoundError from exc
         now = datetime.now(UTC)
         outcome = await self._store.request(
             dataset_id=dataset_id,
@@ -97,7 +126,13 @@ class RefreshRunService:
         return outcome
 
     async def get(self, *, actor: User, dataset_id: UUID, run_id: UUID) -> RefreshRun:
-        _require_admin(actor)
+        dataset = await self._dataset_store.get(dataset_id)
+        if dataset is None:
+            raise RefreshRunNotFoundError
+        try:
+            require_dataset_owner(actor, dataset)
+        except DatasetNotFoundError as exc:
+            raise RefreshRunNotFoundError from exc
         run = await self._store.get(dataset_id=dataset_id, run_id=run_id)
         if run is None:
             raise RefreshRunNotFoundError

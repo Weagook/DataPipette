@@ -38,6 +38,7 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **DAT-012:** Explicit validation shall re-check live source objects, capture output types, and store a derived artifact bound to the exact draft revision.
 - **DAT-013:** Changing a draft definition shall invalidate prior validation; a concurrent change shall prevent stale validation from being attached.
 - **DAT-014:** Synchronous draft preview shall require validation of the same revision and enforce server-side row, response-size, statement-time, and memory bounds without creating a snapshot.
+- **DAT-015:** An active analyst shall author and execute only owned datasets whose referenced source relations remain inside the analyst's current effective connection scope; administrators retain operational access.
 
 ### Query safety advisor
 

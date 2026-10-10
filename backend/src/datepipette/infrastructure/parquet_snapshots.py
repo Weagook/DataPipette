@@ -17,6 +17,10 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from datepipette.application.connection_access import (
+    ConnectionAccessAuthorizer,
+    ConnectionAccessDeniedError,
+)
 from datepipette.application.connections import ConnectionSecretUnavailableError
 from datepipette.application.refresh_worker import RefreshExecutionResult
 from datepipette.domain.connections import PostgresConnection
@@ -33,7 +37,9 @@ from datepipette.infrastructure.models import (
     DatasetModel,
     DatasetVersionModel,
     PostgresConnectionModel,
+    UserModel,
 )
+from datepipette.infrastructure.repositories.authentication import to_user
 from datepipette.infrastructure.repositories.connections import to_connection
 from datepipette.infrastructure.source_postgres import open_read_only_source
 
@@ -230,6 +236,7 @@ class LocalParquetSnapshotExecutor:
         connect_timeout_seconds: int,
         statement_timeout_seconds: int,
         batch_rows: int,
+        authorizer: ConnectionAccessAuthorizer,
     ) -> None:
         self._session_factory = session_factory
         self._cipher = cipher
@@ -237,6 +244,7 @@ class LocalParquetSnapshotExecutor:
         self._connect_timeout = connect_timeout_seconds
         self._statement_timeout = statement_timeout_seconds
         self._batch_rows = batch_rows
+        self._authorizer = authorizer
 
     async def execute(self, run: RefreshRun) -> RefreshExecutionResult:
         try:
@@ -249,6 +257,8 @@ class LocalParquetSnapshotExecutor:
             return RefreshExecutionResult(False, "unsupported_source_type")
         except ConnectionSecretUnavailableError:
             return RefreshExecutionResult(False, "connection_secret_unavailable")
+        except ConnectionAccessDeniedError:
+            return RefreshExecutionResult(False, "connection_access_revoked")
         except (TimeoutError, psycopg.Error):
             return RefreshExecutionResult(False, "source_unavailable")
         except (OSError, pa.ArrowException, ValueError, TypeError):
@@ -276,8 +286,16 @@ class LocalParquetSnapshotExecutor:
             ):
                 return None
             connection_model = await session.get(PostgresConnectionModel, dataset.connection_id)
-            if connection_model is None:
+            actor_model = await session.get(UserModel, run.requested_by)
+            if connection_model is None or actor_model is None:
                 return None
+            definition = VisualDatasetDefinition.from_document(version.definition)
+            await self._authorizer.require_relation(
+                actor=to_user(actor_model),
+                connection_id=connection_model.id,
+                schema_name=definition.relation.schema_name,
+                relation_name=definition.relation.relation_name,
+            )
             connection = to_connection(connection_model)
             password = self._cipher.decrypt(
                 connection_model.encrypted_password,
@@ -297,7 +315,7 @@ class LocalParquetSnapshotExecutor:
                 connection=connection,
                 password=password,
                 ca_certificate=ca_certificate,
-                definition=VisualDatasetDefinition.from_document(version.definition),
+                definition=definition,
                 validation=validation,
             )
 

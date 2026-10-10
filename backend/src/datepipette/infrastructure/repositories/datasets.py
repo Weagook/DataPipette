@@ -137,6 +137,7 @@ class SqlAlchemyDatasetStore:
         *,
         after_created_at: datetime | None,
         after_id: UUID | None,
+        owner_id: UUID | None,
         limit: int,
     ) -> list[Dataset]:
         statement = (
@@ -151,6 +152,8 @@ class SqlAlchemyDatasetStore:
             .order_by(DatasetModel.created_at, DatasetModel.id)
             .limit(limit)
         )
+        if owner_id is not None:
+            statement = statement.where(DatasetModel.owner_id == owner_id)
         if after_created_at is not None and after_id is not None:
             statement = statement.where(
                 or_(

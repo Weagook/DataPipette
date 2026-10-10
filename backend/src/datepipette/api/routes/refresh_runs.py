@@ -1,4 +1,4 @@
-"""Administrator endpoints for durable dataset refresh runs."""
+"""Owner-authorized endpoints for durable dataset refresh runs."""
 
 from dataclasses import asdict
 from datetime import datetime
@@ -9,8 +9,8 @@ from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel
 
 from datepipette.api.dependencies.authentication import (
-    AdministratorCsrfSession,
-    AdministratorSession,
+    CsrfSession,
+    CurrentSession,
     request_id,
 )
 from datepipette.api.draft_revisions import draft_etag, expected_draft_revision
@@ -70,7 +70,7 @@ async def request_refresh_run(
     dataset_id: UUID,
     request: Request,
     response: Response,
-    session: AdministratorCsrfSession,
+    session: CsrfSession,
     if_match: Annotated[str | None, Header(alias="If-Match", max_length=64)] = None,
     idempotency_key: Annotated[
         str | None,
@@ -134,7 +134,7 @@ async def read_refresh_run(
     dataset_id: UUID,
     run_id: UUID,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
 ) -> RefreshRunResponse:
     try:
         run = await _service(request).get(

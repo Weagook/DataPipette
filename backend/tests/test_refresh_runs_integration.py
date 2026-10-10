@@ -13,6 +13,7 @@ from sqlalchemy import select, text
 
 from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
+from datepipette.application.connection_access import ConnectionAccessAuthorizer
 from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.refresh_worker import (
     RefreshExecutionResult,
@@ -32,6 +33,10 @@ from datepipette.infrastructure.models import (
 )
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datepipette.infrastructure.repositories.connection_access import (
+    SqlAlchemyConnectionAccessStore,
+)
+from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.main import create_app
 
@@ -213,9 +218,15 @@ async def _mark_valid(dataset_id: str, definition: dict[str, Any]) -> None:
 def test_refresh_requests_are_idempotent_coalesced_and_retryable() -> None:
     asyncio.run(_bootstrap())
     engine = create_database_engine(TEST_SETTINGS)
-    store = SqlAlchemyRefreshRunStore(create_session_factory(engine))
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
     dispatcher = RecordingDispatcher()
-    service = RefreshRunService(store, dispatcher)
+    service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory)),
+    )
     try:
         with TestClient(create_app(settings=TEST_SETTINGS, refresh_run_service=service)) as client:
             _login(client)
@@ -326,9 +337,15 @@ def test_refresh_requests_are_idempotent_coalesced_and_retryable() -> None:
 def test_worker_defers_successor_and_can_complete_with_injected_writer() -> None:
     asyncio.run(_bootstrap())
     engine = create_database_engine(TEST_SETTINGS)
-    store = SqlAlchemyRefreshRunStore(create_session_factory(engine))
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
     dispatcher = RecordingDispatcher()
-    service = RefreshRunService(store, dispatcher)
+    service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory)),
+    )
     try:
         with TestClient(create_app(settings=TEST_SETTINGS, refresh_run_service=service)) as client:
             _login(client)
