@@ -93,7 +93,7 @@ Source query execution, bounded streaming, local Parquet writing, basic result s
 
 ### Query
 
-Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, result serialization, and freshness metadata are implemented for local snapshots. Chart query compilation, aggregation, S3 reads, distributed concurrency controls, and production benchmarks remain future work.
+Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local snapshots. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. Snapshot row responses reuse that projection. Chart query compilation, aggregation, S3 reads, distributed concurrency controls, and production benchmarks remain future work.
 
 ### Visualization
 

@@ -321,11 +321,16 @@ def test_groups_and_dataset_grants_are_effective_and_revocable() -> None:
             headers={**_csrf(analyst_client), "Idempotency-Key": "authorized-no-snapshot"},
         )
         assert authorized_export.status_code == 409
+        analyst_freshness = analyst_client.get(f"/api/v1/datasets/{dataset_id}/freshness")
+        assert analyst_freshness.status_code == 200
+        assert analyst_freshness.json()["data_state"] == "not_published"
+        assert analyst_freshness.json()["snapshot_id"] is None
         viewer_rows = viewer_client.post(
             f"/api/v1/datasets/{dataset_id}/rows:query",
             json={"fields": [str(uuid4())]},
         )
         assert viewer_rows.status_code == 404
+        assert viewer_client.get(f"/api/v1/datasets/{dataset_id}/freshness").status_code == 404
 
         analyst_user = asyncio.run(_user("analyst-acl@example.com"))
         assert asyncio.run(_access(analyst_user, dataset_id)) == frozenset(DatasetPermission)

@@ -26,6 +26,7 @@ from datepipette.application.snapshot_queries import (
     InvalidSnapshotQueryError,
 )
 from datepipette.domain.snapshot_queries import (
+    DatasetDataState,
     SnapshotFilterOperator,
     SnapshotQuery,
     SnapshotQueryFilter,
@@ -86,6 +87,7 @@ class SnapshotRowsMetaResponse(BaseModel):
     last_success_at: datetime
     refresh_state: SnapshotRefreshState
     last_refresh_error: str | None
+    last_refresh_error_at: datetime | None
     is_stale: bool
     next_cursor: str | None
     truncated_by_bytes: bool
@@ -94,6 +96,21 @@ class SnapshotRowsMetaResponse(BaseModel):
 class SnapshotRowsResponse(BaseModel):
     data: SnapshotRowsDataResponse
     meta: SnapshotRowsMetaResponse
+
+
+class DatasetFreshnessResponse(BaseModel):
+    dataset_id: UUID
+    data_state: DatasetDataState
+    snapshot_id: UUID | None
+    snapshot_row_count: int | None
+    last_success_at: datetime | None
+    refresh_state: SnapshotRefreshState
+    active_refresh_run_id: UUID | None
+    refresh_requested_at: datetime | None
+    refresh_started_at: datetime | None
+    last_refresh_error: str | None
+    last_refresh_error_at: datetime | None
+    is_stale: bool
 
 
 def _service(request: Request) -> DatasetSnapshotQueryService:
@@ -111,6 +128,56 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     503: {"model": ProblemDetails},
     504: {"model": ProblemDetails},
 }
+
+
+@router.get(
+    "/{dataset_id}/freshness",
+    response_model=DatasetFreshnessResponse,
+    responses={
+        401: {"model": ProblemDetails},
+        403: {"model": ProblemDetails},
+        404: {"model": ProblemDetails},
+        503: {"model": ProblemDetails},
+    },
+)
+async def read_dataset_freshness(
+    dataset_id: UUID,
+    request: Request,
+    session: CurrentSession,
+) -> DatasetFreshnessResponse:
+    try:
+        value = await _service(request).freshness(
+            actor=session.user,
+            dataset_id=dataset_id,
+        )
+    except DatasetSnapshotNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dataset_not_found",
+            title="Dataset not found",
+            detail="The requested dataset does not exist.",
+        ) from exc
+    except DatasetSnapshotUnavailableError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="snapshot_status_unavailable",
+            title="Snapshot status unavailable",
+            detail="The dataset snapshot status could not be read safely.",
+        ) from exc
+    return DatasetFreshnessResponse(
+        dataset_id=value.dataset_id,
+        data_state=value.data_state,
+        snapshot_id=value.snapshot_id,
+        snapshot_row_count=value.snapshot_row_count,
+        last_success_at=value.last_success_at,
+        refresh_state=value.refresh_state,
+        active_refresh_run_id=value.active_refresh_run_id,
+        refresh_requested_at=value.refresh_requested_at,
+        refresh_started_at=value.refresh_started_at,
+        last_refresh_error=value.last_refresh_error,
+        last_refresh_error_at=value.last_refresh_error_at,
+        is_stale=value.is_stale,
+    )
 
 
 @router.post(
@@ -216,6 +283,7 @@ async def query_dataset_rows(
             last_success_at=page.snapshot_activated_at,
             refresh_state=page.refresh_state,
             last_refresh_error=page.last_refresh_error,
+            last_refresh_error_at=page.last_refresh_error_at,
             is_stale=page.is_stale,
             next_cursor=page.next_cursor,
             truncated_by_bytes=page.truncated_by_bytes,

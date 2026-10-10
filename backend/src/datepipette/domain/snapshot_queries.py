@@ -33,6 +33,30 @@ class SnapshotRefreshState(StrEnum):
     RUNNING = "running"
 
 
+class DatasetDataState(StrEnum):
+    NOT_PUBLISHED = "not_published"
+    REFRESHING = "refreshing"
+    READY = "ready"
+    STALE = "stale"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetFreshness:
+    dataset_id: UUID
+    data_state: DatasetDataState
+    snapshot_id: UUID | None
+    snapshot_row_count: int | None
+    last_success_at: datetime | None
+    refresh_state: SnapshotRefreshState
+    active_refresh_run_id: UUID | None
+    refresh_requested_at: datetime | None
+    refresh_started_at: datetime | None
+    last_refresh_error: str | None
+    last_refresh_error_at: datetime | None
+    is_stale: bool
+
+
 @dataclass(frozen=True, slots=True)
 class SnapshotQueryField:
     field_id: UUID
@@ -78,6 +102,7 @@ class ActiveSnapshotQueryContext:
     refresh_state: SnapshotRefreshState
     last_refresh_error: str | None
     is_stale: bool
+    last_refresh_error_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,3 +130,4 @@ class SnapshotQueryPage:
     is_stale: bool
     next_cursor: str | None
     truncated_by_bytes: bool
+    last_refresh_error_at: datetime | None = None

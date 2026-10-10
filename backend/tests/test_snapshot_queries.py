@@ -25,6 +25,8 @@ from datepipette.domain.access_control import DatasetAccess, DatasetPermission
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
+    DatasetDataState,
+    DatasetFreshness,
     SnapshotFilterOperator,
     SnapshotQuery,
     SnapshotQueryCursorPosition,
@@ -95,7 +97,28 @@ def _admin(role: SystemRole = SystemRole.ADMIN) -> User:
 class FakeStore:
     def __init__(self, context: ActiveSnapshotQueryContext | None = None) -> None:
         self.context = context
+        self.freshness = (
+            DatasetFreshness(
+                dataset_id=context.dataset_id,
+                data_state=DatasetDataState.READY,
+                snapshot_id=context.snapshot_id,
+                snapshot_row_count=context.snapshot_row_count,
+                last_success_at=context.activated_at,
+                refresh_state=context.refresh_state,
+                active_refresh_run_id=None,
+                refresh_requested_at=None,
+                refresh_started_at=None,
+                last_refresh_error=context.last_refresh_error,
+                last_refresh_error_at=context.last_refresh_error_at,
+                is_stale=context.is_stale,
+            )
+            if context is not None
+            else None
+        )
         self.audit: list[dict[str, Any]] = []
+
+    async def get_freshness(self, dataset_id: UUID) -> DatasetFreshness | None:
+        return self.freshness if dataset_id == DATASET_ID else None
 
     async def get_active_context(self, dataset_id: UUID) -> ActiveSnapshotQueryContext | None:
         return self.context if dataset_id == DATASET_ID else None
@@ -276,6 +299,19 @@ def test_service_rejects_unknown_dataset_role_and_cursor_mismatch() -> None:
                 dataset_id=DATASET_ID,
                 value=_query(cursor="not-a-cursor"),
                 request_id="request",
+            )
+        )
+
+
+def test_service_returns_freshness_and_conceals_denied_access() -> None:
+    service, store, _ = _service()
+    result = asyncio.run(service.freshness(actor=_admin(), dataset_id=DATASET_ID))
+    assert result is store.freshness
+    with pytest.raises(DatasetSnapshotNotFoundError):
+        asyncio.run(
+            service.freshness(
+                actor=_admin(SystemRole.VIEWER),
+                dataset_id=DATASET_ID,
             )
         )
 

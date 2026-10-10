@@ -15,6 +15,8 @@ from datepipette.domain.datasets import DatasetValidation, VisualDatasetDefiniti
 from datepipette.domain.refresh import RefreshRunState
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
+    DatasetDataState,
+    DatasetFreshness,
     SnapshotQueryField,
     SnapshotRefreshState,
 )
@@ -74,6 +76,14 @@ class SqlAlchemySnapshotQueryStore:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
+    async def get_freshness(self, dataset_id: UUID) -> DatasetFreshness | None:
+        async with self._session_factory() as session:
+            dataset = await session.get(DatasetModel, dataset_id)
+            if dataset is None:
+                return None
+            snapshot = await self._active_snapshot(session, dataset)
+            return await self._freshness(session, dataset, snapshot)
+
     async def get_active_context(
         self,
         dataset_id: UUID,
@@ -103,33 +113,9 @@ class SqlAlchemySnapshotQueryStore:
             if row is None:
                 raise DatasetSnapshotUnavailableError
             snapshot, version = row
-            latest_run = await session.scalar(
-                select(DatasetRefreshRunModel)
-                .where(DatasetRefreshRunModel.dataset_id == dataset.id)
-                .order_by(
-                    DatasetRefreshRunModel.requested_at.desc(),
-                    DatasetRefreshRunModel.id.desc(),
-                )
-                .limit(1)
-            )
+            freshness = await self._freshness(session, dataset, snapshot)
 
         fields = query_fields_from_models(version, snapshot)
-        refresh_state = SnapshotRefreshState.IDLE
-        if latest_run is not None and latest_run.state == RefreshRunState.QUEUED.value:
-            refresh_state = SnapshotRefreshState.QUEUED
-        elif latest_run is not None and latest_run.state == RefreshRunState.RUNNING.value:
-            refresh_state = SnapshotRefreshState.RUNNING
-        last_error = (
-            latest_run.error_code
-            if latest_run is not None and latest_run.state == RefreshRunState.FAILED.value
-            else None
-        )
-        is_stale = bool(
-            last_error is not None
-            and latest_run is not None
-            and latest_run.finished_at is not None
-            and latest_run.finished_at >= snapshot.activated_at
-        )
         return ActiveSnapshotQueryContext(
             dataset_id=dataset.id,
             snapshot_id=snapshot.id,
@@ -138,8 +124,102 @@ class SqlAlchemySnapshotQueryStore:
             activated_at=snapshot.activated_at,
             snapshot_row_count=snapshot.row_count,
             fields=fields,
+            refresh_state=freshness.refresh_state,
+            last_refresh_error=freshness.last_refresh_error,
+            is_stale=freshness.is_stale,
+            last_refresh_error_at=freshness.last_refresh_error_at,
+        )
+
+    @staticmethod
+    async def _active_snapshot(
+        session: AsyncSession,
+        dataset: DatasetModel,
+    ) -> DatasetSnapshotModel | None:
+        if dataset.active_snapshot_id is None:
+            return None
+        snapshot = await session.get(DatasetSnapshotModel, dataset.active_snapshot_id)
+        if (
+            snapshot is None
+            or snapshot.dataset_id != dataset.id
+            or snapshot.state != SnapshotState.ACTIVE.value
+        ):
+            raise DatasetSnapshotUnavailableError
+        return snapshot
+
+    @staticmethod
+    async def _freshness(
+        session: AsyncSession,
+        dataset: DatasetModel,
+        snapshot: DatasetSnapshotModel | None,
+    ) -> DatasetFreshness:
+        running = await session.scalar(
+            select(DatasetRefreshRunModel)
+            .where(
+                DatasetRefreshRunModel.dataset_id == dataset.id,
+                DatasetRefreshRunModel.state == RefreshRunState.RUNNING.value,
+            )
+            .order_by(DatasetRefreshRunModel.requested_at, DatasetRefreshRunModel.id)
+            .limit(1)
+        )
+        active_run = running or await session.scalar(
+            select(DatasetRefreshRunModel)
+            .where(
+                DatasetRefreshRunModel.dataset_id == dataset.id,
+                DatasetRefreshRunModel.state == RefreshRunState.QUEUED.value,
+            )
+            .order_by(DatasetRefreshRunModel.requested_at, DatasetRefreshRunModel.id)
+            .limit(1)
+        )
+        failure_statement = (
+            select(DatasetRefreshRunModel)
+            .where(
+                DatasetRefreshRunModel.dataset_id == dataset.id,
+                DatasetRefreshRunModel.state == RefreshRunState.FAILED.value,
+                DatasetRefreshRunModel.error_code.is_not(None),
+                DatasetRefreshRunModel.finished_at.is_not(None),
+            )
+            .order_by(
+                DatasetRefreshRunModel.finished_at.desc(),
+                DatasetRefreshRunModel.id.desc(),
+            )
+            .limit(1)
+        )
+        if snapshot is not None:
+            failure_statement = failure_statement.where(
+                DatasetRefreshRunModel.finished_at >= snapshot.activated_at
+            )
+        latest_failure = await session.scalar(failure_statement)
+
+        refresh_state = SnapshotRefreshState.IDLE
+        if active_run is not None and active_run.state == RefreshRunState.RUNNING.value:
+            refresh_state = SnapshotRefreshState.RUNNING
+        elif active_run is not None:
+            refresh_state = SnapshotRefreshState.QUEUED
+        is_stale = snapshot is not None and latest_failure is not None
+        if active_run is not None:
+            data_state = DatasetDataState.REFRESHING
+        elif snapshot is not None and is_stale:
+            data_state = DatasetDataState.STALE
+        elif snapshot is not None:
+            data_state = DatasetDataState.READY
+        elif latest_failure is not None:
+            data_state = DatasetDataState.FAILED
+        else:
+            data_state = DatasetDataState.NOT_PUBLISHED
+        return DatasetFreshness(
+            dataset_id=dataset.id,
+            data_state=data_state,
+            snapshot_id=snapshot.id if snapshot is not None else None,
+            snapshot_row_count=snapshot.row_count if snapshot is not None else None,
+            last_success_at=snapshot.activated_at if snapshot is not None else None,
             refresh_state=refresh_state,
-            last_refresh_error=last_error,
+            active_refresh_run_id=active_run.id if active_run is not None else None,
+            refresh_requested_at=active_run.requested_at if active_run is not None else None,
+            refresh_started_at=active_run.started_at if active_run is not None else None,
+            last_refresh_error=(latest_failure.error_code if latest_failure is not None else None),
+            last_refresh_error_at=(
+                latest_failure.finished_at if latest_failure is not None else None
+            ),
             is_stale=is_stale,
         )
 

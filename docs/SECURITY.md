@@ -110,6 +110,7 @@ A viewer with dashboard access may receive chart results but must not use that r
 - DuckDB queries use validated schema identifiers and bound filter values.
 - Query time, result rows, bytes, memory, and concurrency are limited.
 - Snapshot access is authorized before storage is touched.
+- Dataset freshness requires the same effective `view_rows` permission as snapshot rows, conceals denied resources as not found, and returns only bounded metadata plus stable safe refresh error codes.
 - Snapshot row requests resolve field UUIDs against the published schema and never accept SQL expressions. Filter values are normalized by type and parameter-bound.
 - Pagination cursors are encrypted and authenticated, contain no readable business values, and are bound to one dataset, snapshot, projection, filter set, and sort order.
 - Local snapshot paths are generated metadata keys, resolved under the configured storage root, and rejected if they escape it.

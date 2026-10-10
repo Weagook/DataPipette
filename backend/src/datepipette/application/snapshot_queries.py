@@ -18,6 +18,7 @@ from datepipette.domain.access_control import DatasetPermission
 from datepipette.domain.identity import User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
+    DatasetFreshness,
     SnapshotFilterOperator,
     SnapshotQuery,
     SnapshotQueryCursorPosition,
@@ -78,6 +79,8 @@ class DecodedSnapshotCursor:
 
 
 class SnapshotQueryStore(Protocol):
+    async def get_freshness(self, dataset_id: UUID) -> DatasetFreshness | None: ...
+
     async def get_active_context(
         self,
         dataset_id: UUID,
@@ -363,6 +366,20 @@ class DatasetSnapshotQueryService:
         self._maximum_response_bytes = maximum_response_bytes
         self._authorizer = authorizer
 
+    async def freshness(self, *, actor: User, dataset_id: UUID) -> DatasetFreshness:
+        try:
+            await self._authorizer.require(
+                actor=actor,
+                dataset_id=dataset_id,
+                permissions=frozenset({DatasetPermission.VIEW_ROWS}),
+            )
+        except DatasetAccessDeniedError as exc:
+            raise DatasetSnapshotNotFoundError from exc
+        freshness = await self._store.get_freshness(dataset_id)
+        if freshness is None:
+            raise DatasetSnapshotNotFoundError
+        return freshness
+
     async def query(
         self,
         *,
@@ -474,4 +491,5 @@ class DatasetSnapshotQueryService:
             is_stale=context.is_stale,
             next_cursor=next_cursor,
             truncated_by_bytes=execution.truncated_by_bytes,
+            last_refresh_error_at=context.last_refresh_error_at,
         )
