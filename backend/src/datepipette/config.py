@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     refresh_statement_timeout_seconds: int = Field(default=1800, ge=1, le=86_400)
     refresh_batch_rows: int = Field(default=50_000, ge=1_000, le=100_000)
     snapshot_storage_path: Path = Path(".local/snapshots")
+    snapshot_query_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    snapshot_query_memory_limit_mb: int = Field(default=256, ge=64, le=4096)
+    snapshot_query_threads: int = Field(default=2, ge=1, le=16)
+    snapshot_query_concurrency: int = Field(default=4, ge=1, le=64)
+    snapshot_query_temp_limit_mb: int = Field(default=512, ge=64, le=8192)
+    snapshot_query_max_response_bytes: int = Field(
+        default=2_097_152,
+        ge=65_536,
+        le=16_777_216,
+    )
     connection_encryption_key: SecretStr = SecretStr(DEVELOPMENT_CONNECTION_ENCRYPTION_KEY)
     metadata_database_url: SecretStr = SecretStr(
         "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette"

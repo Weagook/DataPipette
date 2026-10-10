@@ -123,6 +123,22 @@ Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-
 
 The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-refresh-run-orchestration.md); local Parquet publication is recorded in [ADR-0013](adr/0013-local-parquet-snapshot-publication.md).
 
+## Snapshot row queries
+
+- `POST /api/v1/datasets/{dataset_id}/rows:query` is a read-only operation with a structured body. It requires an authenticated administrator but not CSRF; object-level analyst/viewer access waits for dataset grants.
+- `fields` contains 1–100 published field UUIDs. A request may contain at most 20 filters, five sort fields, 100 values in one `in` filter, and 200 rows per page.
+- Supported operators are `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `contains`, `starts_with`, `is_null`, and `is_not_null`. Operators are checked against the published PostgreSQL type. Comparisons apply to integers, bounded decimals, floating-point values, and temporal fields; unconstrained `numeric` remains exact text in the current Parquet format. Use null operators instead of `eq: null`.
+- Excel-style semicolon input is translated by a client into an explicit `in` value array. The API does not accept or parse filter-expression strings.
+- Field UUIDs resolve to generated physical Parquet columns. Filter and cursor values are parameter-bound; callers cannot submit identifiers, expressions, or SQL.
+- Sorts use `NULLS LAST`. The immutable Parquet file row number is the final internal ascending tie-breaker, including when no user sort is supplied.
+- `cursor` is encrypted, authenticated, and bound to dataset, active snapshot, projection, normalized filters, and sorting. A changed query or newly active snapshot returns `400 invalid_snapshot_cursor`.
+- Responses enforce a two-MiB default encoded-row budget. `truncated_by_bytes` can be true before `page_size` is reached; `next_cursor` continues after the last returned row. A single row larger than the limit returns `413 snapshot_row_too_large`.
+- Metadata includes snapshot ID, total rows in the unfiltered snapshot, `last_success_at`, current refresh state, staleness, last safe refresh error, and the next cursor. It intentionally omits an expensive filtered total count.
+- Missing publication returns `409 dataset_snapshot_not_published`; missing/corrupt local data returns redacted `503 snapshot_query_unavailable`; timeout returns `504 snapshot_query_timeout`.
+- Decimal values are JSON strings, temporal values are ISO text normalized to UTC when timezone-aware, binary values are base64, and JSON snapshot fields are restored as JSON values.
+
+The query and cursor rationale is recorded in [ADR-0014](adr/0014-typed-snapshot-row-queries.md).
+
 ## Success responses
 
 Ordinary resources use direct JSON objects. Collection responses include data and pagination metadata:

@@ -19,10 +19,14 @@ from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.refresh_worker import RefreshWorkerService
+from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
 from datepipette.config import Settings
 from datepipette.domain.refresh import RefreshClaimOutcome
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
+from datepipette.infrastructure.duckdb_snapshot_queries import (
+    DuckDbLocalSnapshotQueryExecutor,
+)
 from datepipette.infrastructure.models import (
     AuditEventModel,
     DatasetSnapshotModel,
@@ -30,6 +34,10 @@ from datepipette.infrastructure.models import (
 from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
+from datepipette.infrastructure.repositories.snapshot_queries import (
+    SqlAlchemySnapshotQueryStore,
+)
+from datepipette.infrastructure.snapshot_cursor import EncryptedSnapshotCursorCodec
 from datepipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
@@ -208,6 +216,26 @@ def _create_and_validate(
     return dataset_id, etag, definition
 
 
+def _snapshot_query_service(
+    session_factory: Any,
+    storage_root: Path,
+    maximum_bytes: int = 2_097_152,
+) -> DatasetSnapshotQueryService:
+    return DatasetSnapshotQueryService(
+        SqlAlchemySnapshotQueryStore(session_factory),
+        DuckDbLocalSnapshotQueryExecutor(
+            storage_root,
+            timeout_seconds=10,
+            memory_limit_mb=128,
+            threads=2,
+            temporary_directory_limit_mb=128,
+            maximum_concurrent_queries=2,
+        ),
+        EncryptedSnapshotCursorCodec(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
+        maximum_bytes,
+    )
+
+
 def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
     tmp_path: Path,
 ) -> None:
@@ -228,13 +256,23 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
     worker = RefreshWorkerService(store, executor)
     try:
         with TestClient(
-            create_app(settings=TEST_SETTINGS, refresh_run_service=refresh_service)
+            create_app(
+                settings=TEST_SETTINGS,
+                refresh_run_service=refresh_service,
+                snapshot_query_service=_snapshot_query_service(session_factory, tmp_path),
+            )
         ) as client:
             _login(client)
             dataset_id, etag, original_definition = _create_and_validate(
                 client,
                 _connection(client),
             )
+            unpublished = client.post(
+                f"/api/v1/datasets/{dataset_id}/rows:query",
+                json={"fields": [original_definition["fields"][0]["id"]]},
+            )
+            assert unpublished.status_code == 409
+            assert unpublished.json()["code"] == "dataset_snapshot_not_published"
             refresh_url = f"/api/v1/datasets/{dataset_id}/refresh-runs"
             requested = client.post(
                 refresh_url,
@@ -270,7 +308,8 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             table = pq.read_table(first_path)
             assert table.num_rows == 2
             assert pq.ParquetFile(first_path).num_row_groups == 2
-            assert table.column_names == [
+            assert first_snapshot.schema_document["schema_version"] == 2
+            expected_names = [
                 "record_id",
                 "label",
                 "amount",
@@ -279,8 +318,42 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
                 "payload",
                 "raw",
             ]
-            assert table["amount"].to_pylist() == [Decimal("12.30"), None]
-            assert table["payload"].to_pylist() == ['{"tier":"gold"}', None]
+            fields = first_snapshot.schema_document["fields"]
+            assert [field["name"] for field in fields] == expected_names
+            assert table.column_names == [field["storage_name"] for field in fields]
+            assert all(name.startswith("field_") for name in table.column_names)
+            by_name = {field["name"]: field["storage_name"] for field in fields}
+            assert table[by_name["amount"]].to_pylist() == [Decimal("12.30"), None]
+            assert table[by_name["payload"]].to_pylist() == ['{"tier":"gold"}', None]
+
+            field_ids = {field["name"]: field["id"] for field in original_definition["fields"]}
+            query_url = f"/api/v1/datasets/{dataset_id}/rows:query"
+            first_page = client.post(
+                query_url,
+                json={
+                    "fields": [field_ids["record_id"], field_ids["label"]],
+                    "sorts": [{"field_id": field_ids["active"], "direction": "asc"}],
+                    "page_size": 1,
+                },
+            )
+            assert first_page.status_code == 200, first_page.text
+            assert first_page.json()["data"]["rows"] == [
+                {"record_id": 2, "label": "Beta private value"}
+            ]
+            first_snapshot_cursor = first_page.json()["meta"]["next_cursor"]
+            assert first_snapshot_cursor
+            second_page = client.post(
+                query_url,
+                json={
+                    "fields": [field_ids["record_id"], field_ids["label"]],
+                    "sorts": [{"field_id": field_ids["active"], "direction": "asc"}],
+                    "page_size": 1,
+                    "cursor": first_snapshot_cursor,
+                },
+            )
+            assert second_page.status_code == 200, second_page.text
+            assert second_page.json()["data"]["rows"][0]["record_id"] == 1
+            assert second_page.json()["meta"]["next_cursor"] is None
 
             asyncio.run(_insert_source_row())
             second = client.post(
@@ -304,6 +377,119 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert first_after.state == "superseded"
             assert second_after.state == "active"
             assert second_after.row_count == 3
+
+            active_cursor = None
+            paged_ids: list[int] = []
+            first_active_cursor = None
+            for _ in range(3):
+                page = client.post(
+                    query_url,
+                    json={
+                        "fields": [field_ids["record_id"]],
+                        "sorts": [{"field_id": field_ids["active"], "direction": "asc"}],
+                        "page_size": 1,
+                        "cursor": active_cursor,
+                    },
+                )
+                assert page.status_code == 200, page.text
+                paged_ids.append(page.json()["data"]["rows"][0]["record_id"])
+                active_cursor = page.json()["meta"]["next_cursor"]
+                if first_active_cursor is None:
+                    first_active_cursor = active_cursor
+            assert paged_ids == [2, 1, 3]
+            assert active_cursor is None
+            mismatched = client.post(
+                query_url,
+                json={
+                    "fields": [field_ids["label"]],
+                    "sorts": [{"field_id": field_ids["active"], "direction": "asc"}],
+                    "page_size": 1,
+                    "cursor": first_active_cursor,
+                },
+            )
+            assert mismatched.status_code == 400
+            assert mismatched.json()["code"] == "invalid_snapshot_cursor"
+
+            filtered = client.post(
+                query_url,
+                json={
+                    "fields": [
+                        field_ids["record_id"],
+                        field_ids["amount"],
+                        field_ids["occurred_at"],
+                        field_ids["payload"],
+                    ],
+                    "filters": [
+                        {
+                            "field_id": field_ids["label"],
+                            "operator": "in",
+                            "values": ["Alpha private value", "Gamma private value"],
+                        },
+                        {
+                            "field_id": field_ids["amount"],
+                            "operator": "gte",
+                            "value": "12.30",
+                        },
+                        {
+                            "field_id": field_ids["occurred_at"],
+                            "operator": "between",
+                            "values": ["2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"],
+                        },
+                        {
+                            "field_id": field_ids["label"],
+                            "operator": "contains",
+                            "value": "private",
+                        },
+                    ],
+                    "sorts": [{"field_id": field_ids["amount"], "direction": "desc"}],
+                    "page_size": 10,
+                },
+            )
+            assert filtered.status_code == 200, filtered.text
+            assert [row["record_id"] for row in filtered.json()["data"]["rows"]] == [3, 1]
+            assert filtered.json()["data"]["rows"][0]["amount"] == "99.99"
+            assert filtered.json()["data"]["rows"][0]["payload"] == {}
+            assert filtered.json()["meta"]["snapshot_id"] == str(second_snapshot_id)
+            assert filtered.json()["meta"]["snapshot_row_count"] == 3
+
+            nulls = client.post(
+                query_url,
+                json={
+                    "fields": [field_ids["record_id"]],
+                    "filters": [{"field_id": field_ids["amount"], "operator": "is_null"}],
+                    "page_size": 10,
+                },
+            )
+            assert nulls.status_code == 200
+            assert nulls.json()["data"]["rows"] == [{"record_id": 2}]
+
+            stale_cursor = client.post(
+                query_url,
+                json={
+                    "fields": [field_ids["record_id"], field_ids["label"]],
+                    "sorts": [{"field_id": field_ids["active"], "direction": "asc"}],
+                    "page_size": 1,
+                    "cursor": first_snapshot_cursor,
+                },
+            )
+            assert stale_cursor.status_code == 400
+            assert stale_cursor.json()["code"] == "invalid_snapshot_cursor"
+
+            invalid_operator = client.post(
+                query_url,
+                json={
+                    "fields": [field_ids["record_id"]],
+                    "filters": [
+                        {
+                            "field_id": field_ids["active"],
+                            "operator": "contains",
+                            "value": "true",
+                        }
+                    ],
+                },
+            )
+            assert invalid_operator.status_code == 422
+            assert invalid_operator.json()["code"] == "snapshot_query_invalid"
 
             latest_draft = client.get(f"/api/v1/datasets/{dataset_id}/draft")
             unsupported = deepcopy(latest_draft.json()["definition"])
@@ -339,6 +525,15 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert failed["error_code"] == "unsupported_source_type"
             unchanged = client.get(f"/api/v1/datasets/{dataset_id}").json()
             assert UUID(unchanged["active_snapshot_id"]) == second_snapshot_id
+            stale_rows = client.post(
+                query_url,
+                json={"fields": [field_ids["record_id"]], "page_size": 1},
+            )
+            assert stale_rows.status_code == 200
+            assert stale_rows.json()["meta"]["snapshot_id"] == str(second_snapshot_id)
+            assert stale_rows.json()["meta"]["is_stale"] is True
+            assert stale_rows.json()["meta"]["last_refresh_error"] == "unsupported_source_type"
+            assert stale_rows.json()["meta"]["refresh_state"] == "idle"
     finally:
         asyncio.run(engine.dispose())
 
@@ -397,7 +592,8 @@ def test_empty_source_publishes_typed_zero_row_parquet(tmp_path: Path) -> None:
             assert snapshot.row_count == 0
             assert parquet.metadata is not None
             assert parquet.metadata.num_rows == 0
-            assert parquet.schema_arrow.names == [
+            fields = snapshot.schema_document["fields"]
+            assert [field["name"] for field in fields] == [
                 "record_id",
                 "label",
                 "amount",
@@ -406,6 +602,7 @@ def test_empty_source_publishes_typed_zero_row_parquet(tmp_path: Path) -> None:
                 "payload",
                 "raw",
             ]
+            assert parquet.schema_arrow.names == [field["storage_name"] for field in fields]
     finally:
         asyncio.run(engine.dispose())
 

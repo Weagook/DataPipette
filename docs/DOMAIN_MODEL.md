@@ -101,6 +101,8 @@ Each manual request supplies an idempotency key. Metadata PostgreSQL stores its 
 
 The official UI representation of detailed rows in the active snapshot. It is not a separate `Report` entity. Temporary filters, pagination, and sorting apply to the current request. Exports may reuse them.
 
+The implemented query contract selects fields by stable UUID, applies typed temporary predicates, and uses an encrypted cursor tied to one immutable snapshot and query shape. Multiple values from an Excel-like UI become an explicit `in` list. Changing filters, sorting, projection, or the active snapshot invalidates the cursor rather than mixing pages from different result sets.
+
 ### Chart
 
 A persistent analytical query and visualization over one dataset snapshot. It stores dimensions, measures, typed filters, groupings, sorting, limits, chart type, and presentation options.

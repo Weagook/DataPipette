@@ -49,6 +49,8 @@ uv run --package datepipette celery \
 
 Refresh state is durable in metadata PostgreSQL and Redis is only the transport. The development worker streams validated source rows into `.local/snapshots` by default; Compose uses its private `snapshot-data` volume. Never commit, share, or serve these files directly because they contain business data.
 
+Interactive snapshot reads use embedded DuckDB against the active Parquet object. `DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS`, `DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB`, `DATEPIPETTE_SNAPSHOT_QUERY_THREADS`, `DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY`, `DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB`, and `DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES` bound each local query. DuckDB provides parameterized projection, predicates, ordering, and pagination; `pytz` supports its timezone-aware Python timestamp conversion.
+
 The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 
 - `GET /api/v1/health/live` for process liveness;
@@ -78,7 +80,7 @@ Stop local dependencies without deleting their volumes:
 docker compose -f deploy/compose/compose.yaml stop
 ```
 
-Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, and `SNAPSHOT_STORAGE_PATH`.
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, `SNAPSHOT_STORAGE_PATH`, and the `SNAPSHOT_QUERY_*` limits documented above.
 
 API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
 

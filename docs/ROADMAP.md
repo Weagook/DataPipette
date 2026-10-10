@@ -26,7 +26,7 @@ Outcome: an administrator connects PostgreSQL and an analyst publishes and brows
 - [x] Establish durable idempotent refresh runs and Celery worker orchestration
 - [x] Publish a validated one-table definition through Celery
 - [x] Stream rows into validated local Parquet storage
-- [ ] Query snapshot rows with DuckDB and cursor pagination
+- [x] Query snapshot rows with DuckDB, typed filters, deterministic cursor pagination, and bounded responses
 - [ ] Expose freshness and refresh errors through API and UI
 
 ## Phase 2 — Governed dataset engine
