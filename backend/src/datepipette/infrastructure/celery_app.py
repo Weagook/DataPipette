@@ -9,7 +9,7 @@ def create_celery_app(settings: Settings) -> Celery:
     app = Celery(
         "datepipette",
         broker=settings.redis_url.get_secret_value(),
-        include=["datepipette.workers.refresh"],
+        include=["datepipette.workers.refresh", "datepipette.workers.exports"],
     )
     app.conf.update(
         accept_content=["json"],

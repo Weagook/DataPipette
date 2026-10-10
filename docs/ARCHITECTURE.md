@@ -99,7 +99,7 @@ Chart specifications, type validation, dashboard layouts, chart dependency track
 
 ### Export
 
-Asynchronous CSV/XLSX generation, private artifact lifecycle, signed URL issuance, and expiry cleanup.
+Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local artifact storage, and short-lived capability issuance are implemented. The worker validates the stored typed query against the captured snapshot schema, streams bounded DuckDB batches into a candidate file, neutralizes formula-like strings, and atomically publishes the artifact. Logical expiry is enforced after 24 hours; physical cleanup and S3-compatible storage remain future adapters.
 
 ### Audit and operations
 
@@ -144,6 +144,15 @@ Any failure before atomic publication leaves the current definition and snapshot
 6. Return typed rows plus pagination, snapshot identity, freshness, and safe error metadata.
 
 User-provided values must be bound as parameters. Identifiers must resolve from the published dataset schema rather than being interpolated from arbitrary strings.
+
+## Export flow
+
+1. Authenticate, authorize direct dataset access, require CSRF and an idempotency key.
+2. Validate field UUIDs and typed filters/sorts against the active snapshot, then persist a job bound to that snapshot ID.
+3. Enqueue only the export UUID through Redis/Celery and atomically claim it in the worker.
+4. Stream the deterministic DuckDB result into a private CSV or XLSX candidate under row and resource limits.
+5. Atomically publish file metadata, retain it logically for 24 hours, and expose safe job history.
+6. Issue a reissuable encrypted five-minute download capability after owner authorization.
 
 ## Failure model
 

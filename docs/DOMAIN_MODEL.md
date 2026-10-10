@@ -117,12 +117,14 @@ A named layout of chart references. Charts may use different datasets and load i
 
 An asynchronous request to write a filtered dataset table view to CSV or XLSX. The resulting private file expires after 24 hours. Download URLs expire after five minutes and may be reissued while the file exists.
 
-Suggested states:
+Implemented states:
 
 ```text
-queued -> running -> ready -> expired
+queued -> running -> succeeded
                   -> failed
 ```
+
+Each job is bound to the active immutable snapshot at creation and stores selected field UUIDs plus the typed temporary filters and sorts needed to reproduce the request. Metadata PostgreSQL is authoritative; Redis carries only the export UUID. The completed file becomes logically unavailable 24 hours after success, while physical cleanup remains a separate workflow. Five-minute encrypted download capabilities can be reissued before expiry without regenerating the file.
 
 ### Audit event
 

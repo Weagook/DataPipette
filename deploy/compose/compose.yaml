@@ -42,7 +42,7 @@ services:
         install -d -o nobody -g nogroup /var/lib/datepipette/snapshots &&
         exec uv run --frozen --package datepipette celery
         --app datepipette.infrastructure.celery_app:celery_app worker
-        --uid nobody --gid nogroup --queues refresh --concurrency 1 --loglevel INFO
+        --uid nobody --gid nogroup --queues refresh,export --concurrency 1 --loglevel INFO
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/datepipette/.venv
       UV_LINK_MODE: copy

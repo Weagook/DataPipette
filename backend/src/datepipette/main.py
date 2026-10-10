@@ -21,6 +21,7 @@ from datepipette.application.connections import ConnectionService
 from datepipette.application.dataset_preview import DatasetPreviewService
 from datepipette.application.dataset_validation import DatasetValidationService
 from datepipette.application.datasets import DatasetService
+from datepipette.application.exports import DatasetExportService, ExportDownloadService
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
@@ -32,12 +33,16 @@ from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.dataset_preview import PsycopgSourceDatasetPreviewer
 from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
 from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbLocalSnapshotQueryExecutor
+from datepipette.infrastructure.export_dispatch import CeleryExportDispatcher
+from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
+from datepipette.infrastructure.local_exports import LocalExportStorage
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
+from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.infrastructure.repositories.snapshot_queries import (
     SqlAlchemySnapshotQueryStore,
@@ -63,6 +68,8 @@ def create_app(
     dataset_preview_service: DatasetPreviewService | None = None,
     refresh_run_service: RefreshRunService | None = None,
     snapshot_query_service: DatasetSnapshotQueryService | None = None,
+    export_service: DatasetExportService | None = None,
+    export_download_service: ExportDownloadService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -92,6 +99,10 @@ def create_app(
                 app.state.refresh_run_service = refresh_run_service
             if snapshot_query_service is not None:
                 app.state.snapshot_query_service = snapshot_query_service
+            if export_service is not None:
+                app.state.export_service = export_service
+            if export_download_service is not None:
+                app.state.export_download_service = export_download_service
             yield
             return
 
@@ -177,6 +188,18 @@ def create_app(
                 resolved_settings.connection_encryption_key.get_secret_value()
             ),
             resolved_settings.snapshot_query_max_response_bytes,
+        )
+        export_store = SqlAlchemyExportStore(resources.session_factory)
+        app.state.export_service = export_service or DatasetExportService(
+            export_store,
+            CeleryExportDispatcher(celery_app),
+        )
+        app.state.export_download_service = export_download_service or ExportDownloadService(
+            export_store,
+            EncryptedExportDownloadTokenCodec(
+                resolved_settings.connection_encryption_key.get_secret_value()
+            ),
+            LocalExportStorage(resolved_settings.snapshot_storage_path),
         )
         try:
             yield

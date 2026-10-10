@@ -39,17 +39,19 @@ Start the development API:
 uv run --package datepipette datepipette
 ```
 
-Compose also starts a single-concurrency Celery worker on the `refresh` queue. To run a worker directly while developing:
+Compose also starts a single-concurrency Celery worker on the `refresh` and `export` queues. To run a worker directly while developing:
 
 ```bash
 uv run --package datepipette celery \
   --app datepipette.infrastructure.celery_app:celery_app \
-  worker --queues refresh --concurrency 1 --loglevel INFO
+  worker --queues refresh,export --concurrency 1 --loglevel INFO
 ```
 
 Refresh state is durable in metadata PostgreSQL and Redis is only the transport. The development worker streams validated source rows into `.local/snapshots` by default; Compose uses its private `snapshot-data` volume. Never commit, share, or serve these files directly because they contain business data.
 
 Interactive snapshot reads use embedded DuckDB against the active Parquet object. `DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS`, `DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB`, `DATEPIPETTE_SNAPSHOT_QUERY_THREADS`, `DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY`, `DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB`, and `DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES` bound each local query. DuckDB provides parameterized projection, predicates, ordering, and pagination; `pytz` supports its timezone-aware Python timestamp conversion.
+
+Background CSV/XLSX exports use the same private storage root and a separate Celery queue. `DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB`, `DATEPIPETTE_EXPORT_THREADS`, `DATEPIPETTE_EXPORT_TEMP_LIMIT_MB`, `DATEPIPETTE_EXPORT_MAX_ROWS`, and `DATEPIPETTE_EXPORT_FETCH_ROWS` bound local generation. Files are logically inaccessible 24 hours after success; local physical cleanup and production S3-compatible storage are not yet implemented.
 
 The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 
@@ -60,6 +62,7 @@ The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 - `DELETE /api/v1/auth/sessions/current` for sign-out;
 - `GET /api/v1/users` for administrator-only local account management;
 - `GET /api/v1/connections` for administrator-only PostgreSQL source management;
+- `POST /api/v1/datasets/{dataset_id}/exports` for administrator-only background CSV/XLSX generation;
 - `/docs` and `/openapi.json` for the development API contract.
 
 Browser authentication uses an HTTP-only session cookie. State-changing requests also send the readable `datepipette_csrf` cookie value in the `X-CSRF-Token` header. Production forces secure cookies even if local configuration attempts to disable them.

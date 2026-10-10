@@ -42,3 +42,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0012](0012-durable-refresh-run-orchestration.md): Durable idempotent refresh-run orchestration
 - [ADR-0013](0013-local-parquet-snapshot-publication.md): Streaming local Parquet snapshot publication
 - [ADR-0014](0014-typed-snapshot-row-queries.md): Typed snapshot row queries
+- [ADR-0015](0015-snapshot-bound-background-exports.md): Snapshot-bound background exports
