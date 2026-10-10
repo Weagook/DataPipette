@@ -69,13 +69,13 @@ Dependencies point inward: infrastructure and API adapters may depend on applica
 
 Users, groups, roles, service accounts, token lifecycle, sessions, scopes, ACL evaluation, and object ownership.
 
-Groups, human-user memberships, and additive dataset grants are stored in metadata PostgreSQL. Protected dataset operations evaluate authoritative grants per request: administrators and owners have full access, analysts receive the union of direct and group permissions, and the viewer role is denied detailed rows and exports regardless of grants. The implemented permissions separate row browsing, export, and grant management. Redis is not an authorization cache, so revocation applies to the next request.
+Groups, human-user memberships, additive dataset grants, and scoped connection grants are stored in metadata PostgreSQL. Protected dataset operations evaluate authoritative grants per request: administrators and owners have full dataset access, analysts receive the union of direct and group permissions, and the viewer role is denied detailed rows and source connections regardless of grants. The implemented permissions separate row browsing, export, grant management, and source authoring. Redis is not an authorization cache, so revocation applies to the next request and is re-checked by refresh workers.
 
 ### Connections and catalog
 
 Encrypted PostgreSQL connection configuration, health checks, schema introspection, table and column metadata, foreign-key suggestions, and connection visibility policies.
 
-Catalog discovery is currently a live adapter query rather than a metadata replica. The API opens a bounded read-only source transaction, queries static `pg_catalog` statements, filters results with the connected role's effective schema/table/column privileges, and returns only structural metadata. System schemas are hidden by default. Connection-grant allowlists will narrow this database-visible set when that later authorization slice is implemented.
+Catalog discovery is a live adapter query rather than a metadata replica. The API opens a bounded read-only source transaction, queries static `pg_catalog` statements, intersects the connected role's schema/table/column privileges with the analyst's effective exact connection scopes, and returns only structural metadata. Scope filtering occurs before pagination, system schemas are hidden by default, and foreign-key targets outside the effective scope are omitted.
 
 ### Datasets
 
@@ -85,7 +85,7 @@ The first validation slice is synchronous and single-table: it re-checks live ca
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
 
-Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The local executor recompiles the structured definition, streams named-cursor batches into typed Parquet, validates the completed object, and only then atomically activates snapshot metadata.
+Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, reloads the requesting user's effective relation scope, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The local executor recompiles the structured definition, streams named-cursor batches into typed Parquet, validates the completed object, and only then atomically activates snapshot metadata.
 
 ### Execution
 

@@ -6,6 +6,11 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from datepipette.application.connection_access import (
+    ConnectionAccessAuthorizer,
+    ConnectionAccessDeniedError,
+    ConnectionAccessStore,
+)
 from datepipette.domain.connections import (
     ConnectionTestResult,
     EncryptedConnectionSecrets,
@@ -106,6 +111,7 @@ class ConnectionStore(Protocol):
         *,
         after_created_at: datetime | None,
         after_id: UUID | None,
+        allowed_ids: frozenset[UUID] | None,
         limit: int,
     ) -> list[PostgresConnection]: ...
 
@@ -180,10 +186,14 @@ class ConnectionService:
         store: ConnectionStore,
         cipher: SecretCipher,
         tester: SourceConnectionTester,
+        access_store: ConnectionAccessStore,
+        authorizer: ConnectionAccessAuthorizer,
     ) -> None:
         self._store = store
         self._cipher = cipher
         self._tester = tester
+        self._access_store = access_store
+        self._authorizer = authorizer
 
     async def create(
         self, *, actor: User, value: ConnectionCreate, request_id: str
@@ -225,11 +235,18 @@ class ConnectionService:
         )
 
     async def list(self, *, actor: User, cursor: str | None, limit: int) -> ConnectionPage:
-        _require_admin(actor)
+        if actor.status is not AccountStatus.ACTIVE or actor.role is SystemRole.VIEWER:
+            return ConnectionPage([], None)
         after_created_at, after_id = _decode_cursor(cursor)
+        allowed_ids = (
+            None
+            if actor.role is SystemRole.ADMIN
+            else await self._access_store.list_accessible_connection_ids(actor.id)
+        )
         items = await self._store.list(
             after_created_at=after_created_at,
             after_id=after_id,
+            allowed_ids=allowed_ids,
             limit=limit + 1,
         )
         visible = items[:limit]
@@ -239,7 +256,10 @@ class ConnectionService:
         )
 
     async def get(self, *, actor: User, connection_id: UUID) -> PostgresConnection:
-        _require_admin(actor)
+        try:
+            await self._authorizer.require_connection(actor=actor, connection_id=connection_id)
+        except ConnectionAccessDeniedError as exc:
+            raise ConnectionNotFoundError from exc
         connection = await self._store.get(connection_id)
         if connection is None:
             raise ConnectionNotFoundError

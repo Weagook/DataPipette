@@ -5,16 +5,20 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
+from datepipette.application.connection_access import (
+    ConnectionAccessAuthorizer,
+    ConnectionAccessDeniedError,
+)
 from datepipette.application.connections import (
     ConnectionSecretUnavailableError,
     ConnectionStore,
     SecretCipher,
 )
 from datepipette.application.datasets import (
-    DatasetAdministratorRequiredError,
     DatasetNotFoundError,
     DatasetRevisionConflictError,
     DatasetStore,
+    require_dataset_owner,
 )
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
@@ -26,7 +30,7 @@ from datepipette.domain.datasets import (
     ValidatedDatasetField,
     VisualDatasetDefinition,
 )
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.identity import User
 
 
 class SourceDatasetValidationUnavailableError(Exception):
@@ -60,11 +64,13 @@ class DatasetValidationService:
         connection_store: ConnectionStore,
         cipher: SecretCipher,
         source_validator: SourceDatasetValidator,
+        authorizer: ConnectionAccessAuthorizer,
     ) -> None:
         self._dataset_store = dataset_store
         self._connection_store = connection_store
         self._cipher = cipher
         self._source_validator = source_validator
+        self._authorizer = authorizer
 
     async def validate(
         self,
@@ -74,15 +80,22 @@ class DatasetValidationService:
         expected_revision: int,
         request_id: str,
     ) -> DatasetDraft:
-        if actor.role is not SystemRole.ADMIN or actor.status is not AccountStatus.ACTIVE:
-            raise DatasetAdministratorRequiredError
-
         dataset = await self._dataset_store.get(dataset_id)
         draft = await self._dataset_store.get_draft(dataset_id)
         if dataset is None or draft is None:
             raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
         if draft.revision != expected_revision:
             raise DatasetRevisionConflictError
+        try:
+            await self._authorizer.require_relation(
+                actor=actor,
+                connection_id=dataset.connection_id,
+                schema_name=draft.definition.relation.schema_name,
+                relation_name=draft.definition.relation.relation_name,
+            )
+        except ConnectionAccessDeniedError as exc:
+            raise DatasetNotFoundError from exc
         connection = await self._connection_store.get(dataset.connection_id)
         secrets = await self._connection_store.get_secrets(dataset.connection_id)
         if connection is None or secrets is None:

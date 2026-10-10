@@ -8,13 +8,13 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 from redis.asyncio import Redis
-from sqlalchemy import text, update
+from sqlalchemy import select, text, update
 
 from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.config import Settings
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import PostgresConnectionModel
+from datepipette.infrastructure.models import AuditEventModel, PostgresConnectionModel
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.main import create_app
 
@@ -126,6 +126,23 @@ async def _corrupt_connection_secret(connection_id: str) -> None:
         await engine.dispose()
 
 
+async def _connection_grant_audit_events() -> list[AuditEventModel]:
+    engine = create_database_engine(TEST_SETTINGS)
+    try:
+        async with create_session_factory(engine)() as session:
+            return list(
+                (
+                    await session.scalars(
+                        select(AuditEventModel)
+                        .where(AuditEventModel.action.like("connection.grant_%"))
+                        .order_by(AuditEventModel.occurred_at, AuditEventModel.id)
+                    )
+                ).all()
+            )
+    finally:
+        await engine.dispose()
+
+
 @pytest.fixture(autouse=True)
 def clean_state() -> Generator[None, None, None]:
     asyncio.run(_reset())
@@ -167,6 +184,46 @@ def _create_connection(
     )
     assert response.status_code == 201, response.text
     return cast(str, response.json()["id"])
+
+
+def _create_user(client: TestClient, *, email: str, role: str) -> str:
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "email": email,
+            "display_name": email.split("@", maxsplit=1)[0],
+            "password": "connection visibility password",
+            "role": role,
+        },
+        headers=_headers(client),
+    )
+    assert response.status_code == 201, response.text
+    return cast(str, response.json()["id"])
+
+
+def _grant(
+    client: TestClient,
+    connection_id: str,
+    *,
+    principal_type: str,
+    principal_id: str,
+    scope_type: str,
+    schema_name: str | None = None,
+    relation_name: str | None = None,
+) -> dict[str, object]:
+    response = client.post(
+        f"/api/v1/connections/{connection_id}/grants",
+        json={
+            "principal_type": principal_type,
+            "principal_id": principal_id,
+            "scope_type": scope_type,
+            "schema_name": schema_name,
+            "relation_name": relation_name,
+        },
+        headers=_headers(client),
+    )
+    assert response.status_code == 201, response.text
+    return cast(dict[str, object], response.json())
 
 
 def test_catalog_lists_live_objects_and_describes_keys() -> None:
@@ -270,7 +327,7 @@ def test_catalog_lists_live_objects_and_describes_keys() -> None:
         assert restricted_detail.json()["foreign_keys"] == []
 
 
-def test_catalog_returns_safe_errors_and_requires_an_administrator() -> None:
+def test_catalog_returns_safe_errors_and_conceals_ungranted_connections() -> None:
     asyncio.run(_bootstrap_and_create_source_objects())
     with TestClient(create_app(settings=TEST_SETTINGS)) as client:
         assert client.get(f"/api/v1/connections/{uuid4()}/catalog/schemas").status_code == 401
@@ -324,6 +381,267 @@ def test_catalog_returns_safe_errors_and_requires_an_administrator() -> None:
             email="analyst@example.com",
             password="analyst password for tests",
         )
-        forbidden = analyst_client.get(f"/api/v1/connections/{connection_id}/catalog/schemas")
-        assert forbidden.status_code == 403
-        assert forbidden.json()["code"] == "administrator_required"
+        concealed = analyst_client.get(f"/api/v1/connections/{connection_id}/catalog/schemas")
+        assert concealed.status_code == 404
+        assert concealed.json()["code"] == "connection_not_found"
+
+
+def test_connection_scopes_union_filter_foreign_keys_and_revoke_immediately() -> None:
+    asyncio.run(_bootstrap_and_create_source_objects())
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        connection_id = _create_connection(admin)
+        analyst_id = _create_user(admin, email="scoped-analyst@example.com", role="analyst")
+        viewer_id = _create_user(admin, email="scoped-viewer@example.com", role="viewer")
+        group = admin.post(
+            "/api/v1/groups",
+            json={"name": "Catalog team"},
+            headers=_headers(admin),
+        )
+        assert group.status_code == 201
+        group_id = cast(str, group.json()["id"])
+        for user_id in (analyst_id, viewer_id):
+            membership = admin.put(
+                f"/api/v1/groups/{group_id}/members/{user_id}",
+                headers=_headers(admin),
+            )
+            assert membership.status_code == 200
+
+        missing_csrf = admin.post(
+            f"/api/v1/connections/{connection_id}/grants",
+            json={
+                "principal_type": "user",
+                "principal_id": analyst_id,
+                "scope_type": "all",
+            },
+        )
+        assert missing_csrf.status_code == 403
+
+        orders_grant = _grant(
+            admin,
+            connection_id,
+            principal_type="user",
+            principal_id=analyst_id,
+            scope_type="table",
+            schema_name=SCHEMA,
+            relation_name="orders",
+        )
+        repeated = _grant(
+            admin,
+            connection_id,
+            principal_type="user",
+            principal_id=analyst_id,
+            scope_type="table",
+            schema_name=SCHEMA,
+            relation_name="orders",
+        )
+        assert repeated["id"] == orders_grant["id"]
+        _grant(
+            admin,
+            connection_id,
+            principal_type="group",
+            principal_id=group_id,
+            scope_type="table",
+            schema_name=SCHEMA,
+            relation_name="customers",
+        )
+        assert len(admin.get(f"/api/v1/connections/{connection_id}/grants").json()["data"]) == 2
+
+        invalid_scope = admin.post(
+            f"/api/v1/connections/{connection_id}/grants",
+            json={
+                "principal_type": "user",
+                "principal_id": analyst_id,
+                "scope_type": "all",
+                "schema_name": SCHEMA,
+            },
+            headers=_headers(admin),
+        )
+        assert invalid_scope.status_code == 422
+        invalid_viewer = admin.post(
+            f"/api/v1/connections/{connection_id}/grants",
+            json={
+                "principal_type": "user",
+                "principal_id": viewer_id,
+                "scope_type": "all",
+            },
+            headers=_headers(admin),
+        )
+        assert invalid_viewer.status_code == 404
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
+        _login(
+            analyst,
+            email="scoped-analyst@example.com",
+            password="connection visibility password",
+        )
+        listed = analyst.get("/api/v1/connections")
+        assert [item["id"] for item in listed.json()["data"]] == [connection_id]
+        assert analyst.get(f"/api/v1/connections/{connection_id}").status_code == 200
+        assert analyst.get(f"/api/v1/connections/{connection_id}/grants").status_code == 403
+        assert (
+            analyst.post(
+                f"/api/v1/connections/{connection_id}/tests",
+                headers=_headers(analyst),
+            ).status_code
+            == 403
+        )
+        schemas = analyst.get(f"/api/v1/connections/{connection_id}/catalog/schemas")
+        assert schemas.json()["data"] == [{"name": SCHEMA}]
+        relations = analyst.get(
+            f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations"
+        )
+        assert {item["name"] for item in relations.json()["data"]} == {"customers", "orders"}
+        order_detail = analyst.get(
+            f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations/orders"
+        )
+        assert order_detail.status_code == 200
+        assert order_detail.json()["foreign_keys"][0]["target_relation"] == "customers"
+        assert (
+            analyst.get(
+                f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations/order_amounts"
+            ).status_code
+            == 404
+        )
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as viewer:
+        _login(
+            viewer,
+            email="scoped-viewer@example.com",
+            password="connection visibility password",
+        )
+        assert viewer.get("/api/v1/connections").json()["data"] == []
+        assert viewer.get(f"/api/v1/connections/{connection_id}").status_code == 404
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        removed = admin.delete(
+            f"/api/v1/groups/{group_id}/members/{analyst_id}",
+            headers=_headers(admin),
+        )
+        assert removed.status_code == 204
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
+        _login(
+            analyst,
+            email="scoped-analyst@example.com",
+            password="connection visibility password",
+        )
+        relations = analyst.get(
+            f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations"
+        )
+        assert [item["name"] for item in relations.json()["data"]] == ["orders"]
+        detail = analyst.get(
+            f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations/orders"
+        )
+        assert detail.json()["foreign_keys"] == []
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        schema_grant = _grant(
+            admin,
+            connection_id,
+            principal_type="user",
+            principal_id=analyst_id,
+            scope_type="schema",
+            schema_name=SCHEMA,
+        )
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
+        _login(
+            analyst,
+            email="scoped-analyst@example.com",
+            password="connection visibility password",
+        )
+        relations = analyst.get(
+            f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations"
+        )
+        assert {item["name"] for item in relations.json()["data"]} == {
+            "customers",
+            "order_amounts",
+            "orders",
+        }
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        assert (
+            admin.delete(
+                f"/api/v1/connections/{connection_id}/grants/{schema_grant['id']}",
+                headers=_headers(admin),
+            ).status_code
+            == 204
+        )
+        assert (
+            admin.delete(
+                f"/api/v1/connections/{connection_id}/grants/{orders_grant['id']}",
+                headers=_headers(admin),
+            ).status_code
+            == 204
+        )
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
+        _login(
+            analyst,
+            email="scoped-analyst@example.com",
+            password="connection visibility password",
+        )
+        assert analyst.get("/api/v1/connections").json()["data"] == []
+        assert (
+            analyst.get(f"/api/v1/connections/{connection_id}/catalog/schemas").status_code == 404
+        )
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        all_grant = _grant(
+            admin,
+            connection_id,
+            principal_type="user",
+            principal_id=analyst_id,
+            scope_type="all",
+        )
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
+        _login(
+            analyst,
+            email="scoped-analyst@example.com",
+            password="connection visibility password",
+        )
+        relations = analyst.get(
+            f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations"
+        )
+        assert {item["name"] for item in relations.json()["data"]} == {
+            "customers",
+            "order_amounts",
+            "orders",
+        }
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        assert (
+            admin.delete(
+                f"/api/v1/connections/{connection_id}/grants/{all_grant['id']}",
+                headers=_headers(admin),
+            ).status_code
+            == 204
+        )
+
+    events = asyncio.run(_connection_grant_audit_events())
+    assert [event.action for event in events].count("connection.grant_created") == 4
+    assert [event.action for event in events].count("connection.grant_revoked") == 3
+    assert all(event.resource_id == UUID(connection_id) for event in events)
+    assert all(
+        set(event.details)
+        == {
+            "grant_id",
+            "principal_type",
+            "principal_id",
+            "scope_type",
+            "schema_name",
+            "relation_name",
+        }
+        for event in events
+    )
+    assert not any(
+        forbidden in repr([event.details for event in events]).lower()
+        for forbidden in ("password", "sql", "row")
+    )

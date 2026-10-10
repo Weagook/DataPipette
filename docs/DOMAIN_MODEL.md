@@ -36,7 +36,7 @@ An administrator-managed PostgreSQL data source. It stores encrypted credentials
 
 ### Connection grant
 
-Permission to use a connection. The grant exposes either all objects visible to the PostgreSQL role or an allowlist of schemas and tables. Effective visibility is the union of a principal's direct and group grants.
+Administrator-managed permission for an active analyst or group to use a connection. Exact scopes are every database-visible object (`all`), one schema, or one relation. Effective visibility is the union of direct and current group grants, intersected with the configured PostgreSQL role's privileges. Administrators bypass grants; viewers cannot use source connections. Connection access permits source discovery and dataset authoring but does not grant access to another owner's dataset or its snapshots.
 
 ### Dataset
 
@@ -62,6 +62,8 @@ One of two forms:
 Generated SQL is an execution artifact of a visual definition, not its source of truth.
 
 Visual definitions are schema-versioned JSON documents. Source relations and output fields have stable UUIDs; labels and output names may change without changing those identities. The first implemented definition version contains exactly one source relation, one or more selected fields, display metadata, and no joins. Metadata PostgreSQL stores the complete document in JSONB and the application replaces it atomically rather than updating nested paths.
+
+An analyst-created dataset is private to its owner and administrators. The owner can edit and execute it only while the referenced relation remains in their effective connection scope. Scope revocation blocks later source access but does not delete the definition or an existing published snapshot.
 
 ### Draft and published versions
 

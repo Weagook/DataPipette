@@ -5,16 +5,20 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
+from datepipette.application.connection_access import (
+    ConnectionAccessAuthorizer,
+    ConnectionAccessDeniedError,
+)
 from datepipette.application.connections import (
     ConnectionSecretUnavailableError,
     ConnectionStore,
     SecretCipher,
 )
 from datepipette.application.datasets import (
-    DatasetAdministratorRequiredError,
     DatasetNotFoundError,
     DatasetRevisionConflictError,
     DatasetStore,
+    require_dataset_owner,
 )
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
@@ -23,7 +27,7 @@ from datepipette.domain.datasets import (
     PreviewTruncationReason,
     VisualDatasetDefinition,
 )
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.identity import User
 
 MAX_PREVIEW_ROWS = 200
 MAX_PREVIEW_BYTES = 1_048_576
@@ -63,11 +67,13 @@ class DatasetPreviewService:
         connection_store: ConnectionStore,
         cipher: SecretCipher,
         source_previewer: SourceDatasetPreviewer,
+        authorizer: ConnectionAccessAuthorizer,
     ) -> None:
         self._dataset_store = dataset_store
         self._connection_store = connection_store
         self._cipher = cipher
         self._source_previewer = source_previewer
+        self._authorizer = authorizer
 
     async def preview(
         self,
@@ -78,8 +84,6 @@ class DatasetPreviewService:
         limit: int,
         request_id: str,
     ) -> DatasetPreview:
-        if actor.role is not SystemRole.ADMIN or actor.status is not AccountStatus.ACTIVE:
-            raise DatasetAdministratorRequiredError
         if not 1 <= limit <= MAX_PREVIEW_ROWS:
             raise ValueError("Preview limit is outside the supported range")
 
@@ -87,8 +91,18 @@ class DatasetPreviewService:
         draft = await self._dataset_store.get_draft(dataset_id)
         if dataset is None or draft is None:
             raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
         if draft.revision != expected_revision:
             raise DatasetRevisionConflictError
+        try:
+            await self._authorizer.require_relation(
+                actor=actor,
+                connection_id=dataset.connection_id,
+                schema_name=draft.definition.relation.schema_name,
+                relation_name=draft.definition.relation.relation_name,
+            )
+        except ConnectionAccessDeniedError as exc:
+            raise DatasetNotFoundError from exc
         validation = draft.validation
         expected_fields = tuple((field.id, field.name) for field in draft.definition.fields)
         validated_fields = (

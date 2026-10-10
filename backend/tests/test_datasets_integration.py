@@ -3,8 +3,10 @@
 import asyncio
 from collections.abc import Generator
 from copy import deepcopy
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,10 +15,22 @@ from sqlalchemy import select, text
 
 from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
+from datepipette.application.connection_access import ConnectionAccessAuthorizer
+from datepipette.application.refresh_worker import RefreshWorkerService
 from datepipette.config import Settings
+from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import AuditEventModel, DatasetVersionModel
+from datepipette.infrastructure.models import (
+    AuditEventModel,
+    DatasetRefreshRunModel,
+    DatasetVersionModel,
+)
+from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datepipette.infrastructure.repositories.connection_access import (
+    SqlAlchemyConnectionAccessStore,
+)
+from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
@@ -147,6 +161,65 @@ def _create_dataset(
     )
     assert response.status_code == 201, response.text
     return cast(dict[str, Any], response.json()), response.headers["etag"]
+
+
+async def _mark_valid(dataset_id: str) -> None:
+    engine = create_database_engine(TEST_SETTINGS)
+    try:
+        async with create_session_factory(engine)() as session, session.begin():
+            draft = await session.scalar(
+                select(DatasetVersionModel).where(
+                    DatasetVersionModel.dataset_id == UUID(dataset_id)
+                )
+            )
+            assert draft is not None
+            fields = cast(list[dict[str, Any]], draft.definition["fields"])
+            draft.validation = {
+                "state": "valid",
+                "validated_revision": draft.revision,
+                "validated_at": datetime.now(UTC).isoformat(),
+                "compiled_sql": "SELECT 1",
+                "result_schema": [
+                    {
+                        "field_id": field["id"],
+                        "name": field["name"],
+                        "data_type": "bigint",
+                        "nullable": True,
+                    }
+                    for field in fields
+                ],
+                "plan": None,
+                "findings": [],
+            }
+    finally:
+        await engine.dispose()
+
+
+async def _execute_refresh(run_id: str, storage_root: Path) -> str | None:
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    authorizer = ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory))
+    try:
+        worker = RefreshWorkerService(
+            store,
+            LocalParquetSnapshotExecutor(
+                session_factory,
+                AesGcmSecretCipher(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
+                storage_root,
+                connect_timeout_seconds=1,
+                statement_timeout_seconds=1,
+                batch_rows=100,
+                authorizer=authorizer,
+            ),
+        )
+        await worker.execute(UUID(run_id))
+        async with session_factory() as session:
+            run = await session.get(DatasetRefreshRunModel, UUID(run_id))
+            assert run is not None
+            return run.error_code
+    finally:
+        await engine.dispose()
 
 
 def test_dataset_draft_round_trip_revision_and_redacted_audit() -> None:
@@ -347,6 +420,178 @@ def test_dataset_collection_conflicts_validation_and_admin_boundary() -> None:
             email="analyst@example.com",
             password="analyst password for tests",
         )
-        forbidden = analyst_client.get("/api/v1/datasets")
-        assert forbidden.status_code == 403
-        assert forbidden.json()["code"] == "administrator_required"
+        visible = analyst_client.get("/api/v1/datasets")
+        assert visible.status_code == 200
+        assert visible.json()["data"] == []
+
+
+def test_analyst_authors_only_owned_datasets_and_revocation_blocks_source_operations(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_bootstrap())
+    user_password = "analyst source access password"
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        connection_id = _create_connection(admin)
+        analyst_response = admin.post(
+            "/api/v1/users",
+            json={
+                "email": "owner-analyst@example.com",
+                "display_name": "Owner analyst",
+                "password": user_password,
+                "role": "analyst",
+            },
+            headers=_csrf(admin),
+        )
+        assert analyst_response.status_code == 201
+        analyst_id = cast(str, analyst_response.json()["id"])
+        other_response = admin.post(
+            "/api/v1/users",
+            json={
+                "email": "other-analyst@example.com",
+                "display_name": "Other analyst",
+                "password": user_password,
+                "role": "analyst",
+            },
+            headers=_csrf(admin),
+        )
+        assert other_response.status_code == 201
+        viewer_response = admin.post(
+            "/api/v1/users",
+            json={
+                "email": "dataset-viewer@example.com",
+                "display_name": "Dataset viewer",
+                "password": user_password,
+                "role": "viewer",
+            },
+            headers=_csrf(admin),
+        )
+        assert viewer_response.status_code == 201
+
+        grant = admin.post(
+            f"/api/v1/connections/{connection_id}/grants",
+            json={
+                "principal_type": "user",
+                "principal_id": analyst_id,
+                "scope_type": "table",
+                "schema_name": "crm",
+                "relation_name": "customers",
+            },
+            headers=_csrf(admin),
+        )
+        assert grant.status_code == 201, grant.text
+        grant_id = cast(str, grant.json()["id"])
+        admin_dataset, _ = _create_dataset(admin, connection_id, name="Admin private")
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
+        _login(analyst, email="owner-analyst@example.com", password=user_password)
+        created, etag = _create_dataset(analyst, connection_id, name="Analyst private")
+        dataset_id = cast(str, created["id"])
+        listed = analyst.get("/api/v1/datasets")
+        assert [item["id"] for item in listed.json()["data"]] == [dataset_id]
+        assert analyst.get(f"/api/v1/datasets/{admin_dataset['id']}").status_code == 404
+        assert analyst.get(f"/api/v1/datasets/{dataset_id}").status_code == 200
+        assert analyst.get(f"/api/v1/datasets/{dataset_id}/draft").status_code == 200
+
+        changed = _definition()
+        changed["fields"][0]["display"]["label"] = "Identifier"
+        replaced = analyst.put(
+            f"/api/v1/datasets/{dataset_id}/draft",
+            json={"definition": changed},
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert replaced.status_code == 200, replaced.text
+        etag = replaced.headers["etag"]
+
+        validation = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/draft/validations",
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert validation.status_code == 502
+        asyncio.run(_mark_valid(dataset_id))
+        preview = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/draft/previews",
+            json={"limit": 10},
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert preview.status_code == 502
+        refresh = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/refresh-runs",
+            headers={
+                **_csrf(analyst),
+                "If-Match": etag,
+                "Idempotency-Key": "before-revoke",
+            },
+        )
+        assert refresh.status_code == 202, refresh.text
+        refresh_id = cast(str, refresh.json()["id"])
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as other:
+        _login(other, email="other-analyst@example.com", password=user_password)
+        assert other.get(f"/api/v1/datasets/{dataset_id}").status_code == 404
+        assert other.get(f"/api/v1/datasets/{dataset_id}/draft").status_code == 404
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as viewer:
+        _login(viewer, email="dataset-viewer@example.com", password=user_password)
+        blocked = viewer.post(
+            "/api/v1/datasets",
+            json={
+                "name": "Viewer dataset",
+                "connection_id": connection_id,
+                "definition": _definition(),
+            },
+            headers=_csrf(viewer),
+        )
+        assert blocked.status_code == 404
+        assert viewer.get("/api/v1/datasets").json()["data"] == []
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
+        _login(admin)
+        revoked = admin.delete(
+            f"/api/v1/connections/{connection_id}/grants/{grant_id}",
+            headers=_csrf(admin),
+        )
+        assert revoked.status_code == 204
+
+    assert asyncio.run(_execute_refresh(refresh_id, tmp_path)) == "connection_access_revoked"
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
+        _login(analyst, email="owner-analyst@example.com", password=user_password)
+        assert analyst.get(f"/api/v1/datasets/{dataset_id}").status_code == 200
+        assert analyst.get(f"/api/v1/datasets/{dataset_id}/draft").status_code == 200
+        blocked_replace = analyst.put(
+            f"/api/v1/datasets/{dataset_id}/draft",
+            json={"definition": changed},
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert blocked_replace.status_code == 404
+        blocked_validation = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/draft/validations",
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert blocked_validation.status_code == 404
+        blocked_preview = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/draft/previews",
+            json={"limit": 10},
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert blocked_preview.status_code == 404
+        blocked_refresh = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/refresh-runs",
+            headers={
+                **_csrf(analyst),
+                "If-Match": etag,
+                "Idempotency-Key": "after-revoke",
+            },
+        )
+        assert blocked_refresh.status_code == 404
+        blocked_create = analyst.post(
+            "/api/v1/datasets",
+            json={
+                "name": "Blocked dataset",
+                "connection_id": connection_id,
+                "definition": _definition(),
+            },
+            headers=_csrf(analyst),
+        )
+        assert blocked_create.status_code == 404

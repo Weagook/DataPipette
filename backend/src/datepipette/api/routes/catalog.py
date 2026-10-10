@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Path, Query, Request, status
 from pydantic import BaseModel
 
-from datepipette.api.dependencies.authentication import AdministratorSession
+from datepipette.api.dependencies.authentication import CurrentSession
 from datepipette.api.problems import ApiProblem, ProblemDetails
 from datepipette.application.catalog import (
     CatalogConnectionNotFoundError,
@@ -164,7 +164,7 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 async def list_catalog_schemas(
     connection_id: UUID,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     include_system: bool = False,
@@ -199,7 +199,7 @@ async def list_catalog_relations(
     connection_id: UUID,
     schema_name: CatalogName,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> CatalogRelationCollectionResponse:
@@ -234,7 +234,7 @@ async def inspect_catalog_relation(
     schema_name: CatalogName,
     relation_name: CatalogName,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
 ) -> CatalogRelationDetailResponse:
     try:
         detail = await _service(request).inspect_relation(

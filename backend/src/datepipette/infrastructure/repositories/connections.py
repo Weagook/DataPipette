@@ -100,13 +100,18 @@ class SqlAlchemyConnectionStore:
         *,
         after_created_at: datetime | None,
         after_id: UUID | None,
+        allowed_ids: frozenset[UUID] | None,
         limit: int,
     ) -> list[PostgresConnection]:
+        if allowed_ids == frozenset():
+            return []
         statement = (
             select(PostgresConnectionModel)
             .order_by(PostgresConnectionModel.created_at, PostgresConnectionModel.id)
             .limit(limit)
         )
+        if allowed_ids is not None:
+            statement = statement.where(PostgresConnectionModel.id.in_(allowed_ids))
         if after_created_at is not None and after_id is not None:
             statement = statement.where(
                 or_(

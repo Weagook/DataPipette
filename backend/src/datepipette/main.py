@@ -22,6 +22,10 @@ from datepipette.application.access_control import (
 )
 from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.catalog import CatalogService
+from datepipette.application.connection_access import (
+    ConnectionAccessAuthorizer,
+    ConnectionGrantService,
+)
 from datepipette.application.connections import ConnectionService
 from datepipette.application.dataset_preview import DatasetPreviewService
 from datepipette.application.dataset_validation import DatasetValidationService
@@ -46,6 +50,9 @@ from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
 from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datepipette.infrastructure.repositories.connection_access import (
+    SqlAlchemyConnectionAccessStore,
+)
 from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
@@ -78,6 +85,7 @@ def create_app(
     export_download_service: ExportDownloadService | None = None,
     group_service: GroupService | None = None,
     dataset_grant_service: DatasetGrantService | None = None,
+    connection_grant_service: ConnectionGrantService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -115,6 +123,8 @@ def create_app(
                 app.state.group_service = group_service
             if dataset_grant_service is not None:
                 app.state.dataset_grant_service = dataset_grant_service
+            if connection_grant_service is not None:
+                app.state.connection_grant_service = connection_grant_service
             yield
             return
 
@@ -140,6 +150,8 @@ def create_app(
             )
         )
         connection_store = SqlAlchemyConnectionStore(resources.session_factory)
+        connection_access_store = SqlAlchemyConnectionAccessStore(resources.session_factory)
+        connection_authorizer = ConnectionAccessAuthorizer(connection_access_store)
         connection_cipher = AesGcmSecretCipher(
             resolved_settings.connection_encryption_key.get_secret_value()
         )
@@ -150,6 +162,11 @@ def create_app(
                 resolved_settings.source_connect_timeout_seconds,
                 resolved_settings.source_statement_timeout_seconds,
             ),
+            connection_access_store,
+            connection_authorizer,
+        )
+        app.state.connection_grant_service = connection_grant_service or ConnectionGrantService(
+            connection_access_store
         )
         app.state.catalog_service = catalog_service or CatalogService(
             connection_store,
@@ -158,9 +175,13 @@ def create_app(
                 resolved_settings.source_connect_timeout_seconds,
                 resolved_settings.source_statement_timeout_seconds,
             ),
+            connection_authorizer,
         )
         dataset_store = SqlAlchemyDatasetStore(resources.session_factory)
-        app.state.dataset_service = dataset_service or DatasetService(dataset_store)
+        app.state.dataset_service = dataset_service or DatasetService(
+            dataset_store,
+            connection_authorizer,
+        )
         app.state.dataset_validation_service = (
             dataset_validation_service
             or DatasetValidationService(
@@ -171,6 +192,7 @@ def create_app(
                     resolved_settings.source_connect_timeout_seconds,
                     resolved_settings.source_statement_timeout_seconds,
                 ),
+                connection_authorizer,
             )
         )
         app.state.dataset_preview_service = dataset_preview_service or DatasetPreviewService(
@@ -181,10 +203,13 @@ def create_app(
                 resolved_settings.source_connect_timeout_seconds,
                 resolved_settings.source_statement_timeout_seconds,
             ),
+            connection_authorizer,
         )
         app.state.refresh_run_service = refresh_run_service or RefreshRunService(
             SqlAlchemyRefreshRunStore(resources.session_factory),
             CeleryRefreshDispatcher(celery_app),
+            dataset_store,
+            connection_authorizer,
         )
         access_store = SqlAlchemyAccessControlStore(resources.session_factory)
         access_authorizer = DatasetAccessAuthorizer(access_store)

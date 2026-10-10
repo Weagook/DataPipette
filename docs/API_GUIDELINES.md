@@ -28,6 +28,7 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/connections
 /api/v1/connections/{connection_id}
 /api/v1/connections/{connection_id}/tests
+/api/v1/connections/{connection_id}/grants
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
 /api/v1/datasets/{dataset_id}/draft/validations
@@ -85,32 +86,36 @@ The authorization model is recorded in [ADR-0016](adr/0016-additive-dataset-acce
 
 ## PostgreSQL connections
 
-- Connection management and testing require an active administrator session; mutations are CSRF-protected.
+- Connection creation, configuration, and testing require an active administrator session; mutations are CSRF-protected.
 - Password and optional CA certificate fields are write-only. Responses expose presence booleans, never secret values.
-- Lists use bounded cursor pagination. Connection names are unique within an installation.
+- Lists use bounded cursor pagination. Connection names are unique within an installation. Administrators list every connection, active analysts list only connections with an effective direct or group grant, and viewers receive an empty collection.
 - Updating connection settings clears the previous test state until the connection is tested again.
 - `POST /api/v1/connections/{connection_id}/tests` returns a safe success/failure representation. It never returns raw Psycopg, network, TLS, or database errors.
+- Connection grants are administrator-managed and target one active analyst or one group. Exact scopes are `all`, `schema`, and `table`; repeating an identical grant returns the existing grant.
+- Scope unions are additive. `Viewer` remains unable to use a connection even through a granted group. Grant and membership changes affect the next request because effective scope is not cached.
+- Grant mutations require CSRF and append redacted audit events containing identifiers and scope names only.
 - Supported SSL modes are `disable`, `require`, `verify-ca`, and `verify-full`; verification modes require explicit CA material in the current implementation.
 
 Secret-envelope and connection-test decisions are recorded in [ADR-0007](adr/0007-encrypted-postgresql-connections.md).
 
 ## PostgreSQL catalog
 
-- Live catalog reads require an active administrator session until connection grants are implemented.
+- Live catalog reads require an administrator or an active analyst with effective connection access. An absent or inaccessible connection is represented as `404 connection_not_found`.
 - `GET /api/v1/connections/{connection_id}/catalog/schemas` lists schemas for which the source role has `USAGE`. PostgreSQL system schemas are hidden by default and can be included explicitly.
 - `GET /api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations` lists selectable tables, partitioned tables, views, materialized views, and foreign tables.
 - `GET /api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations/{relation_name}` returns ordered columns, PostgreSQL-formatted data types, nullability, primary-key columns, and visible foreign-key mappings.
 - Schema and relation collections use opaque cursor pagination, stable name ordering, and a maximum page size of 100.
+- Analyst scope filtering happens in the source query before pagination. A table grant exposes its containing schema but no sibling relations; foreign-key mappings omit targets outside effective scope.
 - An absent object and an object hidden by source privileges produce the same `404 catalog_object_not_found` response. Source failures produce a redacted `502 source_catalog_unavailable` response.
 - Catalog requests read the source directly and do not persist or cache source metadata.
 
-The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-catalog.md).
+The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-catalog.md); DatePipette scope enforcement is recorded in [ADR-0017](adr/0017-scoped-connection-access.md).
 
 ## Visual dataset drafts
 
-- Dataset draft endpoints require an active administrator session until connection grants define analyst scope; mutations are CSRF-protected.
-- `POST /api/v1/datasets` creates a private dataset and its first draft for one existing PostgreSQL connection. Saving does not contact the source database.
-- `GET /api/v1/datasets` uses bounded cursor pagination; `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata, including nullable `active_version_id` and `active_snapshot_id`.
+- Dataset draft endpoints require an administrator or the active analyst who owns the dataset; mutations are CSRF-protected. Other analysts and viewers receive the same `404 dataset_not_found` boundary as an absent dataset.
+- `POST /api/v1/datasets` creates a private dataset and its first draft on one relation currently allowed by the actor's connection scope. It stores the structured definition without contacting the source database.
+- `GET /api/v1/datasets` uses bounded cursor pagination; administrators see every dataset and analysts see only their own. `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata, including nullable `active_version_id` and `active_snapshot_id`.
 - `GET /api/v1/datasets/{dataset_id}/draft` returns the complete schema-versioned visual definition, its latest revision-bound validation artifact when one exists, and an ETag such as `"draft-3"`.
 - `PUT /api/v1/datasets/{dataset_id}/draft` atomically replaces the complete definition and requires its current ETag in `If-Match`. A stale revision returns `409 dataset_revision_conflict`; a missing precondition returns `428 draft_revision_required`.
 - `POST /api/v1/datasets/{dataset_id}/draft/validations` requires the current draft ETag and explicitly re-checks the live relation and selected columns. It returns `valid`, `valid_with_warnings`, or `invalid`, the PostgreSQL-formatted result schema, safely generated SQL, a compact planner summary, and stable findings.
@@ -124,20 +129,20 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 - Source preview failure returns redacted `502 source_preview_unavailable`. A concurrent edit discards the fetched rows and returns `409 dataset_revision_conflict`.
 - `PATCH /api/v1/datasets/{dataset_id}` currently renames the stable dataset resource without changing its draft.
 - Dataset names are unique per owner without case sensitivity. Definitions contain exactly one relation, 1–500 fields with stable UUIDs, and no joins in the first slice.
-- Saving remains offline and is not evidence that source objects exist. Validation is explicit and does not imply that preview, refresh, or publication has succeeded.
+- Create and draft replacement re-check source authorization but otherwise remain offline and are not evidence that source objects exist. Validation is explicit and does not imply that preview, refresh, or publication has succeeded. Validation and preview re-check both ownership and current relation scope before touching the source.
 
-Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md).
+Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md); analyst ownership is recorded in [ADR-0017](adr/0017-scoped-connection-access.md).
 
 ## Refresh runs
 
-- `POST /api/v1/datasets/{dataset_id}/refresh-runs` requires administrator CSRF, the current draft ETag in `If-Match`, and an `Idempotency-Key` of at most 200 characters. The exact revision must have a current `valid` or `valid_with_warnings` validation artifact.
+- `POST /api/v1/datasets/{dataset_id}/refresh-runs` requires administrator or owner CSRF, the current draft ETag in `If-Match`, and an `Idempotency-Key` of at most 200 characters. The exact revision must have a current `valid` or `valid_with_warnings` validation artifact and the actor must still have source-relation access.
 - A successful request returns `202`, the durable run resource, `Location`, the draft `ETag`, and `X-DatePipette-Coalesced`. The latter is `true` when this request reused an existing run.
 - Idempotency is scoped to actor and dataset. Retrying the same key returns the same run. A different key coalesces into the one queued run when possible; metadata PostgreSQL retains each hashed request mapping.
 - At most one run is `running` and one is `queued` per dataset. A queued successor waits when another run is active. Duplicate Celery delivery does not restart a running or terminal run.
 - If Redis publication fails, the API returns `503 refresh_dispatch_unavailable` with `Location` and `Retry-After`. Retrying with the same key republishes the same saved run.
 - `GET /api/v1/datasets/{dataset_id}/refresh-runs/{run_id}` returns durable state, dispatch and execution attempt counts, timestamps, nullable `snapshot_id`, and a stable safe `error_code`.
 - A successful run has a completely written and validated Parquet object before `snapshot_id` is exposed. Local execution streams fixed-size source batches and atomically activates snapshot metadata; it never buffers the complete result.
-- Stable execution errors currently include `draft_changed`, `unsupported_source_type`, `connection_secret_unavailable`, `source_unavailable`, `snapshot_write_failed`, and `refresh_execution_failed`. A failure leaves the previous active snapshot unchanged.
+- The worker re-checks the requesting user's current source-relation scope immediately before source access. Stable execution errors currently include `connection_access_revoked`, `draft_changed`, `unsupported_source_type`, `connection_secret_unavailable`, `source_unavailable`, `snapshot_write_failed`, and `refresh_execution_failed`. A failure leaves the previous active snapshot unchanged.
 
 The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-refresh-run-orchestration.md); local Parquet publication is recorded in [ADR-0013](adr/0013-local-parquet-snapshot-publication.md).
 
