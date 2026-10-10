@@ -59,6 +59,7 @@ class _ExecutionContext:
 @dataclass(frozen=True, slots=True)
 class _ColumnAdapter:
     name: str
+    storage_name: str
     postgres_type: str
     arrow_type: pa.DataType
     nullable: bool
@@ -95,7 +96,12 @@ def _json_text(value: Any) -> str | None:
     )
 
 
-def _adapter(name: str, data_type: str, nullable: bool) -> _ColumnAdapter:
+def _adapter(
+    field_id: UUID,
+    name: str,
+    data_type: str,
+    nullable: bool,
+) -> _ColumnAdapter:
     normalized = " ".join(data_type.lower().split())
     arrow_type: pa.DataType
     converter: Callable[[Any], Any] = _identity
@@ -161,16 +167,24 @@ def _adapter(name: str, data_type: str, nullable: bool) -> _ColumnAdapter:
         converter = _text
     else:
         raise UnsupportedSourceTypeError(data_type)
-    return _ColumnAdapter(name, data_type, arrow_type, nullable, converter)
+    return _ColumnAdapter(
+        name,
+        f"field_{field_id.hex}",
+        data_type,
+        arrow_type,
+        nullable,
+        converter,
+    )
 
 
 def arrow_schema(validation: DatasetValidation) -> tuple[pa.Schema, tuple[_ColumnAdapter, ...]]:
     adapters = tuple(
-        _adapter(field.name, field.data_type, field.nullable) for field in validation.result_schema
+        _adapter(field.field_id, field.name, field.data_type, field.nullable)
+        for field in validation.result_schema
     )
     fields = [
         pa.field(
-            item.name,
+            item.storage_name,
             item.arrow_type,
             nullable=item.nullable,
             metadata={b"datepipette:postgres_type": item.postgres_type.encode()},
@@ -178,17 +192,18 @@ def arrow_schema(validation: DatasetValidation) -> tuple[pa.Schema, tuple[_Colum
         for item in adapters
     ]
     return (
-        pa.schema(fields, metadata={b"datepipette:schema_version": b"1"}),
+        pa.schema(fields, metadata={b"datepipette:schema_version": b"2"}),
         adapters,
     )
 
 
 def _schema_document(adapters: tuple[_ColumnAdapter, ...]) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "fields": [
             {
                 "name": item.name,
+                "storage_name": item.storage_name,
                 "postgres_type": item.postgres_type,
                 "arrow_type": str(item.arrow_type),
                 "nullable": item.nullable,

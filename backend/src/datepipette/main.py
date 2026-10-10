@@ -23,6 +23,7 @@ from datepipette.application.dataset_validation import DatasetValidationService
 from datepipette.application.datasets import DatasetService
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.refresh_runs import RefreshRunService
+from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
 from datepipette.infrastructure.catalog import PsycopgSourceCatalogInspector
@@ -30,6 +31,7 @@ from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.dataset_preview import PsycopgSourceDatasetPreviewer
 from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
+from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbLocalSnapshotQueryExecutor
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
@@ -37,10 +39,14 @@ from datepipette.infrastructure.repositories.authentication import SqlAlchemyAut
 from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
+from datepipette.infrastructure.repositories.snapshot_queries import (
+    SqlAlchemySnapshotQueryStore,
+)
 from datepipette.infrastructure.repositories.user_administration import (
     SqlAlchemyUserAdministrationStore,
 )
 from datepipette.infrastructure.runtime import create_runtime_resources
+from datepipette.infrastructure.snapshot_cursor import EncryptedSnapshotCursorCodec
 from datepipette.infrastructure.source_postgres import PsycopgSourceConnectionTester
 from datepipette.logging import configure_logging
 
@@ -56,6 +62,7 @@ def create_app(
     dataset_validation_service: DatasetValidationService | None = None,
     dataset_preview_service: DatasetPreviewService | None = None,
     refresh_run_service: RefreshRunService | None = None,
+    snapshot_query_service: DatasetSnapshotQueryService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -83,6 +90,8 @@ def create_app(
                 app.state.dataset_preview_service = dataset_preview_service
             if refresh_run_service is not None:
                 app.state.refresh_run_service = refresh_run_service
+            if snapshot_query_service is not None:
+                app.state.snapshot_query_service = snapshot_query_service
             yield
             return
 
@@ -153,6 +162,21 @@ def create_app(
         app.state.refresh_run_service = refresh_run_service or RefreshRunService(
             SqlAlchemyRefreshRunStore(resources.session_factory),
             CeleryRefreshDispatcher(celery_app),
+        )
+        app.state.snapshot_query_service = snapshot_query_service or DatasetSnapshotQueryService(
+            SqlAlchemySnapshotQueryStore(resources.session_factory),
+            DuckDbLocalSnapshotQueryExecutor(
+                resolved_settings.snapshot_storage_path,
+                timeout_seconds=resolved_settings.snapshot_query_timeout_seconds,
+                memory_limit_mb=resolved_settings.snapshot_query_memory_limit_mb,
+                threads=resolved_settings.snapshot_query_threads,
+                temporary_directory_limit_mb=(resolved_settings.snapshot_query_temp_limit_mb),
+                maximum_concurrent_queries=resolved_settings.snapshot_query_concurrency,
+            ),
+            EncryptedSnapshotCursorCodec(
+                resolved_settings.connection_encryption_key.get_secret_value()
+            ),
+            resolved_settings.snapshot_query_max_response_bytes,
         )
         try:
             yield

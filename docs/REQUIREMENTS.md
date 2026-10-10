@@ -69,6 +69,8 @@ This document assigns stable identifiers to approved product requirements. Detai
 
 - **EXP-001:** Dataset rows shall be server-side paginated, sortable, and filterable with typed operators.
 - **EXP-002:** Temporary table filters shall not mutate the dataset definition.
+- **EXP-006:** Snapshot row cursors shall be opaque, tamper-evident, and invalidated when the snapshot or normalized query shape changes.
+- **EXP-007:** Interactive snapshot reads shall enforce server-side limits for fields, filters, set values, sorting, page rows, response bytes, execution time, memory, CPU threads, and temporary disk.
 - **EXP-003:** CSV and XLSX exports shall be background jobs and shall apply the current temporary filters.
 - **EXP-004:** Export files shall be private, retained for 24 hours, and downloaded through five-minute signed URLs.
 - **EXP-005:** A new signed URL may be issued while an export file exists; regeneration after expiry shall use the current snapshot.

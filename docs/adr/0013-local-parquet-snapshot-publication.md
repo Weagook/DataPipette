@@ -14,6 +14,7 @@ Production will use private S3-compatible storage, but a local adapter is needed
 - Recompile the structured visual definition and execute it inside a read-only, deadline-bound source transaction through a named Psycopg server-side cursor.
 - Fetch at most the configured batch size, default 50,000 rows, and convert each batch directly into one Arrow `RecordBatch`. Never construct pandas dataframes or a table containing the complete result.
 - Build a fixed Arrow schema from the revision-bound validation artifact before fetching rows. Preserve PostgreSQL type names in Arrow field metadata and durable snapshot schema metadata.
+- Snapshot schema version 2 uses UUID-derived physical Parquet column names and records their logical mapping. This avoids collisions with analytical-engine technical columns while keeping the public dataset schema stable.
 - Initially support booleans, integer and floating types, bounded decimal types, unconstrained numeric as exact text, character/text/UUID, dates, timestamps, time without zone, binary, JSON/JSONB as canonical JSON text, interval, network addresses, MAC addresses, XML, and money as text. Fail arrays, ranges, composites, extension types, and decimals above Arrow precision with `unsupported_source_type`.
 - Incrementally write Parquet 2.6 with Zstandard compression, statistics, and page checksums. Empty results still produce a typed valid Parquet file.
 - Write to a unique staging path under the configured storage root. After close, verify schema and row count through Parquet metadata, compute byte size and SHA-256, fsync the file, and atomically rename it to a UUID-based immutable relative object key.
@@ -28,7 +29,7 @@ Production will use private S3-compatible storage, but a local adapter is needed
 - Readers cannot observe a partial snapshot or metadata pointing at an incomplete file.
 - Filesystem and PostgreSQL cannot commit atomically; orphan cleanup is required, but publication failure cannot replace the active snapshot.
 - The local adapter is suitable only for one-node development and tests. S3-compatible storage remains mandatory for horizontally scaled production.
-- Snapshot rows are now durable, but no interactive API reads them until the DuckDB query slice is implemented.
+- Snapshot rows are durable and are read by the bounded DuckDB query slice defined in ADR-0014.
 
 ## Alternatives considered
 

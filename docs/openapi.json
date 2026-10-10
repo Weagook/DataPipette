@@ -1271,6 +1271,282 @@
         "title": "SessionRevocationResponse",
         "type": "object"
       },
+      "SnapshotColumnResponse": {
+        "properties": {
+          "data_type": {
+            "title": "Data Type",
+            "type": "string"
+          },
+          "field_id": {
+            "format": "uuid",
+            "title": "Field Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "field_id",
+          "name",
+          "data_type",
+          "nullable"
+        ],
+        "title": "SnapshotColumnResponse",
+        "type": "object"
+      },
+      "SnapshotFilterOperator": {
+        "enum": [
+          "eq",
+          "neq",
+          "gt",
+          "gte",
+          "lt",
+          "lte",
+          "between",
+          "in",
+          "contains",
+          "starts_with",
+          "is_null",
+          "is_not_null"
+        ],
+        "title": "SnapshotFilterOperator",
+        "type": "string"
+      },
+      "SnapshotFilterPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "field_id": {
+            "format": "uuid",
+            "title": "Field Id",
+            "type": "string"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/SnapshotFilterOperator"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "values": {
+            "items": {},
+            "maxItems": 100,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "field_id",
+          "operator"
+        ],
+        "title": "SnapshotFilterPayload",
+        "type": "object"
+      },
+      "SnapshotRefreshState": {
+        "enum": [
+          "idle",
+          "queued",
+          "running"
+        ],
+        "title": "SnapshotRefreshState",
+        "type": "string"
+      },
+      "SnapshotRowsDataResponse": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotColumnResponse"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns",
+          "rows"
+        ],
+        "title": "SnapshotRowsDataResponse",
+        "type": "object"
+      },
+      "SnapshotRowsMetaResponse": {
+        "properties": {
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "last_refresh_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh Error"
+          },
+          "last_success_at": {
+            "format": "date-time",
+            "title": "Last Success At",
+            "type": "string"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "refresh_state": {
+            "$ref": "#/components/schemas/SnapshotRefreshState"
+          },
+          "snapshot_id": {
+            "format": "uuid",
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "snapshot_row_count": {
+            "title": "Snapshot Row Count",
+            "type": "integer"
+          },
+          "snapshot_state": {
+            "const": "ready",
+            "default": "ready",
+            "title": "Snapshot State",
+            "type": "string"
+          },
+          "truncated_by_bytes": {
+            "title": "Truncated By Bytes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "snapshot_row_count",
+          "last_success_at",
+          "refresh_state",
+          "last_refresh_error",
+          "is_stale",
+          "next_cursor",
+          "truncated_by_bytes"
+        ],
+        "title": "SnapshotRowsMetaResponse",
+        "type": "object"
+      },
+      "SnapshotRowsQueryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          },
+          "fields": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Fields",
+            "type": "array"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotFilterPayload"
+            },
+            "maxItems": 20,
+            "title": "Filters",
+            "type": "array"
+          },
+          "page_size": {
+            "default": 100,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "sorts": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotSortPayload"
+            },
+            "maxItems": 5,
+            "title": "Sorts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "SnapshotRowsQueryRequest",
+        "type": "object"
+      },
+      "SnapshotRowsResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SnapshotRowsDataResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/SnapshotRowsMetaResponse"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SnapshotRowsResponse",
+        "type": "object"
+      },
+      "SnapshotSortDirection": {
+        "enum": [
+          "asc",
+          "desc"
+        ],
+        "title": "SnapshotSortDirection",
+        "type": "string"
+      },
+      "SnapshotSortPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/SnapshotSortDirection",
+            "default": "asc"
+          },
+          "field_id": {
+            "format": "uuid",
+            "title": "Field Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field_id"
+        ],
+        "title": "SnapshotSortPayload",
+        "type": "object"
+      },
       "SystemRole": {
         "description": "Coarse installation-wide capability role.",
         "enum": [
@@ -4085,6 +4361,144 @@
         "summary": "Read Refresh Run",
         "tags": [
           "refresh-runs"
+        ]
+      }
+    },
+    "/api/v1/datasets/{dataset_id}/rows:query": {
+      "post": {
+        "operationId": "query_dataset_rows_api_v1_datasets__dataset_id__rows_query_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotRowsQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotRowsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Query Dataset Rows",
+        "tags": [
+          "dataset rows"
         ]
       }
     },
