@@ -122,6 +122,46 @@ class SnapshotCursorCodec(Protocol):
     def decode(self, value: str) -> DecodedSnapshotCursor: ...
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedSnapshotQuery:
+    selected_fields: tuple[SnapshotQueryField, ...]
+    filters: tuple[SnapshotQueryFilter, ...]
+    sorts: tuple[SnapshotQuerySort, ...]
+
+
+def prepare_snapshot_query(
+    context: ActiveSnapshotQueryContext,
+    value: SnapshotQuery,
+    *,
+    require_page: bool = True,
+) -> PreparedSnapshotQuery:
+    """Validate identifiers and normalize typed values for reads and exports."""
+
+    if not 1 <= len(value.field_ids) <= MAX_QUERY_FIELDS:
+        raise InvalidSnapshotQueryError("Select between 1 and 100 fields")
+    if len(set(value.field_ids)) != len(value.field_ids):
+        raise InvalidSnapshotQueryError("Selected fields must be unique")
+    if len(value.filters) > MAX_QUERY_FILTERS or len(value.sorts) > MAX_QUERY_SORTS:
+        raise InvalidSnapshotQueryError("Query contains too many filters or sorts")
+    if require_page and not 1 <= value.page_size <= MAX_QUERY_PAGE_ROWS:
+        raise InvalidSnapshotQueryError("Page size is outside the supported range")
+    fields_by_id = {field.field_id: field for field in context.fields}
+    try:
+        selected_fields = tuple(fields_by_id[field_id] for field_id in value.field_ids)
+        if len({item.field_id for item in value.sorts}) != len(value.sorts):
+            raise InvalidSnapshotQueryError("Sort fields must be unique")
+        for filter_item in value.filters:
+            if filter_item.field_id not in fields_by_id:
+                raise InvalidSnapshotQueryError("Query references an unknown field")
+        for sort_item in value.sorts:
+            if sort_item.field_id not in fields_by_id:
+                raise InvalidSnapshotQueryError("Query references an unknown field")
+    except KeyError as exc:
+        raise InvalidSnapshotQueryError("Query references an unknown field") from exc
+    filters = tuple(_normalize_filter(item, fields_by_id[item.field_id]) for item in value.filters)
+    return PreparedSnapshotQuery(selected_fields, filters, value.sorts)
+
+
 def _type_family(data_type: str) -> str:
     normalized = " ".join(data_type.lower().split())
     if normalized == "boolean":
@@ -326,37 +366,15 @@ class DatasetSnapshotQueryService:
     ) -> SnapshotQueryPage:
         if actor.role is not SystemRole.ADMIN or actor.status is not AccountStatus.ACTIVE:
             raise DatasetSnapshotNotFoundError
-        if not 1 <= len(value.field_ids) <= MAX_QUERY_FIELDS:
-            raise InvalidSnapshotQueryError("Select between 1 and 100 fields")
-        if len(set(value.field_ids)) != len(value.field_ids):
-            raise InvalidSnapshotQueryError("Selected fields must be unique")
-        if len(value.filters) > MAX_QUERY_FILTERS or len(value.sorts) > MAX_QUERY_SORTS:
-            raise InvalidSnapshotQueryError("Query contains too many filters or sorts")
-        if not 1 <= value.page_size <= MAX_QUERY_PAGE_ROWS:
-            raise InvalidSnapshotQueryError("Page size is outside the supported range")
         if value.cursor is not None and len(value.cursor) > MAX_QUERY_CURSOR_LENGTH:
             raise InvalidSnapshotCursorError("Cursor is too long")
 
         context = await self._store.get_active_context(dataset_id)
         if context is None:
             raise DatasetSnapshotNotFoundError
-        fields_by_id = {field.field_id: field for field in context.fields}
-        try:
-            selected_fields = tuple(fields_by_id[field_id] for field_id in value.field_ids)
-            if len({item.field_id for item in value.sorts}) != len(value.sorts):
-                raise InvalidSnapshotQueryError("Sort fields must be unique")
-            for filter_item in value.filters:
-                if filter_item.field_id not in fields_by_id:
-                    raise InvalidSnapshotQueryError("Query references an unknown field")
-            for sort_item in value.sorts:
-                if sort_item.field_id not in fields_by_id:
-                    raise InvalidSnapshotQueryError("Query references an unknown field")
-        except KeyError as exc:
-            raise InvalidSnapshotQueryError("Query references an unknown field") from exc
-
-        filters = tuple(
-            _normalize_filter(item, fields_by_id[item.field_id]) for item in value.filters
-        )
+        prepared = prepare_snapshot_query(context, value)
+        selected_fields = prepared.selected_fields
+        filters = prepared.filters
         digest = query_digest(value.field_ids, filters, value.sorts)
         position = None
         if value.cursor is not None:

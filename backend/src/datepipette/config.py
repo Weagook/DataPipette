@@ -45,6 +45,11 @@ class Settings(BaseSettings):
         ge=65_536,
         le=16_777_216,
     )
+    export_memory_limit_mb: int = Field(default=512, ge=64, le=4096)
+    export_threads: int = Field(default=2, ge=1, le=16)
+    export_temp_limit_mb: int = Field(default=2048, ge=64, le=32768)
+    export_max_rows: int = Field(default=5_000_000, ge=1, le=10_000_000)
+    export_fetch_rows: int = Field(default=10_000, ge=100, le=100_000)
     connection_encryption_key: SecretStr = SecretStr(DEVELOPMENT_CONNECTION_ENCRYPTION_KEY)
     metadata_database_url: SecretStr = SecretStr(
         "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette"

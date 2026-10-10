@@ -34,7 +34,10 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/charts
 /api/v1/charts/{chart_id}/data:query
 /api/v1/dashboards
-/api/v1/exports
+/api/v1/datasets/{dataset_id}/exports
+/api/v1/datasets/{dataset_id}/exports/{export_id}
+/api/v1/datasets/{dataset_id}/exports/{export_id}/download-link
+/api/v1/export-downloads
 /api/v1/audit-events
 ```
 
@@ -138,6 +141,17 @@ The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-re
 - Decimal values are JSON strings, temporal values are ISO text normalized to UTC when timezone-aware, binary values are base64, and JSON snapshot fields are restored as JSON values.
 
 The query and cursor rationale is recorded in [ADR-0014](adr/0014-typed-snapshot-row-queries.md).
+
+## Dataset exports
+
+- `POST /api/v1/datasets/{dataset_id}/exports` requires administrator CSRF and an `Idempotency-Key`. It accepts `csv` or `xlsx` plus the same bounded field UUID, typed filter, and sort vocabulary used by snapshot row queries; cursors and page size do not apply.
+- Creation returns `202`, `Location`, `X-DatePipette-Idempotent-Replay`, and a durable job bound to the active snapshot at request time. Retrying the same actor/dataset/key returns the same job.
+- `GET /api/v1/datasets/{dataset_id}/exports` returns at most 100 newest jobs; `GET .../{export_id}` returns durable state, safe error code, timestamps, row count, bytes, checksum, and logical expiry.
+- `POST .../{export_id}/download-link` authorizes the current administrator and returns a relative five-minute capability URL only for a successful unexpired job. It may be called repeatedly without regenerating the artifact.
+- `GET /api/v1/export-downloads?token=...` requires the encrypted capability rather than a session and returns the private file with an attachment filename. Invalid capabilities are concealed as `404`; expired exports return `410`.
+- Jobs use `queued`, `running`, `succeeded`, and `failed`. Worker/audit failures expose stable safe codes and never affect the active dataset snapshot.
+
+The export lifecycle and security boundary are recorded in [ADR-0015](adr/0015-snapshot-bound-background-exports.md).
 
 ## Success responses
 

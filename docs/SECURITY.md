@@ -119,6 +119,10 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Storage buckets disallow public access.
 - CSV generation must mitigate formula injection for values beginning with spreadsheet control characters.
 - XLSX generation must preserve types and must not embed executable macros.
+- Implemented exports are bound to the immutable snapshot selected at creation; Celery receives only the export UUID and duplicate delivery cannot rerun a terminal job.
+- CSV and XLSX string cells beginning with spreadsheet formula/control prefixes are escaped with a leading apostrophe. Precision-sensitive decimal values remain text.
+- Download capabilities are issued only after administrator authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
+- Until object ACLs exist, export creation/history/link issuance require an administrator; this is a temporary stricter boundary, not analyst authorization.
 
 ## Audit
 

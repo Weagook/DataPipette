@@ -52,9 +52,9 @@ Outcome: analysts can inspect and extract governed detailed data.
 
 - Saved dataset display settings
 - Typed filters, sorting, and pagination
-- CSV and XLSX background exports
-- Export history, expiry, and signed-download flow
-- Formula-injection and authorization tests
+- [x] CSV and XLSX background exports
+- [x] Export history, logical expiry, and signed-download flow
+- [x] Formula-injection and authorization tests
 
 ## Phase 4 — Charts and dashboards
 

@@ -28,7 +28,7 @@ from datepipette.infrastructure.models import (
 )
 
 
-def _query_fields(
+def query_fields_from_models(
     version: DatasetVersionModel,
     snapshot: DatasetSnapshotModel,
 ) -> tuple[SnapshotQueryField, ...]:
@@ -113,7 +113,7 @@ class SqlAlchemySnapshotQueryStore:
                 .limit(1)
             )
 
-        fields = _query_fields(version, snapshot)
+        fields = query_fields_from_models(version, snapshot)
         refresh_state = SnapshotRefreshState.IDLE
         if latest_run is not None and latest_run.state == RefreshRunState.QUEUED.value:
             refresh_state = SnapshotRefreshState.QUEUED

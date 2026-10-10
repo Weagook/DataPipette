@@ -291,3 +291,72 @@ class DatasetSnapshotModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     activated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetExportModel(Base):
+    __tablename__ = "dataset_exports"
+    __table_args__ = (
+        CheckConstraint("format IN ('csv', 'xlsx')", name="format_valid"),
+        CheckConstraint(
+            "state IN ('queued', 'running', 'succeeded', 'failed')",
+            name="state_valid",
+        ),
+        CheckConstraint("jsonb_typeof(query_document) = 'object'", name="query_object"),
+        CheckConstraint("dispatch_attempts >= 0", name="dispatch_attempts_nonnegative"),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        CheckConstraint("row_count IS NULL OR row_count >= 0", name="row_count_nonnegative"),
+        CheckConstraint("byte_size IS NULL OR byte_size > 0", name="byte_size_positive"),
+        Index("ix_dataset_exports_dataset_requested", "dataset_id", "requested_at"),
+        Index("ix_dataset_exports_expiry", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
+    snapshot_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dataset_snapshots.id", ondelete="RESTRICT"), index=True
+    )
+    requested_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    format: Mapped[str] = mapped_column(String(10))
+    state: Mapped[str] = mapped_column(String(20))
+    query_document: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    dispatch_attempts: Mapped[int] = mapped_column(Integer)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(Integer)
+    object_key: Mapped[str | None] = mapped_column(String(1024), unique=True)
+    row_count: Mapped[int | None] = mapped_column(Integer)
+    byte_size: Mapped[int | None] = mapped_column(Integer)
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64))
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    error_code: Mapped[str | None] = mapped_column(String(50))
+    request_id: Mapped[str] = mapped_column(String(128))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetExportRequestModel(Base):
+    __tablename__ = "dataset_export_requests"
+    __table_args__ = (
+        Index(
+            "uq_dataset_export_requests_actor_dataset_key",
+            "actor_id",
+            "dataset_id",
+            "idempotency_key_hash",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64))
+    export_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dataset_exports.id", ondelete="CASCADE"), index=True
+    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
