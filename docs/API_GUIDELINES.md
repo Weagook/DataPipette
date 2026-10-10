@@ -29,6 +29,7 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/connections/{connection_id}
 /api/v1/connections/{connection_id}/tests
 /api/v1/connections/{connection_id}/grants
+/api/v1/connections/{connection_id}/catalog/join-suggestions
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
 /api/v1/datasets/{dataset_id}/draft/validations
@@ -104,6 +105,7 @@ Secret-envelope and connection-test decisions are recorded in [ADR-0007](adr/000
 - `GET /api/v1/connections/{connection_id}/catalog/schemas` lists schemas for which the source role has `USAGE`. PostgreSQL system schemas are hidden by default and can be included explicitly.
 - `GET /api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations` lists selectable tables, partitioned tables, views, materialized views, and foreign tables.
 - `GET /api/v1/connections/{connection_id}/catalog/schemas/{schema_name}/relations/{relation_name}` returns ordered columns, PostgreSQL-formatted data types, nullability, primary-key columns, and visible foreign-key mappings.
+- `POST /api/v1/connections/{connection_id}/catalog/join-suggestions` is a read-only structured catalog query over 1–10 caller-identified relations. It returns foreign keys only between requested authorized relations, preserves composite-key column order, and never changes a dataset.
 - Schema and relation collections use opaque cursor pagination, stable name ordering, and a maximum page size of 100.
 - Analyst scope filtering happens in the source query before pagination. A table grant exposes its containing schema but no sibling relations; foreign-key mappings omit targets outside effective scope.
 - An absent object and an object hidden by source privileges produce the same `404 catalog_object_not_found` response. Source failures produce a redacted `502 source_catalog_unavailable` response.
@@ -114,11 +116,11 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 ## Visual dataset drafts
 
 - Dataset draft endpoints require an administrator or the active analyst who owns the dataset; mutations are CSRF-protected. Other analysts and viewers receive the same `404 dataset_not_found` boundary as an absent dataset.
-- `POST /api/v1/datasets` creates a private dataset and its first draft on one relation currently allowed by the actor's connection scope. It stores the structured definition without contacting the source database.
+- `POST /api/v1/datasets` creates a private dataset and its first draft on relations currently allowed by the actor's connection scope. It stores the structured definition without contacting the source database.
 - `GET /api/v1/datasets` uses bounded cursor pagination; administrators see every dataset and analysts see only their own. `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata, including nullable `active_version_id` and `active_snapshot_id`.
 - `GET /api/v1/datasets/{dataset_id}/draft` returns the complete schema-versioned visual definition, its latest revision-bound validation artifact when one exists, and an ETag such as `"draft-3"`.
 - `PUT /api/v1/datasets/{dataset_id}/draft` atomically replaces the complete definition and requires its current ETag in `If-Match`. A stale revision returns `409 dataset_revision_conflict`; a missing precondition returns `428 draft_revision_required`.
-- `POST /api/v1/datasets/{dataset_id}/draft/validations` requires the current draft ETag and explicitly re-checks the live relation and selected columns. It returns `valid`, `valid_with_warnings`, or `invalid`, the PostgreSQL-formatted result schema, safely generated SQL, a compact planner summary, and stable findings.
+- `POST /api/v1/datasets/{dataset_id}/draft/validations` requires the current draft ETag and explicitly re-checks every live relation, selected column, and join column. It returns `valid`, `valid_with_warnings`, or `invalid`, the PostgreSQL-formatted result schema, safely generated SQL, a compact planner summary, and stable relation/field/join findings.
 - Missing source objects are `200` validation results with error findings. A network, TLS, credential, timeout, or unexpected source response returns the redacted `502 source_validation_unavailable` problem and does not erase the previous artifact.
 - Validation uses `EXPLAIN (FORMAT JSON)` without `ANALYZE`; no business rows are executed, previewed, or stored. A plan estimate of at least one million output rows currently produces the advisory `large_estimated_result` warning.
 - Replacing a definition clears its validation artifact. A concurrent edit during validation produces `409 dataset_revision_conflict` rather than attaching stale derived metadata.
@@ -128,10 +130,10 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 - JSON preview values preserve `null`, booleans, integers, finite floats, strings, arrays, and objects. PostgreSQL `numeric`/`decimal` becomes a string to avoid precision loss; dates/times use ISO text; UUID and interval values use text; `bytea` uses base64.
 - Source preview failure returns redacted `502 source_preview_unavailable`. A concurrent edit discards the fetched rows and returns `409 dataset_revision_conflict`.
 - `PATCH /api/v1/datasets/{dataset_id}` currently renames the stable dataset resource without changing its draft.
-- Dataset names are unique per owner without case sensitivity. Definitions contain exactly one relation, 1–500 fields with stable UUIDs, and no joins in the first slice.
-- Create and draft replacement re-check source authorization but otherwise remain offline and are not evidence that source objects exist. Validation is explicit and does not imply that preview, refresh, or publication has succeeded. Validation and preview re-check both ownership and current relation scope before touching the source.
+- Dataset names are unique per owner without case sensitivity. Schema version 1 remains exactly one relation with no joins. Schema version 2 contains 1–10 uniquely aliased relations, 1–500 fields, and a deterministic rooted tree of explicit `inner` or `left` joins. Each additional relation is introduced once with 1–8 equality column pairs; cycles, disconnected graphs, cross joins, expressions, and arbitrary predicates are rejected.
+- Create and draft replacement re-check source authorization for every referenced relation but otherwise remain offline and are not evidence that source objects exist. Validation is explicit and does not imply that preview, refresh, or publication has succeeded. Validation and preview re-check both ownership and the complete current relation scope before touching the source.
 
-Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md); analyst ownership is recorded in [ADR-0017](adr/0017-scoped-connection-access.md).
+Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md); analyst ownership is recorded in [ADR-0017](adr/0017-scoped-connection-access.md); the version-2 join model is recorded in [ADR-0018](adr/0018-versioned-visual-join-trees.md).
 
 ## Refresh runs
 

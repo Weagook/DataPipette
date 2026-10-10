@@ -1,6 +1,7 @@
 """PostgreSQL validation and safe SQL compilation for one-relation datasets."""
 
 from typing import Any
+from uuid import UUID
 
 import psycopg
 from psycopg import sql
@@ -18,6 +19,7 @@ from datepipette.domain.datasets import (
     ValidationFindingCode,
     ValidationSeverity,
     VisualDatasetDefinition,
+    VisualJoinType,
 )
 from datepipette.infrastructure.dataset_sql import compile_visual_select
 from datepipette.infrastructure.source_postgres import open_read_only_source
@@ -72,49 +74,89 @@ class PsycopgSourceDatasetValidator:
                 ) as source,
                 source.cursor() as cursor,
             ):
-                relation = definition.relation
-                await cursor.execute(
-                    _RELATION_SQL,
-                    (relation.schema_name, relation.relation_name),
-                )
-                relation_row = await cursor.fetchone()
-                if relation_row is None:
+                relation_columns: dict[UUID, dict[str, tuple[str, bool]]] = {}
+                relation_findings: list[DatasetValidationFinding] = []
+                for relation in definition.relations:
+                    await cursor.execute(
+                        _RELATION_SQL,
+                        (relation.schema_name, relation.relation_name),
+                    )
+                    relation_row = await cursor.fetchone()
+                    if relation_row is None:
+                        relation_findings.append(
+                            DatasetValidationFinding(
+                                code=ValidationFindingCode.SOURCE_RELATION_NOT_FOUND,
+                                severity=ValidationSeverity.ERROR,
+                                relation_id=relation.id,
+                            )
+                        )
+                        continue
+                    await cursor.execute(_COLUMNS_SQL, (int(relation_row[0]),))
+                    relation_columns[relation.id] = {
+                        str(row[0]): (str(row[1]), bool(row[2])) for row in await cursor.fetchall()
+                    }
+                if relation_findings:
                     return SourceValidationResult(
                         state=DatasetValidationState.INVALID,
                         compiled_sql=None,
                         result_schema=(),
                         plan=None,
-                        findings=(
-                            DatasetValidationFinding(
-                                code=ValidationFindingCode.SOURCE_RELATION_NOT_FOUND,
-                                severity=ValidationSeverity.ERROR,
-                            ),
-                        ),
+                        findings=tuple(relation_findings),
                     )
 
-                await cursor.execute(_COLUMNS_SQL, (int(relation_row[0]),))
-                columns = {
-                    str(row[0]): (str(row[1]), bool(row[2])) for row in await cursor.fetchall()
-                }
+                nullable_relations: set[UUID] = set()
+                for join in definition.joins:
+                    if (
+                        join.type is VisualJoinType.LEFT
+                        or join.left_relation_id in nullable_relations
+                    ):
+                        nullable_relations.add(join.right_relation_id)
                 result_schema = tuple(
                     ValidatedDatasetField(
                         field_id=field.id,
                         name=field.name,
-                        data_type=columns[field.source.column][0],
-                        nullable=columns[field.source.column][1],
+                        data_type=relation_columns[field.source.relation_id][field.source.column][
+                            0
+                        ],
+                        nullable=(
+                            relation_columns[field.source.relation_id][field.source.column][1]
+                            or field.source.relation_id in nullable_relations
+                        ),
                     )
                     for field in definition.fields
-                    if field.source.column in columns
+                    if field.source.column in relation_columns[field.source.relation_id]
                 )
-                missing = tuple(
+                missing_fields = tuple(
                     DatasetValidationFinding(
                         code=ValidationFindingCode.SOURCE_FIELD_NOT_FOUND,
                         severity=ValidationSeverity.ERROR,
                         field_id=field.id,
+                        relation_id=field.source.relation_id,
                     )
                     for field in definition.fields
-                    if field.source.column not in columns
+                    if field.source.column not in relation_columns[field.source.relation_id]
                 )
+                missing_joins = tuple(
+                    DatasetValidationFinding(
+                        code=ValidationFindingCode.SOURCE_JOIN_COLUMN_NOT_FOUND,
+                        severity=ValidationSeverity.ERROR,
+                        relation_id=relation_id,
+                        join_id=join.id,
+                    )
+                    for join in definition.joins
+                    for relation_id, columns in (
+                        (
+                            join.left_relation_id,
+                            tuple(condition.left_column for condition in join.conditions),
+                        ),
+                        (
+                            join.right_relation_id,
+                            tuple(condition.right_column for condition in join.conditions),
+                        ),
+                    )
+                    if any(column not in relation_columns[relation_id] for column in columns)
+                )
+                missing = missing_fields + missing_joins
                 if missing:
                     return SourceValidationResult(
                         state=DatasetValidationState.INVALID,

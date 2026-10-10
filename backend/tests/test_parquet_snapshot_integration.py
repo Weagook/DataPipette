@@ -105,6 +105,31 @@ async def _bootstrap_source() -> None:
             )
             await connection.execute(
                 text(
+                    f'CREATE TABLE "{SCHEMA}"."customers" ('
+                    "id bigint PRIMARY KEY, name text NOT NULL)"
+                )
+            )
+            await connection.execute(
+                text(
+                    f'CREATE TABLE "{SCHEMA}"."orders" ('
+                    "id bigint PRIMARY KEY, customer_id bigint NOT NULL "
+                    f'REFERENCES "{SCHEMA}"."customers"(id), amount numeric(12,2) NOT NULL)'
+                )
+            )
+            await connection.execute(
+                text(
+                    f'INSERT INTO "{SCHEMA}"."customers" (id, name) VALUES '
+                    "(1, 'Ada'), (2, 'Grace')"
+                )
+            )
+            await connection.execute(
+                text(
+                    f'INSERT INTO "{SCHEMA}"."orders" (id, customer_id, amount) VALUES '
+                    "(10, 1, 42.50)"
+                )
+            )
+            await connection.execute(
+                text(
                     f'INSERT INTO "{SCHEMA}"."records" '
                     "(id, label, amount, active, occurred_at, payload, raw, tags) VALUES "
                     "(1, 'Alpha private value', 12.30, true, "
@@ -194,6 +219,64 @@ def _definition(*, include_tags: bool = False) -> dict[str, Any]:
             for source, output in columns
         ],
         "joins": [],
+    }
+
+
+def _joined_definition(*, missing_join_column: bool = False) -> dict[str, Any]:
+    customers_id = str(uuid4())
+    orders_id = str(uuid4())
+    return {
+        "schema_version": 2,
+        "source": {
+            "relations": [
+                {
+                    "id": customers_id,
+                    "schema": SCHEMA,
+                    "name": "customers",
+                    "alias": "customer",
+                },
+                {
+                    "id": orders_id,
+                    "schema": SCHEMA,
+                    "name": "orders",
+                    "alias": "customer_order",
+                },
+            ]
+        },
+        "fields": [
+            {
+                "id": str(uuid4()),
+                "source": {"relation_id": customers_id, "column": "id"},
+                "name": "customer_id",
+                "display": {"label": "Customer ID", "format": None, "visible": True},
+            },
+            {
+                "id": str(uuid4()),
+                "source": {"relation_id": customers_id, "column": "name"},
+                "name": "customer_name",
+                "display": {"label": "Customer", "format": None, "visible": True},
+            },
+            {
+                "id": str(uuid4()),
+                "source": {"relation_id": orders_id, "column": "amount"},
+                "name": "order_amount",
+                "display": {"label": "Amount", "format": None, "visible": True},
+            },
+        ],
+        "joins": [
+            {
+                "id": str(uuid4()),
+                "type": "left",
+                "left_relation_id": customers_id,
+                "right_relation_id": orders_id,
+                "conditions": [
+                    {
+                        "left_column": "id",
+                        "right_column": "missing" if missing_join_column else "customer_id",
+                    }
+                ],
+            }
+        ],
     }
 
 
@@ -565,6 +648,133 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
     audit = asyncio.run(inspect_audit())
     assert "Alpha private value" not in repr(audit)
     assert str(tmp_path) not in repr(audit)
+
+
+def test_joined_definition_validates_previews_and_publishes_left_join_snapshot(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_bootstrap_source())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    dispatcher = RecordingDispatcher()
+    connection_authorizer = ConnectionAccessAuthorizer(
+        SqlAlchemyConnectionAccessStore(session_factory)
+    )
+    refresh_service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        connection_authorizer,
+    )
+    worker = RefreshWorkerService(
+        store,
+        LocalParquetSnapshotExecutor(
+            session_factory,
+            AesGcmSecretCipher(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
+            tmp_path,
+            connect_timeout_seconds=5,
+            statement_timeout_seconds=30,
+            batch_rows=1,
+            authorizer=connection_authorizer,
+        ),
+    )
+    try:
+        with TestClient(
+            create_app(settings=TEST_SETTINGS, refresh_run_service=refresh_service)
+        ) as client:
+            _login(client)
+            connection_id = _connection(client)
+            definition = _joined_definition()
+            created = client.post(
+                "/api/v1/datasets",
+                json={
+                    "name": "Customer orders",
+                    "connection_id": connection_id,
+                    "definition": definition,
+                },
+                headers=_csrf(client),
+            )
+            assert created.status_code == 201, created.text
+            dataset_id = cast(str, created.json()["id"])
+            etag = created.headers["etag"]
+
+            validated = client.post(
+                f"/api/v1/datasets/{dataset_id}/draft/validations",
+                headers={**_csrf(client), "If-Match": etag},
+            )
+            assert validated.status_code == 200, validated.text
+            assert validated.json()["state"] == "valid"
+            assert validated.json()["compiled_sql"] == (
+                'SELECT "customer"."id" AS "customer_id", '
+                '"customer"."name" AS "customer_name", '
+                '"customer_order"."amount" AS "order_amount" '
+                f'FROM "{SCHEMA}"."customers" AS "customer" '
+                f'LEFT JOIN "{SCHEMA}"."orders" AS "customer_order" '
+                'ON "customer"."id" = "customer_order"."customer_id"'
+            )
+            assert validated.json()["result_schema"][2]["nullable"] is True
+
+            preview = client.post(
+                f"/api/v1/datasets/{dataset_id}/draft/previews",
+                json={"limit": 10},
+                headers={**_csrf(client), "If-Match": etag},
+            )
+            assert preview.status_code == 200, preview.text
+            assert sorted(preview.json()["rows"], key=lambda row: row["customer_id"]) == [
+                {"customer_id": 1, "customer_name": "Ada", "order_amount": "42.50"},
+                {"customer_id": 2, "customer_name": "Grace", "order_amount": None},
+            ]
+
+            requested = client.post(
+                f"/api/v1/datasets/{dataset_id}/refresh-runs",
+                headers={
+                    **_csrf(client),
+                    "If-Match": etag,
+                    "Idempotency-Key": "joined-snapshot",
+                },
+            )
+            assert requested.status_code == 202, requested.text
+            run_id = UUID(requested.json()["id"])
+            assert asyncio.run(worker.execute(run_id)) is RefreshClaimOutcome.CLAIMED
+            completed = client.get(f"/api/v1/datasets/{dataset_id}/refresh-runs/{run_id}").json()
+            assert completed["state"] == "succeeded"
+            snapshot = asyncio.run(_snapshot(UUID(completed["snapshot_id"])))
+            assert snapshot.row_count == 2
+            table = pq.read_table(tmp_path / snapshot.object_key)
+            by_name = {
+                field["name"]: field["storage_name"] for field in snapshot.schema_document["fields"]
+            }
+            assert table[by_name["customer_id"]].to_pylist() == [1, 2]
+            assert table[by_name["order_amount"]].to_pylist() == [Decimal("42.50"), None]
+
+            invalid_definition = _joined_definition(missing_join_column=True)
+            invalid = client.post(
+                "/api/v1/datasets",
+                json={
+                    "name": "Invalid customer orders",
+                    "connection_id": connection_id,
+                    "definition": invalid_definition,
+                },
+                headers=_csrf(client),
+            )
+            invalid_result = client.post(
+                f"/api/v1/datasets/{invalid.json()['id']}/draft/validations",
+                headers={**_csrf(client), "If-Match": invalid.headers["etag"]},
+            )
+            assert invalid_result.status_code == 200
+            assert invalid_result.json()["state"] == "invalid"
+            assert invalid_result.json()["findings"] == [
+                {
+                    "code": "source_join_column_not_found",
+                    "severity": "error",
+                    "field_id": None,
+                    "relation_id": invalid_definition["source"]["relations"][1]["id"],
+                    "join_id": invalid_definition["joins"][0]["id"],
+                }
+            ]
+    finally:
+        asyncio.run(engine.dispose())
 
 
 def test_empty_source_publishes_typed_zero_row_parquet(tmp_path: Path) -> None:

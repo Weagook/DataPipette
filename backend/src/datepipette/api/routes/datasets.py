@@ -1,4 +1,4 @@
-"""Administrator endpoints for private visual dataset drafts."""
+"""Owner-authorized endpoints for private visual dataset drafts."""
 
 from datetime import datetime
 from typing import Annotated, Any, Literal, cast
@@ -47,6 +47,9 @@ from datepipette.domain.datasets import (
     ValidationSeverity,
     VisualDatasetDefinition,
     VisualField,
+    VisualJoin,
+    VisualJoinCondition,
+    VisualJoinType,
     VisualRelation,
 )
 
@@ -65,7 +68,7 @@ class VisualRelationPayload(StrictModel):
 
 
 class VisualSourcePayload(StrictModel):
-    relations: list[VisualRelationPayload] = Field(min_length=1, max_length=1)
+    relations: list[VisualRelationPayload] = Field(min_length=1, max_length=10)
 
 
 class FieldSourcePayload(StrictModel):
@@ -86,11 +89,24 @@ class VisualFieldPayload(StrictModel):
     display: FieldDisplayPayload
 
 
+class VisualJoinConditionPayload(StrictModel):
+    left_column: str = Field(min_length=1, max_length=255)
+    right_column: str = Field(min_length=1, max_length=255)
+
+
+class VisualJoinPayload(StrictModel):
+    id: UUID
+    type: VisualJoinType
+    left_relation_id: UUID
+    right_relation_id: UUID
+    conditions: list[VisualJoinConditionPayload] = Field(min_length=1, max_length=8)
+
+
 class VisualDefinitionPayload(StrictModel):
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     source: VisualSourcePayload
     fields: list[VisualFieldPayload] = Field(min_length=1, max_length=500)
-    joins: list[dict[str, Any]] = Field(default_factory=list, max_length=0)
+    joins: list[VisualJoinPayload] = Field(default_factory=list, max_length=9)
 
 
 class CreateDatasetRequest(StrictModel):
@@ -143,6 +159,8 @@ class ValidationFindingResponse(BaseModel):
     code: ValidationFindingCode
     severity: ValidationSeverity
     field_id: UUID | None
+    relation_id: UUID | None
+    join_id: UUID | None
 
 
 class ValidatedFieldResponse(BaseModel):
@@ -212,16 +230,17 @@ def _preview_service(request: Request) -> DatasetPreviewService:
 
 
 def _definition(payload: VisualDefinitionPayload) -> VisualDatasetDefinition:
-    relation_value = payload.source.relations[0]
-    relation = VisualRelation(
-        id=relation_value.id,
-        schema_name=relation_value.schema_name,
-        relation_name=relation_value.name,
-        alias=relation_value.alias,
-    )
     return VisualDatasetDefinition(
         schema_version=payload.schema_version,
-        relation=relation,
+        relations=tuple(
+            VisualRelation(
+                id=relation.id,
+                schema_name=relation.schema_name,
+                relation_name=relation.name,
+                alias=relation.alias,
+            )
+            for relation in payload.source.relations
+        ),
         fields=tuple(
             VisualField(
                 id=field.id,
@@ -237,6 +256,22 @@ def _definition(payload: VisualDefinitionPayload) -> VisualDatasetDefinition:
                 ),
             )
             for field in payload.fields
+        ),
+        joins=tuple(
+            VisualJoin(
+                id=join.id,
+                type=join.type,
+                left_relation_id=join.left_relation_id,
+                right_relation_id=join.right_relation_id,
+                conditions=tuple(
+                    VisualJoinCondition(
+                        left_column=condition.left_column,
+                        right_column=condition.right_column,
+                    )
+                    for condition in join.conditions
+                ),
+            )
+            for join in payload.joins
         ),
     )
 
@@ -298,6 +333,8 @@ def _validation_response(value: DatasetValidation) -> DatasetValidationResponse:
                 code=finding.code,
                 severity=finding.severity,
                 field_id=finding.field_id,
+                relation_id=finding.relation_id,
+                join_id=finding.join_id,
             )
             for finding in value.findings
         ],

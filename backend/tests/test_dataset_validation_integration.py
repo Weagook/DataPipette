@@ -282,6 +282,8 @@ def test_validation_returns_structured_findings_for_source_drift() -> None:
                 "code": "source_field_not_found",
                 "severity": "error",
                 "field_id": missing_column_definition["fields"][1]["id"],
+                "relation_id": missing_column_definition["source"]["relations"][0]["id"],
+                "join_id": None,
             }
         ]
 
@@ -298,6 +300,8 @@ def test_validation_returns_structured_findings_for_source_drift() -> None:
                 "code": "source_relation_not_found",
                 "severity": "error",
                 "field_id": None,
+                "relation_id": missing_relation_definition["source"]["relations"][0]["id"],
+                "join_id": None,
             }
         ]
 

@@ -84,7 +84,9 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Analyst catalog collections are filtered before pagination. Inaccessible connections, schemas, and relations are concealed with the same not-found boundaries used for absent resources.
 - Catalog discovery requires effective schema `USAGE` and relation `SELECT`; column metadata requires column-level `SELECT`. Foreign-key targets are omitted unless their schema and relation are also visible.
 - Catalog statements are static, names and cursors are bound as values, system schemas are hidden by default, and raw source failures are redacted.
-- Single-table draft validation composes every schema, relation, alias, source-column, and output-column name with Psycopg identifiers; it never interpolates definition text into SQL.
+- Visual draft compilation composes every schema, relation, alias, selected column, join column, and output name with Psycopg identifiers; it never interprets definition text as SQL. Join types come from the closed `inner`/`left` enum and conditions are equality-only.
+- Version-2 definitions authorize the complete relation set at create/replace, validation, preview, refresh request, and worker execution. Partial access cannot execute a joined definition.
+- Join suggestions inspect at most ten explicitly requested authorized relations, return structural foreign-key metadata only, and never mutate a draft automatically.
 - Validation runs plain `EXPLAIN (FORMAT JSON)` inside the bounded read-only source transaction. It never enables `ANALYZE`, returns source rows, or stores the raw plan.
 - Stored validation artifacts contain generated SQL and structural metadata but no credentials, values, or rows. Audit events contain only revision, outcome, counts, and stable finding codes.
 - Draft preview never executes stored SQL text: it recompiles the structured definition, binds the row limit separately, and runs inside the bounded read-only source transaction.

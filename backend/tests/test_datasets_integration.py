@@ -143,6 +143,34 @@ def _definition() -> dict[str, Any]:
     }
 
 
+def _joined_definition() -> dict[str, Any]:
+    definition = _definition()
+    customers_id = definition["source"]["relations"][0]["id"]
+    orders_id = str(uuid4())
+    definition["schema_version"] = 2
+    definition["source"]["relations"].append(
+        {"id": orders_id, "schema": "crm", "name": "orders", "alias": "orders"}
+    )
+    definition["fields"].append(
+        {
+            "id": str(uuid4()),
+            "source": {"relation_id": orders_id, "column": "amount"},
+            "name": "order_amount",
+            "display": {"label": "Order amount", "format": None, "visible": True},
+        }
+    )
+    definition["joins"] = [
+        {
+            "id": str(uuid4()),
+            "type": "left",
+            "left_relation_id": customers_id,
+            "right_relation_id": orders_id,
+            "conditions": [{"left_column": "id", "right_column": "customer_id"}],
+        }
+    ]
+    return definition
+
+
 def _create_dataset(
     client: TestClient,
     connection_id: str,
@@ -392,6 +420,20 @@ def test_dataset_collection_conflicts_validation_and_admin_boundary() -> None:
         assert invalid.status_code == 422
         assert invalid.json()["code"] == "dataset_definition_invalid"
 
+        disconnected_definition = _joined_definition()
+        disconnected_definition["joins"] = []
+        disconnected = client.post(
+            "/api/v1/datasets",
+            json={
+                "name": "Disconnected",
+                "connection_id": connection_id,
+                "definition": disconnected_definition,
+            },
+            headers=_csrf(client),
+        )
+        assert disconnected.status_code == 422
+        assert disconnected.json()["code"] == "dataset_definition_invalid"
+
         missing_id = uuid4()
         assert client.get(f"/api/v1/datasets/{missing_id}").status_code == 404
         assert client.get(f"/api/v1/datasets/{missing_id}/draft").status_code == 404
@@ -485,6 +527,16 @@ def test_analyst_authors_only_owned_datasets_and_revocation_blocks_source_operat
 
     with TestClient(create_app(settings=TEST_SETTINGS)) as analyst:
         _login(analyst, email="owner-analyst@example.com", password=user_password)
+        blocked_join = analyst.post(
+            "/api/v1/datasets",
+            json={
+                "name": "Unauthorized joined dataset",
+                "connection_id": connection_id,
+                "definition": _joined_definition(),
+            },
+            headers=_csrf(analyst),
+        )
+        assert blocked_join.status_code == 404
         created, etag = _create_dataset(analyst, connection_id, name="Analyst private")
         dataset_id = cast(str, created["id"])
         listed = analyst.get("/api/v1/datasets")

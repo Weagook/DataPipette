@@ -1,4 +1,4 @@
-"""Owner-authorized single-table visual dataset drafts."""
+"""Owner-authorized visual dataset drafts."""
 
 import base64
 import json
@@ -223,11 +223,13 @@ class DatasetService:
         )
         definition = _definition_document(value.definition)
         try:
-            await self._authorizer.require_relation(
+            await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=value.connection_id,
-                schema_name=value.definition.relation.schema_name,
-                relation_name=value.definition.relation.relation_name,
+                relations=(
+                    (relation.schema_name, relation.relation_name)
+                    for relation in value.definition.relations
+                ),
             )
         except ConnectionAccessDeniedError as exc:
             raise DatasetConnectionNotFoundError from exc
@@ -315,11 +317,13 @@ class DatasetService:
         if expected_revision < 1:
             raise ValueError("Expected revision must be positive")
         try:
-            await self._authorizer.require_relation(
+            await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=dataset.connection_id,
-                schema_name=definition.relation.schema_name,
-                relation_name=definition.relation.relation_name,
+                relations=(
+                    (relation.schema_name, relation.relation_name)
+                    for relation in definition.relations
+                ),
             )
         except ConnectionAccessDeniedError as exc:
             raise DatasetNotFoundError from exc

@@ -88,11 +88,13 @@ class RefreshRunService:
             raise RefreshRunNotFoundError
         try:
             require_dataset_owner(actor, dataset)
-            await self._authorizer.require_relation(
+            await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=dataset.connection_id,
-                schema_name=draft.definition.relation.schema_name,
-                relation_name=draft.definition.relation.relation_name,
+                relations=(
+                    (relation.schema_name, relation.relation_name)
+                    for relation in draft.definition.relations
+                ),
             )
         except (ConnectionAccessDeniedError, DatasetNotFoundError) as exc:
             raise RefreshRunNotFoundError from exc

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
+from uuid import UUID
 
 
 class RelationKind(StrEnum):
@@ -42,3 +43,24 @@ class CatalogRelationDetail:
     columns: list[CatalogColumn]
     primary_key: list[str]
     foreign_keys: list[CatalogForeignKey]
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogRelationReference:
+    id: UUID
+    schema_name: str
+    relation_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogJoinCondition:
+    source_column: str
+    target_column: str
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogJoinSuggestion:
+    foreign_key_name: str
+    source_relation_id: UUID
+    target_relation_id: UUID
+    conditions: tuple[CatalogJoinCondition, ...]

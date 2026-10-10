@@ -75,13 +75,13 @@ Groups, human-user memberships, additive dataset grants, and scoped connection g
 
 Encrypted PostgreSQL connection configuration, health checks, schema introspection, table and column metadata, foreign-key suggestions, and connection visibility policies.
 
-Catalog discovery is a live adapter query rather than a metadata replica. The API opens a bounded read-only source transaction, queries static `pg_catalog` statements, intersects the connected role's schema/table/column privileges with the analyst's effective exact connection scopes, and returns only structural metadata. Scope filtering occurs before pagination, system schemas are hidden by default, and foreign-key targets outside the effective scope are omitted.
+Catalog discovery is a live adapter query rather than a metadata replica. The API opens bounded read-only source transactions, queries static `pg_catalog` statements, intersects the connected role's schema/table/column privileges with the analyst's effective exact connection scopes, and returns only structural metadata. Scope filtering occurs before pagination, system schemas are hidden by default, and foreign-key targets outside the effective scope are omitted. A bounded join-suggestion operation maps direct and composite foreign keys among up to ten authorized caller-identified relations without persisting a catalog copy.
 
 ### Datasets
 
 Visual and SQL definitions, validation, compilation, draft/publish lifecycle, result schema, display settings, dependency analysis, and schedules.
 
-The first validation slice is synchronous and single-table: it re-checks live catalog visibility, composes identifiers safely, obtains a non-executing PostgreSQL JSON plan, and stores a compact artifact tied to the draft revision. It neither previews rows nor replaces the later background refresh/publication pipeline.
+Validation is synchronous and supports version-1 single-relation and version-2 multi-relation visual definitions. It re-checks live visibility and columns for every relation, safely compiles an ordered acyclic `INNER JOIN`/`LEFT JOIN` tree, obtains a non-executing PostgreSQL JSON plan, and stores a compact artifact tied to the draft revision.
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
 
@@ -89,7 +89,7 @@ Refresh execution is asynchronous and durable. The API transaction records idemp
 
 ### Execution
 
-Source query execution, bounded streaming, local Parquet writing, basic result statistics, and snapshot publication are implemented for one-table visual definitions. S3 storage, cancellation, progress, cleanup, and broader resource policies remain later execution capabilities.
+Source query execution, bounded streaming, local Parquet writing, basic result statistics, and snapshot publication are implemented for version-1 single-relation and version-2 joined visual definitions. S3 storage, cancellation, progress, cleanup, and broader resource policies remain later execution capabilities.
 
 ### Query
 
