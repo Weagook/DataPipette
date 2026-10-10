@@ -68,6 +68,8 @@ Connection access is evaluated from metadata PostgreSQL on every source-touching
 
 Refresh requests are owner-or-administrator and CSRF-protected. They require the current draft ETag and store only a SHA-256 digest of the client idempotency key. Celery messages contain only a refresh-run UUID; definitions, SQL, connection credentials, business rows, and idempotency-key plaintext remain outside Redis. The worker reloads the requesting identity and connection scope, so a queued job cannot outlive grant or membership revocation. Metadata PostgreSQL is authoritative for lifecycle state, and audit events use stable safe error codes rather than raw broker, driver, or source errors.
 
+Refresh schedules are likewise owner-or-administrator and CSRF-protected, use optimistic ETags, and never carry source material through Redis. Scheduled runs target the active published version and execute as the dataset owner, so worker-time account and connection-scope revocation still applies. Scheduler audit events contain only dataset, schedule, run, cadence, revision, and dispatch metadata.
+
 Local Parquet files contain business data and therefore belong under a private runtime directory or volume, never the repository or a publicly served path. Metadata and audit events store only relative object keys, schema/type metadata, identifiers, counts, checksums, and safe error codes—not row values or host-specific absolute paths. Production must replace the local adapter with private encrypted S3-compatible storage and least-privilege credentials.
 
 A viewer with dashboard access may receive chart results but must not use that route to browse dataset rows, create exports, infer unrestricted schema metadata, or execute arbitrary chart definitions.

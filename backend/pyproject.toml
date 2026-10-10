@@ -25,6 +25,7 @@ dependencies = [
 [project.scripts]
 datepipette = "datepipette.main:run"
 datepipette-admin = "datepipette.cli:main"
+datepipette-scheduler = "datepipette.scheduler:run"
 
 [dependency-groups]
 dev = [

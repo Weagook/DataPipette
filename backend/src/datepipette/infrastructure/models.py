@@ -1,6 +1,6 @@
 """SQLAlchemy models owned by the DatePipette metadata database."""
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 from uuid import UUID
 
@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -191,6 +192,11 @@ class DatasetRefreshRunModel(Base):
         CheckConstraint("requested_revision >= 1", name="requested_revision_positive"),
         CheckConstraint("dispatch_attempts >= 0", name="dispatch_attempts_nonnegative"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        CheckConstraint(
+            "(trigger_type = 'manual' AND schedule_id IS NULL) OR "
+            "(trigger_type = 'scheduled' AND schedule_id IS NOT NULL)",
+            name="trigger_shape_valid",
+        ),
         Index(
             "uq_dataset_refresh_runs_one_queued",
             "dataset_id",
@@ -216,6 +222,11 @@ class DatasetRefreshRunModel(Base):
     requested_revision: Mapped[int] = mapped_column(Integer)
     state: Mapped[str] = mapped_column(String(20))
     requested_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    trigger_type: Mapped[str] = mapped_column(String(20))
+    schedule_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("dataset_refresh_schedules.id", ondelete="RESTRICT"),
+        index=True,
+    )
     dispatch_attempts: Mapped[int] = mapped_column(Integer)
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer)
@@ -223,6 +234,46 @@ class DatasetRefreshRunModel(Base):
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetRefreshScheduleModel(Base):
+    __tablename__ = "dataset_refresh_schedules"
+    __table_args__ = (
+        CheckConstraint("kind IN ('interval', 'daily')", name="kind_valid"),
+        CheckConstraint(
+            "(kind = 'interval' AND interval_minutes BETWEEN 5 AND 10080 "
+            "AND daily_time IS NULL) OR "
+            "(kind = 'daily' AND interval_minutes IS NULL AND daily_time IS NOT NULL)",
+            name="cadence_shape_valid",
+        ),
+        CheckConstraint("revision >= 1", name="revision_positive"),
+        CheckConstraint(
+            "(enabled AND next_run_at IS NOT NULL) OR (NOT enabled AND next_run_at IS NULL)",
+            name="enabled_next_run_valid",
+        ),
+        Index(
+            "ix_dataset_refresh_schedules_due",
+            "next_run_at",
+            postgresql_where=text("enabled"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    kind: Mapped[str] = mapped_column(String(20))
+    interval_minutes: Mapped[int | None] = mapped_column(Integer)
+    daily_time: Mapped[time | None] = mapped_column(Time(timezone=False))
+    enabled: Mapped[bool] = mapped_column(Boolean)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

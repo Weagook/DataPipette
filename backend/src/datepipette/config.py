@@ -3,8 +3,9 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEVELOPMENT_CONNECTION_ENCRYPTION_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -34,6 +35,9 @@ class Settings(BaseSettings):
     source_statement_timeout_seconds: int = Field(default=5, ge=1, le=60)
     refresh_statement_timeout_seconds: int = Field(default=1800, ge=1, le=86_400)
     refresh_batch_rows: int = Field(default=50_000, ge=1_000, le=100_000)
+    installation_timezone: str = "UTC"
+    scheduler_poll_seconds: float = Field(default=15.0, ge=1.0, le=300.0)
+    scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
     snapshot_storage_path: Path = Path(".local/snapshots")
     snapshot_query_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     snapshot_query_memory_limit_mb: int = Field(default=256, ge=64, le=4096)
@@ -55,6 +59,15 @@ class Settings(BaseSettings):
         "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette"
     )
     redis_url: SecretStr = SecretStr("redis://localhost:6379/0")
+
+    @field_validator("installation_timezone")
+    @classmethod
+    def validate_installation_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Installation timezone must be a valid IANA name") from exc
+        return value
 
     @model_validator(mode="after")
     def reject_development_encryption_key_in_production(self) -> "Settings":

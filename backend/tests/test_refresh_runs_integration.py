@@ -5,6 +5,7 @@ from collections.abc import Generator
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +21,7 @@ from datepipette.application.refresh_worker import (
     RefreshWorkerService,
     UnavailableSnapshotWriter,
 )
+from datepipette.application.schedules import RefreshSchedulerService
 from datepipette.config import Settings
 from datepipette.domain.refresh import RefreshClaimOutcome, RefreshRun, RefreshRunState
 from datepipette.domain.snapshots import SnapshotArtifact
@@ -29,6 +31,7 @@ from datepipette.infrastructure.models import (
     AuditEventModel,
     DatasetRefreshRequestModel,
     DatasetRefreshRunModel,
+    DatasetRefreshScheduleModel,
     DatasetVersionModel,
 )
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
@@ -38,6 +41,7 @@ from datepipette.infrastructure.repositories.connection_access import (
 )
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
+from datepipette.infrastructure.repositories.schedules import SqlAlchemyRefreshScheduleStore
 from datepipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
@@ -411,3 +415,176 @@ def test_celery_contract_uses_json_late_ack_and_deterministic_task_id() -> None:
     assert fake.call["args"] == [str(run_id)]
     assert fake.call["task_id"] == str(run_id)
     assert fake.call["queue"] == "refresh"
+
+
+def test_schedule_api_and_scheduler_create_coalesce_and_recover_runs() -> None:
+    asyncio.run(_bootstrap())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    run_store = SqlAlchemyRefreshRunStore(session_factory)
+    dispatcher = RecordingDispatcher()
+    refresh_service = RefreshRunService(
+        run_store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory)),
+    )
+    schedule_store = SqlAlchemyRefreshScheduleStore(session_factory, "UTC")
+    scheduler = RefreshSchedulerService(schedule_store, dispatcher, ZoneInfo("UTC"), 100)
+
+    async def force_due(dataset_id: UUID, when: datetime) -> None:
+        async with session_factory() as session, session.begin():
+            schedule = await session.scalar(
+                select(DatasetRefreshScheduleModel).where(
+                    DatasetRefreshScheduleModel.dataset_id == dataset_id
+                )
+            )
+            assert schedule is not None
+            schedule.next_run_at = when
+
+    try:
+        with TestClient(
+            create_app(settings=TEST_SETTINGS, refresh_run_service=refresh_service)
+        ) as client:
+            _login(client)
+            dataset_id_text, draft_etag, definition = _create_dataset(client)
+            dataset_id = UUID(dataset_id_text)
+            schedule_url = f"/api/v1/datasets/{dataset_id}/refresh-schedule"
+            assert client.get(schedule_url).status_code == 404
+
+            disabled = client.put(
+                schedule_url,
+                json={
+                    "kind": "interval",
+                    "interval_minutes": 15,
+                    "daily_time": None,
+                    "enabled": False,
+                },
+                headers=_csrf(client),
+            )
+            assert disabled.status_code == 200, disabled.text
+            assert disabled.headers["etag"] == '"schedule-1"'
+            assert disabled.json()["timezone"] == "UTC"
+            assert disabled.json()["next_run_at"] is None
+
+            unpublished = client.put(
+                schedule_url,
+                json={
+                    "kind": "interval",
+                    "interval_minutes": 15,
+                    "daily_time": None,
+                    "enabled": True,
+                },
+                headers={**_csrf(client), "If-Match": disabled.headers["etag"]},
+            )
+            assert unpublished.status_code == 409
+            assert unpublished.json()["code"] == "dataset_not_published"
+
+            asyncio.run(_mark_valid(dataset_id_text, definition))
+            manual = client.post(
+                f"/api/v1/datasets/{dataset_id}/refresh-runs",
+                headers={
+                    **_csrf(client),
+                    "If-Match": draft_etag,
+                    "Idempotency-Key": "publish-before-scheduling",
+                },
+            ).json()
+            assert (
+                asyncio.run(
+                    RefreshWorkerService(run_store, SuccessfulExecutor()).execute(
+                        UUID(manual["id"])
+                    )
+                )
+                is RefreshClaimOutcome.CLAIMED
+            )
+            active_version_id = client.get(f"/api/v1/datasets/{dataset_id}").json()[
+                "active_version_id"
+            ]
+
+            missing_precondition = client.put(
+                schedule_url,
+                json={
+                    "kind": "daily",
+                    "interval_minutes": None,
+                    "daily_time": "09:30:00",
+                    "enabled": True,
+                },
+                headers=_csrf(client),
+            )
+            assert missing_precondition.status_code == 428
+            enabled = client.put(
+                schedule_url,
+                json={
+                    "kind": "daily",
+                    "interval_minutes": None,
+                    "daily_time": "09:30:00",
+                    "enabled": True,
+                },
+                headers={**_csrf(client), "If-Match": disabled.headers["etag"]},
+            )
+            assert enabled.status_code == 200, enabled.text
+            assert enabled.headers["etag"] == '"schedule-2"'
+            assert enabled.json()["next_run_at"] is not None
+            stale = client.put(
+                schedule_url,
+                json={
+                    "kind": "daily",
+                    "interval_minutes": None,
+                    "daily_time": "10:00:00",
+                    "enabled": True,
+                },
+                headers={**_csrf(client), "If-Match": disabled.headers["etag"]},
+            )
+            assert stale.status_code == 409
+
+            dispatcher.run_ids.clear()
+            due_at = datetime(2026, 10, 11, 8, 0, tzinfo=UTC)
+            asyncio.run(force_due(dataset_id, due_at))
+            tick = asyncio.run(scheduler.tick(due_at))
+            assert tick.due_schedules == 1
+            assert tick.dispatch_attempts == 1
+            scheduled_run_id = dispatcher.run_ids[-1]
+            scheduled_run = client.get(
+                f"/api/v1/datasets/{dataset_id}/refresh-runs/{scheduled_run_id}"
+            ).json()
+            assert scheduled_run["trigger_type"] == "scheduled"
+            assert scheduled_run["schedule_id"] == enabled.json()["id"]
+            assert scheduled_run["dataset_version_id"] == active_version_id
+
+            assert (
+                asyncio.run(
+                    RefreshWorkerService(run_store, SuccessfulExecutor()).execute(scheduled_run_id)
+                )
+                is RefreshClaimOutcome.CLAIMED
+            )
+            dispatcher.fail = True
+            second_due = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
+            asyncio.run(force_due(dataset_id, second_due))
+            failed_dispatch = asyncio.run(scheduler.tick(second_due))
+            assert failed_dispatch.dispatch_failures == 1
+            pending = asyncio.run(schedule_store.undispatched_run_ids(limit=10))
+            assert len(pending) == 1
+            undispatched_id = pending[0]
+            dispatcher.fail = False
+            recovered = asyncio.run(scheduler.tick(second_due))
+            assert recovered.due_schedules == 0
+            assert recovered.dispatch_attempts == 1
+            assert dispatcher.run_ids[-1] == undispatched_id
+
+            claim, _ = asyncio.run(run_store.claim(undispatched_id, second_due))
+            assert claim is RefreshClaimOutcome.CLAIMED
+            third_due = datetime(2026, 10, 13, 8, 0, tzinfo=UTC)
+            asyncio.run(force_due(dataset_id, third_due))
+            successor = asyncio.run(scheduler.tick(third_due))
+            assert successor.due_schedules == 1
+            assert successor.dispatch_attempts == 1
+            successor_id = dispatcher.run_ids[-1]
+            assert successor_id != undispatched_id
+
+            fourth_due = datetime(2026, 10, 14, 8, 0, tzinfo=UTC)
+            asyncio.run(force_due(dataset_id, fourth_due))
+            coalesced = asyncio.run(scheduler.tick(fourth_due))
+            assert coalesced.due_schedules == 1
+            assert coalesced.dispatch_attempts == 0
+    finally:
+        asyncio.run(engine.dispose())

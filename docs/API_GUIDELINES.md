@@ -137,6 +137,9 @@ Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-
 
 ## Refresh runs
 
+- `GET /api/v1/datasets/{dataset_id}/refresh-schedule` returns the owner/admin schedule and its ETag. `PUT` creates a schedule without `If-Match` or atomically replaces an existing schedule with its current ETag; missing update preconditions return `428 schedule_revision_required`, while stale revisions return `409 schedule_revision_conflict`.
+- A schedule is either `interval` with 5–10,080 minutes or `daily` with a timezone-naive `HH:MM` value interpreted in the returned installation `timezone`. Disabled schedules have `next_run_at: null`. Enabling requires an active published dataset and returns `409 dataset_not_published` otherwise.
+- Scheduled runs target the active published version, not the editable draft. Refresh-run resources expose `trigger_type` (`manual` or `scheduled`) and nullable `schedule_id`.
 - `POST /api/v1/datasets/{dataset_id}/refresh-runs` requires administrator or owner CSRF, the current draft ETag in `If-Match`, and an `Idempotency-Key` of at most 200 characters. The exact revision must have a current `valid` or `valid_with_warnings` validation artifact and the actor must still have source-relation access.
 - A successful request returns `202`, the durable run resource, `Location`, the draft `ETag`, and `X-DatePipette-Coalesced`. The latter is `true` when this request reused an existing run.
 - Idempotency is scoped to actor and dataset. Retrying the same key returns the same run. A different key coalesces into the one queued run when possible; metadata PostgreSQL retains each hashed request mapping.
@@ -146,7 +149,7 @@ Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-
 - A successful run has a completely written and validated Parquet object before `snapshot_id` is exposed. Local execution streams fixed-size source batches and atomically activates snapshot metadata; it never buffers the complete result.
 - The worker re-checks the requesting user's current source-relation scope immediately before source access. Stable execution errors currently include `connection_access_revoked`, `draft_changed`, `unsupported_source_type`, `connection_secret_unavailable`, `source_unavailable`, `snapshot_write_failed`, and `refresh_execution_failed`. A failure leaves the previous active snapshot unchanged.
 
-The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-refresh-run-orchestration.md); local Parquet publication is recorded in [ADR-0013](adr/0013-local-parquet-snapshot-publication.md).
+The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-refresh-run-orchestration.md); local Parquet publication is recorded in [ADR-0013](adr/0013-local-parquet-snapshot-publication.md); scheduling is recorded in [ADR-0020](adr/0020-durable-refresh-scheduling.md).
 
 ## Snapshot row queries
 
