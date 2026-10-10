@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 from collections.abc import Generator
 from copy import deepcopy
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
@@ -20,7 +21,7 @@ from datepipette.application.access_control import DatasetAccessAuthorizer
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.application.connection_access import ConnectionAccessAuthorizer
 from datepipette.application.refresh_runs import RefreshRunService
-from datepipette.application.refresh_worker import RefreshWorkerService
+from datepipette.application.refresh_worker import RefreshExecutionResult, RefreshWorkerService
 from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
 from datepipette.config import Settings
 from datepipette.domain.refresh import RefreshClaimOutcome
@@ -367,6 +368,23 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
                 client,
                 _connection(client),
             )
+            freshness_url = f"/api/v1/datasets/{dataset_id}/freshness"
+            unpublished_freshness = client.get(freshness_url)
+            assert unpublished_freshness.status_code == 200
+            assert unpublished_freshness.json() == {
+                "dataset_id": str(dataset_id),
+                "data_state": "not_published",
+                "snapshot_id": None,
+                "snapshot_row_count": None,
+                "last_success_at": None,
+                "refresh_state": "idle",
+                "active_refresh_run_id": None,
+                "refresh_requested_at": None,
+                "refresh_started_at": None,
+                "last_refresh_error": None,
+                "last_refresh_error_at": None,
+                "is_stale": False,
+            }
             unpublished = client.post(
                 f"/api/v1/datasets/{dataset_id}/rows:query",
                 json={"fields": [original_definition["fields"][0]["id"]]},
@@ -384,11 +402,24 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             )
             assert requested.status_code == 202
             first_run_id = UUID(requested.json()["id"])
+            queued_freshness = client.get(freshness_url).json()
+            assert queued_freshness["data_state"] == "refreshing"
+            assert queued_freshness["refresh_state"] == "queued"
+            assert UUID(queued_freshness["active_refresh_run_id"]) == first_run_id
+            assert queued_freshness["refresh_requested_at"] is not None
+            assert queued_freshness["refresh_started_at"] is None
             assert asyncio.run(worker.execute(first_run_id)) is RefreshClaimOutcome.CLAIMED
 
             completed = client.get(f"{refresh_url}/{first_run_id}")
             assert completed.json()["state"] == "succeeded"
             first_snapshot_id = UUID(completed.json()["snapshot_id"])
+            ready_freshness = client.get(freshness_url).json()
+            assert ready_freshness["data_state"] == "ready"
+            assert UUID(ready_freshness["snapshot_id"]) == first_snapshot_id
+            assert ready_freshness["snapshot_row_count"] == 2
+            assert ready_freshness["last_success_at"] is not None
+            assert ready_freshness["refresh_state"] == "idle"
+            assert ready_freshness["active_refresh_run_id"] is None
             dataset = client.get(f"/api/v1/datasets/{dataset_id}").json()
             assert UUID(dataset["active_snapshot_id"]) == first_snapshot_id
             assert dataset["active_version_id"] is not None
@@ -633,7 +664,29 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert stale_rows.json()["meta"]["snapshot_id"] == str(second_snapshot_id)
             assert stale_rows.json()["meta"]["is_stale"] is True
             assert stale_rows.json()["meta"]["last_refresh_error"] == "unsupported_source_type"
+            assert stale_rows.json()["meta"]["last_refresh_error_at"] is not None
             assert stale_rows.json()["meta"]["refresh_state"] == "idle"
+            stale_freshness = client.get(freshness_url).json()
+            assert stale_freshness["data_state"] == "stale"
+            assert stale_freshness["is_stale"] is True
+            assert UUID(stale_freshness["snapshot_id"]) == second_snapshot_id
+            assert stale_freshness["last_refresh_error"] == "unsupported_source_type"
+            assert stale_freshness["last_refresh_error_at"] is not None
+
+            retry = client.post(
+                refresh_url,
+                headers={
+                    **_csrf(client),
+                    "If-Match": unsupported_etag,
+                    "Idempotency-Key": "unsupported-array-retry",
+                },
+            )
+            assert retry.status_code == 202
+            retrying_freshness = client.get(freshness_url).json()
+            assert retrying_freshness["data_state"] == "refreshing"
+            assert retrying_freshness["refresh_state"] == "queued"
+            assert retrying_freshness["is_stale"] is True
+            assert retrying_freshness["last_refresh_error"] == "unsupported_source_type"
     finally:
         asyncio.run(engine.dispose())
 
@@ -648,6 +701,68 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
     audit = asyncio.run(inspect_audit())
     assert "Alpha private value" not in repr(audit)
     assert str(tmp_path) not in repr(audit)
+
+
+def test_freshness_exposes_running_and_failed_first_publication(tmp_path: Path) -> None:
+    asyncio.run(_bootstrap_source())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    refresh_service = RefreshRunService(
+        store,
+        RecordingDispatcher(),
+        SqlAlchemyDatasetStore(session_factory),
+        ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory)),
+    )
+    try:
+        with TestClient(
+            create_app(
+                settings=TEST_SETTINGS,
+                refresh_run_service=refresh_service,
+                snapshot_query_service=_snapshot_query_service(session_factory, tmp_path),
+            )
+        ) as client:
+            _login(client)
+            dataset_id, etag, _ = _create_and_validate(client, _connection(client))
+            requested = client.post(
+                f"/api/v1/datasets/{dataset_id}/refresh-runs",
+                headers={
+                    **_csrf(client),
+                    "If-Match": etag,
+                    "Idempotency-Key": "failed-first-publication",
+                },
+            )
+            assert requested.status_code == 202
+            run_id = UUID(requested.json()["id"])
+            outcome, _ = asyncio.run(store.claim(run_id, datetime.now(UTC)))
+            assert outcome is RefreshClaimOutcome.CLAIMED
+
+            running = client.get(f"/api/v1/datasets/{dataset_id}/freshness")
+            assert running.status_code == 200
+            assert running.json()["data_state"] == "refreshing"
+            assert running.json()["refresh_state"] == "running"
+            assert running.json()["active_refresh_run_id"] == str(run_id)
+            assert running.json()["refresh_started_at"] is not None
+            assert running.json()["snapshot_id"] is None
+
+            asyncio.run(
+                store.complete(
+                    run_id,
+                    RefreshExecutionResult(False, "source_unavailable"),
+                    datetime.now(UTC),
+                )
+            )
+            failed = client.get(f"/api/v1/datasets/{dataset_id}/freshness")
+            assert failed.status_code == 200
+            assert failed.json()["data_state"] == "failed"
+            assert failed.json()["refresh_state"] == "idle"
+            assert failed.json()["snapshot_id"] is None
+            assert failed.json()["last_success_at"] is None
+            assert failed.json()["last_refresh_error"] == "source_unavailable"
+            assert failed.json()["last_refresh_error_at"] is not None
+            assert failed.json()["is_stale"] is False
+    finally:
+        asyncio.run(engine.dispose())
 
 
 def test_joined_definition_validates_previews_and_publishes_left_join_snapshot(

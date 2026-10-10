@@ -46,3 +46,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0016](0016-additive-dataset-access-control.md): Additive dataset access control with role ceilings
 - [ADR-0017](0017-scoped-connection-access.md): Scoped connection access and analyst dataset ownership
 - [ADR-0018](0018-versioned-visual-join-trees.md): Versioned visual join trees and advisory foreign-key suggestions
+- [ADR-0019](0019-dataset-freshness-projection.md): Dataset freshness and refresh failure projection

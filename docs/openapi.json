@@ -796,6 +796,17 @@
         "title": "DatasetCollectionResponse",
         "type": "object"
       },
+      "DatasetDataState": {
+        "enum": [
+          "not_published",
+          "refreshing",
+          "ready",
+          "stale",
+          "failed"
+        ],
+        "title": "DatasetDataState",
+        "type": "string"
+      },
       "DatasetDraftResponse": {
         "properties": {
           "created_at": {
@@ -852,6 +863,135 @@
           "updated_at"
         ],
         "title": "DatasetDraftResponse",
+        "type": "object"
+      },
+      "DatasetFreshnessResponse": {
+        "properties": {
+          "active_refresh_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Refresh Run Id"
+          },
+          "data_state": {
+            "$ref": "#/components/schemas/DatasetDataState"
+          },
+          "dataset_id": {
+            "format": "uuid",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "last_refresh_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh Error"
+          },
+          "last_refresh_error_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh Error At"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "refresh_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Requested At"
+          },
+          "refresh_started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Started At"
+          },
+          "refresh_state": {
+            "$ref": "#/components/schemas/SnapshotRefreshState"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "snapshot_row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Row Count"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "data_state",
+          "snapshot_id",
+          "snapshot_row_count",
+          "last_success_at",
+          "refresh_state",
+          "active_refresh_run_id",
+          "refresh_requested_at",
+          "refresh_started_at",
+          "last_refresh_error",
+          "last_refresh_error_at",
+          "is_stale"
+        ],
+        "title": "DatasetFreshnessResponse",
         "type": "object"
       },
       "DatasetGrantCollectionResponse": {
@@ -2156,6 +2296,18 @@
             ],
             "title": "Last Refresh Error"
           },
+          "last_refresh_error_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh Error At"
+          },
           "last_success_at": {
             "format": "date-time",
             "title": "Last Success At",
@@ -2201,6 +2353,7 @@
           "last_success_at",
           "refresh_state",
           "last_refresh_error",
+          "last_refresh_error_at",
           "is_stale",
           "next_cursor",
           "truncated_by_bytes"
@@ -5960,6 +6113,94 @@
         "summary": "Issue Download Link",
         "tags": [
           "dataset exports"
+        ]
+      }
+    },
+    "/api/v1/datasets/{dataset_id}/freshness": {
+      "get": {
+        "operationId": "read_dataset_freshness_api_v1_datasets__dataset_id__freshness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetFreshnessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Read Dataset Freshness",
+        "tags": [
+          "dataset rows"
         ]
       }
     },

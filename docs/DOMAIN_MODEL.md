@@ -103,6 +103,10 @@ At most one run executes for a dataset and at most one additional run is coalesc
 
 Each manual request supplies an idempotency key. Metadata PostgreSQL stores its digest and mapping to the durable run; Redis carries only the run identifier. Dispatch and execution attempt counts are separate. A broker failure leaves the queued intent retryable, and duplicate task delivery cannot re-execute a running or terminal run. Success references the newly active snapshot; failure preserves the previous active snapshot.
 
+### Dataset freshness
+
+A read-only projection derived from the active snapshot and bounded refresh-run history. Its data state is `not_published`, `refreshing`, `ready`, `stale`, or `failed`. `stale` means an active snapshot remains readable after a later refresh failure; a failed first publication has no readable snapshot and is therefore `failed`, not stale. A queued or running retry is `refreshing` while retaining the latest relevant safe error until successful snapshot activation.
+
 ### Dataset table view
 
 The official UI representation of detailed rows in the active snapshot. It is not a separate `Report` entity. Temporary filters, pagination, and sorting apply to the current request. Exports may reuse them.
