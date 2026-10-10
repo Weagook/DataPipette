@@ -16,6 +16,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select, text
 
 from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datepipette.application.access_control import DatasetAccessAuthorizer
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.refresh_worker import RefreshWorkerService
@@ -32,6 +33,7 @@ from datepipette.infrastructure.models import (
     DatasetSnapshotModel,
 )
 from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
+from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.infrastructure.repositories.snapshot_queries import (
@@ -233,6 +235,7 @@ def _snapshot_query_service(
         ),
         EncryptedSnapshotCursorCodec(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
         maximum_bytes,
+        DatasetAccessAuthorizer(SqlAlchemyAccessControlStore(session_factory)),
     )
 
 

@@ -15,6 +15,11 @@ from datepipette.api.problems import (
     validation_problem_handler,
 )
 from datepipette.api.router import api_v1_router
+from datepipette.application.access_control import (
+    DatasetAccessAuthorizer,
+    DatasetGrantService,
+    GroupService,
+)
 from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.catalog import CatalogService
 from datepipette.application.connections import ConnectionService
@@ -39,6 +44,7 @@ from datepipette.infrastructure.health import InfrastructureReadinessProbe
 from datepipette.infrastructure.local_exports import LocalExportStorage
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
+from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
@@ -70,6 +76,8 @@ def create_app(
     snapshot_query_service: DatasetSnapshotQueryService | None = None,
     export_service: DatasetExportService | None = None,
     export_download_service: ExportDownloadService | None = None,
+    group_service: GroupService | None = None,
+    dataset_grant_service: DatasetGrantService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -103,6 +111,10 @@ def create_app(
                 app.state.export_service = export_service
             if export_download_service is not None:
                 app.state.export_download_service = export_download_service
+            if group_service is not None:
+                app.state.group_service = group_service
+            if dataset_grant_service is not None:
+                app.state.dataset_grant_service = dataset_grant_service
             yield
             return
 
@@ -174,6 +186,13 @@ def create_app(
             SqlAlchemyRefreshRunStore(resources.session_factory),
             CeleryRefreshDispatcher(celery_app),
         )
+        access_store = SqlAlchemyAccessControlStore(resources.session_factory)
+        access_authorizer = DatasetAccessAuthorizer(access_store)
+        app.state.group_service = group_service or GroupService(access_store)
+        app.state.dataset_grant_service = dataset_grant_service or DatasetGrantService(
+            access_store,
+            access_authorizer,
+        )
         app.state.snapshot_query_service = snapshot_query_service or DatasetSnapshotQueryService(
             SqlAlchemySnapshotQueryStore(resources.session_factory),
             DuckDbLocalSnapshotQueryExecutor(
@@ -188,11 +207,13 @@ def create_app(
                 resolved_settings.connection_encryption_key.get_secret_value()
             ),
             resolved_settings.snapshot_query_max_response_bytes,
+            access_authorizer,
         )
         export_store = SqlAlchemyExportStore(resources.session_factory)
         app.state.export_service = export_service or DatasetExportService(
             export_store,
             CeleryExportDispatcher(celery_app),
+            access_authorizer,
         )
         app.state.export_download_service = export_download_service or ExportDownloadService(
             export_store,
@@ -200,6 +221,7 @@ def create_app(
                 resolved_settings.connection_encryption_key.get_secret_value()
             ),
             LocalExportStorage(resolved_settings.snapshot_storage_path),
+            access_authorizer,
         )
         try:
             yield

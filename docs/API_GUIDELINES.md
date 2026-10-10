@@ -22,6 +22,9 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/users
 /api/v1/users/{user_id}
 /api/v1/users/{user_id}/sessions
+/api/v1/groups
+/api/v1/groups/{group_id}
+/api/v1/groups/{group_id}/members
 /api/v1/connections
 /api/v1/connections/{connection_id}
 /api/v1/connections/{connection_id}/tests
@@ -31,6 +34,7 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/datasets/{dataset_id}/draft/previews
 /api/v1/datasets/{dataset_id}/refresh-runs
 /api/v1/datasets/{dataset_id}/rows:query
+/api/v1/datasets/{dataset_id}/grants
 /api/v1/charts
 /api/v1/charts/{chart_id}/data:query
 /api/v1/dashboards
@@ -67,6 +71,17 @@ The durable rationale and consequences are recorded in [ADR-0005](adr/0005-serve
 - All state-changing operations require the session-bound CSRF cookie/header pair.
 
 The lifecycle rationale is recorded in [ADR-0006](adr/0006-local-account-lifecycle.md).
+
+## Groups and dataset grants
+
+- Group creation, listing, renaming, membership listing, and idempotent membership addition/removal require an active administrator; mutations require CSRF.
+- Group names are whitespace-normalized, case-insensitively unique, and contain at most 100 characters.
+- Dataset grants target one active analyst or one group and contain `view_rows`, `export`, or `manage`. Repeating an identical grant returns the existing grant.
+- Administrators and dataset owners have all dataset permissions. Active analysts receive the union of direct and group grants. The `Viewer` role cannot browse detailed rows, export them, or manage grants even through a group.
+- `GET`, `POST`, and `DELETE /api/v1/datasets/{dataset_id}/grants...` require `manage`; mutation requests require CSRF. A `manage` holder may delegate access.
+- Grant and membership changes are read from metadata PostgreSQL on the next protected request. Missing and inaccessible datasets are both represented as `404 dataset_not_found`.
+
+The authorization model is recorded in [ADR-0016](adr/0016-additive-dataset-access-control.md).
 
 ## PostgreSQL connections
 
@@ -128,7 +143,7 @@ The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-re
 
 ## Snapshot row queries
 
-- `POST /api/v1/datasets/{dataset_id}/rows:query` is a read-only operation with a structured body. It requires an authenticated administrator but not CSRF; object-level analyst/viewer access waits for dataset grants.
+- `POST /api/v1/datasets/{dataset_id}/rows:query` is a read-only operation with a structured body. It requires an authenticated administrator, owner, or active analyst with `view_rows`; the viewer role is denied. It does not require CSRF.
 - `fields` contains 1–100 published field UUIDs. A request may contain at most 20 filters, five sort fields, 100 values in one `in` filter, and 200 rows per page.
 - Supported operators are `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `contains`, `starts_with`, `is_null`, and `is_not_null`. Operators are checked against the published PostgreSQL type. Comparisons apply to integers, bounded decimals, floating-point values, and temporal fields; unconstrained `numeric` remains exact text in the current Parquet format. Use null operators instead of `eq: null`.
 - Excel-style semicolon input is translated by a client into an explicit `in` value array. The API does not accept or parse filter-expression strings.
@@ -144,10 +159,10 @@ The query and cursor rationale is recorded in [ADR-0014](adr/0014-typed-snapshot
 
 ## Dataset exports
 
-- `POST /api/v1/datasets/{dataset_id}/exports` requires administrator CSRF and an `Idempotency-Key`. It accepts `csv` or `xlsx` plus the same bounded field UUID, typed filter, and sort vocabulary used by snapshot row queries; cursors and page size do not apply.
+- `POST /api/v1/datasets/{dataset_id}/exports` requires CSRF, an `Idempotency-Key`, and both `view_rows` and `export` dataset permissions. It accepts `csv` or `xlsx` plus the same bounded field UUID, typed filter, and sort vocabulary used by snapshot row queries; cursors and page size do not apply.
 - Creation returns `202`, `Location`, `X-DatePipette-Idempotent-Replay`, and a durable job bound to the active snapshot at request time. Retrying the same actor/dataset/key returns the same job.
-- `GET /api/v1/datasets/{dataset_id}/exports` returns at most 100 newest jobs; `GET .../{export_id}` returns durable state, safe error code, timestamps, row count, bytes, checksum, and logical expiry.
-- `POST .../{export_id}/download-link` authorizes the current administrator and returns a relative five-minute capability URL only for a successful unexpired job. It may be called repeatedly without regenerating the artifact.
+- `GET /api/v1/datasets/{dataset_id}/exports` returns at most 100 newest jobs; `GET .../{export_id}` returns durable state, safe error code, timestamps, row count, bytes, checksum, and logical expiry. Non-administrators with `export` see only their own jobs.
+- `POST .../{export_id}/download-link` requires `export` and, for non-administrators, ownership of that export job. It returns a relative five-minute capability URL only for a successful unexpired job and may be called repeatedly without regenerating the artifact.
 - `GET /api/v1/export-downloads?token=...` requires the encrypted capability rather than a session and returns the private file with an attachment filename. Invalid capabilities are concealed as `404`; expired exports return `410`.
 - Jobs use `queued`, `running`, `succeeded`, and `failed`. Worker/audit failures expose stable safe codes and never affect the active dataset snapshot.
 

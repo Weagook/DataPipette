@@ -13,6 +13,7 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 
+from datepipette.application.access_control import DatasetAccessAuthorizer
 from datepipette.application.exports import (
     DatasetExportService,
     ExportDispatchUnavailableError,
@@ -28,6 +29,7 @@ from datepipette.application.exports import (
     export_query_from_document,
 )
 from datepipette.application.snapshot_queries import InvalidSnapshotQueryError
+from datepipette.domain.access_control import DatasetAccess, DatasetPermission
 from datepipette.domain.exports import (
     ExportArtifact,
     ExportClaimOutcome,
@@ -140,6 +142,11 @@ class FakeStore:
     async def get_active_context(self, dataset_id: UUID) -> ActiveSnapshotQueryContext | None:
         return self.context if dataset_id == DATASET_ID else None
 
+    async def get_dataset_access(self, *, actor_id: UUID, dataset_id: UUID) -> DatasetAccess | None:
+        if dataset_id != DATASET_ID:
+            return None
+        return DatasetAccess(dataset_id, False, frozenset(DatasetPermission))
+
     async def request(self, **values: Any) -> ExportRequestOutcome | None:
         if self.context is None or values["snapshot_id"] != self.context.snapshot_id:
             return None
@@ -159,8 +166,17 @@ class FakeStore:
     async def get_by_id(self, export_id: UUID) -> ExportJob | None:
         return self.job if self.job and self.job.id == export_id else None
 
-    async def list(self, *, dataset_id: UUID, limit: int) -> tuple[ExportJob, ...]:
-        return (self.job,) if self.job and dataset_id == DATASET_ID and limit else ()
+    async def list(
+        self, *, dataset_id: UUID, requested_by: UUID | None, limit: int
+    ) -> tuple[ExportJob, ...]:
+        return (
+            (self.job,)
+            if self.job
+            and dataset_id == DATASET_ID
+            and (requested_by is None or requested_by == self.job.requested_by)
+            and limit
+            else ()
+        )
 
     async def record_dispatch_attempt(self, export_id: UUID, occurred_at: datetime) -> None:
         assert self.job and self.job.id == export_id
@@ -203,7 +219,7 @@ class FakeExecutor:
 def test_export_service_validates_dispatches_lists_and_hides_unauthorized() -> None:
     store = FakeStore(_context())
     dispatcher = FakeDispatcher()
-    service = DatasetExportService(store, dispatcher)
+    service = DatasetExportService(store, dispatcher, DatasetAccessAuthorizer(store))
     outcome = asyncio.run(
         service.request(
             actor=_admin(),
@@ -222,6 +238,22 @@ def test_export_service_validates_dispatches_lists_and_hides_unauthorized() -> N
         == outcome.job.id
     )
     assert asyncio.run(service.list(actor=_admin(), dataset_id=DATASET_ID, limit=10))
+    analyst = _admin(SystemRole.ANALYST)
+    assert asyncio.run(service.list(actor=analyst, dataset_id=DATASET_ID, limit=10))
+    assert (
+        asyncio.run(service.get(actor=analyst, dataset_id=DATASET_ID, export_id=outcome.job.id)).id
+        == outcome.job.id
+    )
+    other_analyst = replace(analyst, id=uuid4())
+    assert not asyncio.run(service.list(actor=other_analyst, dataset_id=DATASET_ID, limit=10))
+    with pytest.raises(ExportNotFoundError):
+        asyncio.run(
+            service.get(
+                actor=other_analyst,
+                dataset_id=DATASET_ID,
+                export_id=outcome.job.id,
+            )
+        )
 
     with pytest.raises(ExportNotFoundError):
         asyncio.run(
@@ -244,7 +276,7 @@ def test_export_service_validates_dispatches_lists_and_hides_unauthorized() -> N
 
 def test_export_dispatch_and_worker_failures_are_safe() -> None:
     store = FakeStore(_context())
-    service = DatasetExportService(store, FakeDispatcher(fail=True))
+    service = DatasetExportService(store, FakeDispatcher(fail=True), DatasetAccessAuthorizer(store))
     with pytest.raises(ExportDispatchUnavailableError):
         asyncio.run(
             service.request(
@@ -360,7 +392,12 @@ def test_download_tokens_and_service_are_reissuable_and_bounded(tmp_path: Path) 
         byte_size=5,
         checksum_sha256="0" * 64,
     )
-    service = ExportDownloadService(store, codec, LocalExportStorage(tmp_path))
+    service = ExportDownloadService(
+        store,
+        codec,
+        LocalExportStorage(tmp_path),
+        DatasetAccessAuthorizer(store),
+    )
     token, expires_at = asyncio.run(
         service.issue(actor=_admin(), dataset_id=DATASET_ID, export_id=store.job.id)
     )

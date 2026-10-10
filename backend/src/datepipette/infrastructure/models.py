@@ -360,3 +360,74 @@ class DatasetExportRequestModel(Base):
         ForeignKey("dataset_exports.id", ondelete="CASCADE"), index=True
     )
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GroupModel(Base):
+    __tablename__ = "identity_groups"
+    __table_args__ = (
+        Index("uq_identity_groups_name_normalized", text("lower(name)"), unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GroupMembershipModel(Base):
+    __tablename__ = "group_memberships"
+    __table_args__ = (Index("uq_group_memberships_group_user", "group_id", "user_id", unique=True),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("identity_groups.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DatasetAclGrantModel(Base):
+    __tablename__ = "dataset_acl_grants"
+    __table_args__ = (
+        CheckConstraint("principal_type IN ('user', 'group')", name="principal_type_valid"),
+        CheckConstraint(
+            "(principal_type = 'user' AND user_id IS NOT NULL AND group_id IS NULL) OR "
+            "(principal_type = 'group' AND group_id IS NOT NULL AND user_id IS NULL)",
+            name="principal_shape_valid",
+        ),
+        CheckConstraint(
+            "permission IN ('view_rows', 'export', 'manage')",
+            name="permission_valid",
+        ),
+        Index(
+            "uq_dataset_acl_grants_user_permission",
+            "dataset_id",
+            "user_id",
+            "permission",
+            unique=True,
+            postgresql_where=text("principal_type = 'user'"),
+        ),
+        Index(
+            "uq_dataset_acl_grants_group_permission",
+            "dataset_id",
+            "group_id",
+            "permission",
+            unique=True,
+            postgresql_where=text("principal_type = 'group'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
+    principal_type: Mapped[str] = mapped_column(String(20))
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    group_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("identity_groups.id", ondelete="CASCADE")
+    )
+    permission: Mapped[str] = mapped_column(String(30))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

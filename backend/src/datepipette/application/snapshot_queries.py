@@ -10,7 +10,12 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
 from uuid import UUID
 
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.application.access_control import (
+    DatasetAccessAuthorizer,
+    DatasetAccessDeniedError,
+)
+from datepipette.domain.access_control import DatasetPermission
+from datepipette.domain.identity import User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     SnapshotFilterOperator,
@@ -350,11 +355,13 @@ class DatasetSnapshotQueryService:
         executor: SnapshotQueryExecutor,
         cursor_codec: SnapshotCursorCodec,
         maximum_response_bytes: int,
+        authorizer: DatasetAccessAuthorizer,
     ) -> None:
         self._store = store
         self._executor = executor
         self._cursor_codec = cursor_codec
         self._maximum_response_bytes = maximum_response_bytes
+        self._authorizer = authorizer
 
     async def query(
         self,
@@ -364,8 +371,14 @@ class DatasetSnapshotQueryService:
         value: SnapshotQuery,
         request_id: str,
     ) -> SnapshotQueryPage:
-        if actor.role is not SystemRole.ADMIN or actor.status is not AccountStatus.ACTIVE:
-            raise DatasetSnapshotNotFoundError
+        try:
+            await self._authorizer.require(
+                actor=actor,
+                dataset_id=dataset_id,
+                permissions=frozenset({DatasetPermission.VIEW_ROWS}),
+            )
+        except DatasetAccessDeniedError as exc:
+            raise DatasetSnapshotNotFoundError from exc
         if value.cursor is not None and len(value.cursor) > MAX_QUERY_CURSOR_LENGTH:
             raise InvalidSnapshotCursorError("Cursor is too long")
 

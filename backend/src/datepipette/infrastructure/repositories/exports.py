@@ -178,14 +178,20 @@ class SqlAlchemyExportStore:
             model = await session.get(DatasetExportModel, export_id)
         return _to_job(model) if model is not None else None
 
-    async def list(self, *, dataset_id: UUID, limit: int) -> tuple[ExportJob, ...]:
+    async def list(
+        self, *, dataset_id: UUID, requested_by: UUID | None, limit: int
+    ) -> tuple[ExportJob, ...]:
         async with self._session_factory() as session:
+            statement = select(DatasetExportModel).where(
+                DatasetExportModel.dataset_id == dataset_id
+            )
+            if requested_by is not None:
+                statement = statement.where(DatasetExportModel.requested_by == requested_by)
             models = (
                 await session.scalars(
-                    select(DatasetExportModel)
-                    .where(DatasetExportModel.dataset_id == dataset_id)
-                    .order_by(DatasetExportModel.requested_at.desc(), DatasetExportModel.id.desc())
-                    .limit(limit)
+                    statement.order_by(
+                        DatasetExportModel.requested_at.desc(), DatasetExportModel.id.desc()
+                    ).limit(limit)
                 )
             ).all()
         return tuple(_to_job(model) for model in models)

@@ -7,12 +7,17 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
+from datepipette.application.access_control import (
+    DatasetAccessAuthorizer,
+    DatasetAccessDeniedError,
+)
 from datepipette.application.snapshot_queries import (
     DatasetSnapshotNotFoundError,
     DatasetSnapshotNotPublishedError,
     InvalidSnapshotQueryError,
     prepare_snapshot_query,
 )
+from datepipette.domain.access_control import DatasetPermission
 from datepipette.domain.exports import (
     ExportArtifact,
     ExportClaimOutcome,
@@ -21,7 +26,7 @@ from datepipette.domain.exports import (
     ExportJob,
     ExportRequestOutcome,
 )
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.identity import SystemRole, User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     SnapshotFilterOperator,
@@ -78,7 +83,9 @@ class ExportStore(Protocol):
     ) -> ExportRequestOutcome | None: ...
     async def get(self, *, dataset_id: UUID, export_id: UUID) -> ExportJob | None: ...
     async def get_by_id(self, export_id: UUID) -> ExportJob | None: ...
-    async def list(self, *, dataset_id: UUID, limit: int) -> tuple[ExportJob, ...]: ...
+    async def list(
+        self, *, dataset_id: UUID, requested_by: UUID | None, limit: int
+    ) -> tuple[ExportJob, ...]: ...
     async def record_dispatch_attempt(self, export_id: UUID, occurred_at: datetime) -> None: ...
     async def mark_dispatched(self, export_id: UUID, occurred_at: datetime) -> None: ...
     async def claim(
@@ -162,14 +169,31 @@ def export_query_from_document(value: dict[str, Any]) -> SnapshotQuery:
 
 
 class DatasetExportService:
-    def __init__(self, store: ExportStore, dispatcher: ExportDispatcher) -> None:
+    def __init__(
+        self,
+        store: ExportStore,
+        dispatcher: ExportDispatcher,
+        authorizer: DatasetAccessAuthorizer,
+    ) -> None:
         self._store = store
         self._dispatcher = dispatcher
+        self._authorizer = authorizer
 
-    @staticmethod
-    def _authorize(actor: User) -> None:
-        if actor.role is not SystemRole.ADMIN or actor.status is not AccountStatus.ACTIVE:
-            raise ExportNotFoundError
+    async def _authorize(
+        self,
+        *,
+        actor: User,
+        dataset_id: UUID,
+        permissions: frozenset[DatasetPermission],
+    ) -> None:
+        try:
+            await self._authorizer.require(
+                actor=actor,
+                dataset_id=dataset_id,
+                permissions=permissions,
+            )
+        except DatasetAccessDeniedError as exc:
+            raise ExportNotFoundError from exc
 
     async def request(
         self,
@@ -181,7 +205,11 @@ class DatasetExportService:
         idempotency_key: str,
         request_id: str,
     ) -> ExportRequestOutcome:
-        self._authorize(actor)
+        await self._authorize(
+            actor=actor,
+            dataset_id=dataset_id,
+            permissions=frozenset({DatasetPermission.VIEW_ROWS, DatasetPermission.EXPORT}),
+        )
         context = await self._store.get_active_context(dataset_id)
         if context is None:
             raise DatasetSnapshotNotFoundError
@@ -215,15 +243,27 @@ class DatasetExportService:
         return outcome
 
     async def get(self, *, actor: User, dataset_id: UUID, export_id: UUID) -> ExportJob:
-        self._authorize(actor)
+        await self._authorize(
+            actor=actor,
+            dataset_id=dataset_id,
+            permissions=frozenset({DatasetPermission.EXPORT}),
+        )
         job = await self._store.get(dataset_id=dataset_id, export_id=export_id)
-        if job is None:
+        if job is None or (actor.role is not SystemRole.ADMIN and job.requested_by != actor.id):
             raise ExportNotFoundError
         return job
 
     async def list(self, *, actor: User, dataset_id: UUID, limit: int) -> tuple[ExportJob, ...]:
-        self._authorize(actor)
-        return await self._store.list(dataset_id=dataset_id, limit=limit)
+        await self._authorize(
+            actor=actor,
+            dataset_id=dataset_id,
+            permissions=frozenset({DatasetPermission.EXPORT}),
+        )
+        return await self._store.list(
+            dataset_id=dataset_id,
+            requested_by=None if actor.role is SystemRole.ADMIN else actor.id,
+            limit=limit,
+        )
 
 
 class ExportWorkerService:
@@ -254,17 +294,26 @@ class ExportDownloadService:
         store: ExportStore,
         codec: ExportDownloadTokenCodec,
         resolver: ExportFileResolver,
+        authorizer: DatasetAccessAuthorizer,
     ) -> None:
         self._store = store
         self._codec = codec
         self._resolver = resolver
+        self._authorizer = authorizer
 
     async def issue(
         self, *, actor: User, dataset_id: UUID, export_id: UUID
     ) -> tuple[str, datetime]:
-        DatasetExportService._authorize(actor)
+        try:
+            await self._authorizer.require(
+                actor=actor,
+                dataset_id=dataset_id,
+                permissions=frozenset({DatasetPermission.EXPORT}),
+            )
+        except DatasetAccessDeniedError as exc:
+            raise ExportNotFoundError from exc
         job = await self._store.get(dataset_id=dataset_id, export_id=export_id)
-        if job is None:
+        if job is None or (actor.role is not SystemRole.ADMIN and job.requested_by != actor.id):
             raise ExportNotFoundError
         now = datetime.now(UTC)
         if now >= job.expires_at:

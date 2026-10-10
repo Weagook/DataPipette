@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from datepipette.api.dependencies.authentication import AdministratorSession, request_id
+from datepipette.api.dependencies.authentication import CurrentSession, request_id
 from datepipette.api.problems import ApiProblem, ProblemDetails
 from datepipette.application.snapshot_queries import (
     MAX_QUERY_CURSOR_LENGTH,
@@ -122,7 +122,7 @@ async def query_dataset_rows(
     dataset_id: UUID,
     payload: SnapshotRowsQueryRequest,
     request: Request,
-    session: AdministratorSession,
+    session: CurrentSession,
 ) -> SnapshotRowsResponse:
     try:
         page = await _service(request).query(
