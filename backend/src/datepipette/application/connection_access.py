@@ -1,5 +1,6 @@
 """Connection grants and authoritative effective-scope authorization."""
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -117,6 +118,21 @@ class ConnectionAccessAuthorizer:
     ) -> ConnectionAccess:
         access = await self.require_connection(actor=actor, connection_id=connection_id)
         if not access.allows_relation(schema_name, relation_name):
+            raise ConnectionAccessDeniedError
+        return access
+
+    async def require_relations(
+        self,
+        *,
+        actor: User,
+        connection_id: UUID,
+        relations: Iterable[tuple[str, str]],
+    ) -> ConnectionAccess:
+        access = await self.require_connection(actor=actor, connection_id=connection_id)
+        if any(
+            not access.allows_relation(schema_name, relation_name)
+            for schema_name, relation_name in relations
+        ):
             raise ConnectionAccessDeniedError
         return access
 

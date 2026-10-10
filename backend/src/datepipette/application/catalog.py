@@ -15,7 +15,13 @@ from datepipette.application.connections import (
     ConnectionStore,
     SecretCipher,
 )
-from datepipette.domain.catalog import CatalogRelation, CatalogRelationDetail
+from datepipette.domain.catalog import (
+    CatalogJoinCondition,
+    CatalogJoinSuggestion,
+    CatalogRelation,
+    CatalogRelationDetail,
+    CatalogRelationReference,
+)
 from datepipette.domain.connection_access import ConnectionAccess
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.identity import User
@@ -216,6 +222,66 @@ class CatalogService:
                 )
             ],
         )
+
+    async def suggest_joins(
+        self,
+        *,
+        actor: User,
+        connection_id: UUID,
+        relations: tuple[CatalogRelationReference, ...],
+    ) -> tuple[CatalogJoinSuggestion, ...]:
+        if not 1 <= len(relations) <= 10:
+            raise ValueError("Between one and ten relations are required")
+        relation_ids = [relation.id for relation in relations]
+        if len(relation_ids) != len(set(relation_ids)):
+            raise ValueError("Relation identifiers must be unique")
+        connection, password, ca_certificate, access = await self._resolve(actor, connection_id)
+        if any(
+            not access.allows_relation(relation.schema_name, relation.relation_name)
+            for relation in relations
+        ):
+            raise CatalogObjectNotFoundError
+        by_source_object: dict[tuple[str, str], list[CatalogRelationReference]] = {}
+        for relation in relations:
+            by_source_object.setdefault((relation.schema_name, relation.relation_name), []).append(
+                relation
+            )
+
+        suggestions: list[CatalogJoinSuggestion] = []
+        for source_reference in relations:
+            detail = await self._inspector.inspect_relation(
+                connection,
+                password=password,
+                ca_certificate=ca_certificate,
+                schema_name=source_reference.schema_name,
+                relation_name=source_reference.relation_name,
+            )
+            if detail is None:
+                raise CatalogObjectNotFoundError
+            for foreign_key in detail.foreign_keys:
+                if len(foreign_key.source_columns) != len(foreign_key.target_columns):
+                    raise SourceCatalogUnavailableError
+                for target_reference in by_source_object.get(
+                    (foreign_key.target_schema, foreign_key.target_relation), []
+                ):
+                    if source_reference.id == target_reference.id:
+                        continue
+                    suggestions.append(
+                        CatalogJoinSuggestion(
+                            foreign_key_name=foreign_key.name,
+                            source_relation_id=source_reference.id,
+                            target_relation_id=target_reference.id,
+                            conditions=tuple(
+                                CatalogJoinCondition(source_column, target_column)
+                                for source_column, target_column in zip(
+                                    foreign_key.source_columns,
+                                    foreign_key.target_columns,
+                                    strict=True,
+                                )
+                            ),
+                        )
+                    )
+        return tuple(suggestions)
 
     async def _resolve(
         self, actor: User, connection_id: UUID

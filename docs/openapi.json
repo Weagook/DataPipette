@@ -77,6 +77,121 @@
         "title": "CatalogForeignKeyResponse",
         "type": "object"
       },
+      "CatalogJoinConditionResponse": {
+        "properties": {
+          "source_column": {
+            "title": "Source Column",
+            "type": "string"
+          },
+          "target_column": {
+            "title": "Target Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_column",
+          "target_column"
+        ],
+        "title": "CatalogJoinConditionResponse",
+        "type": "object"
+      },
+      "CatalogJoinRelationPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "schema": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "schema",
+          "name"
+        ],
+        "title": "CatalogJoinRelationPayload",
+        "type": "object"
+      },
+      "CatalogJoinSuggestionCollectionResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogJoinSuggestionResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "CatalogJoinSuggestionCollectionResponse",
+        "type": "object"
+      },
+      "CatalogJoinSuggestionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogJoinRelationPayload"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Relations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "relations"
+        ],
+        "title": "CatalogJoinSuggestionRequest",
+        "type": "object"
+      },
+      "CatalogJoinSuggestionResponse": {
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogJoinConditionResponse"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "foreign_key_name": {
+            "title": "Foreign Key Name",
+            "type": "string"
+          },
+          "source_relation_id": {
+            "format": "uuid",
+            "title": "Source Relation Id",
+            "type": "string"
+          },
+          "target_relation_id": {
+            "format": "uuid",
+            "title": "Target Relation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "foreign_key_name",
+          "source_relation_id",
+          "target_relation_id",
+          "conditions"
+        ],
+        "title": "CatalogJoinSuggestionResponse",
+        "type": "object"
+      },
       "CatalogRelationCollectionResponse": {
         "properties": {
           "data": {
@@ -2544,6 +2659,7 @@
         "enum": [
           "source_relation_not_found",
           "source_field_not_found",
+          "source_join_column_not_found",
           "large_estimated_result"
         ],
         "title": "ValidationFindingCode",
@@ -2566,6 +2682,30 @@
             ],
             "title": "Field Id"
           },
+          "join_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join Id"
+          },
+          "relation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation Id"
+          },
           "severity": {
             "$ref": "#/components/schemas/ValidationSeverity"
           }
@@ -2573,7 +2713,9 @@
         "required": [
           "code",
           "severity",
-          "field_id"
+          "field_id",
+          "relation_id",
+          "join_id"
         ],
         "title": "ValidationFindingResponse",
         "type": "object"
@@ -2600,15 +2742,17 @@
           },
           "joins": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/VisualJoinPayload"
             },
-            "maxItems": 0,
+            "maxItems": 9,
             "title": "Joins",
             "type": "array"
           },
           "schema_version": {
-            "const": 1,
+            "enum": [
+              1,
+              2
+            ],
             "title": "Schema Version",
             "type": "integer"
           },
@@ -2654,6 +2798,78 @@
         "title": "VisualFieldPayload",
         "type": "object"
       },
+      "VisualJoinConditionPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "left_column": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Left Column",
+            "type": "string"
+          },
+          "right_column": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Right Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "left_column",
+          "right_column"
+        ],
+        "title": "VisualJoinConditionPayload",
+        "type": "object"
+      },
+      "VisualJoinPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/VisualJoinConditionPayload"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "left_relation_id": {
+            "format": "uuid",
+            "title": "Left Relation Id",
+            "type": "string"
+          },
+          "right_relation_id": {
+            "format": "uuid",
+            "title": "Right Relation Id",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/VisualJoinType"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "left_relation_id",
+          "right_relation_id",
+          "conditions"
+        ],
+        "title": "VisualJoinPayload",
+        "type": "object"
+      },
+      "VisualJoinType": {
+        "enum": [
+          "inner",
+          "left"
+        ],
+        "title": "VisualJoinType",
+        "type": "string"
+      },
       "VisualRelationPayload": {
         "additionalProperties": false,
         "properties": {
@@ -2697,7 +2913,7 @@
             "items": {
               "$ref": "#/components/schemas/VisualRelationPayload"
             },
-            "maxItems": 1,
+            "maxItems": 10,
             "minItems": 1,
             "title": "Relations",
             "type": "array"
@@ -3264,6 +3480,124 @@
         "summary": "Update Connection",
         "tags": [
           "connections"
+        ]
+      }
+    },
+    "/api/v1/connections/{connection_id}/catalog/join-suggestions": {
+      "post": {
+        "operationId": "suggest_catalog_joins_api_v1_connections__connection_id__catalog_join_suggestions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogJoinSuggestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogJoinSuggestionCollectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Suggest Catalog Joins",
+        "tags": [
+          "catalog"
         ]
       }
     },

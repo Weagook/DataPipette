@@ -88,11 +88,13 @@ class DatasetValidationService:
         if draft.revision != expected_revision:
             raise DatasetRevisionConflictError
         try:
-            await self._authorizer.require_relation(
+            await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=dataset.connection_id,
-                schema_name=draft.definition.relation.schema_name,
-                relation_name=draft.definition.relation.relation_name,
+                relations=(
+                    (relation.schema_name, relation.relation_name)
+                    for relation in draft.definition.relations
+                ),
             )
         except ConnectionAccessDeniedError as exc:
             raise DatasetNotFoundError from exc

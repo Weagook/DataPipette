@@ -62,9 +62,14 @@ def _to_draft(model: DatasetVersionModel) -> DatasetDraft:
 
 def _summary(definition: dict[str, object]) -> dict[str, object]:
     fields = definition.get("fields")
+    source = definition.get("source")
+    relations = source.get("relations") if isinstance(source, dict) else None
+    joins = definition.get("joins")
     return {
         "schema_version": definition.get("schema_version"),
+        "relation_count": len(relations) if isinstance(relations, list) else 0,
         "field_count": len(fields) if isinstance(fields, list) else 0,
+        "join_count": len(joins) if isinstance(joins, list) else 0,
     }
 
 

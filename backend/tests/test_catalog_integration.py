@@ -102,6 +102,22 @@ async def _bootstrap_and_create_source_objects() -> None:
                 )
             )
             await connection.execute(
+                text(
+                    f"CREATE TABLE {SCHEMA}.tenant_customers ("
+                    "tenant_id bigint NOT NULL, id bigint NOT NULL, "
+                    "PRIMARY KEY (tenant_id, id))"
+                )
+            )
+            await connection.execute(
+                text(
+                    f"CREATE TABLE {SCHEMA}.tenant_orders ("
+                    "id bigint PRIMARY KEY, tenant_id bigint NOT NULL, "
+                    "customer_id bigint NOT NULL, "
+                    f"FOREIGN KEY (tenant_id, customer_id) REFERENCES "
+                    f"{SCHEMA}.tenant_customers(tenant_id, id))"
+                )
+            )
+            await connection.execute(
                 text(f"CREATE ROLE {READER_ROLE} LOGIN PASSWORD '{READER_PASSWORD}'")
             )
             await connection.execute(
@@ -267,7 +283,13 @@ def test_catalog_lists_live_objects_and_describes_keys() -> None:
             first_page.json()["data"][0]["name"],
             *(item["name"] for item in second_page.json()["data"]),
         }
-        assert relation_names == {"customers", "order_amounts", "orders"}
+        assert relation_names == {
+            "customers",
+            "order_amounts",
+            "orders",
+            "tenant_customers",
+            "tenant_orders",
+        }
         assert {item["kind"] for item in second_page.json()["data"]} <= {"table", "view"}
 
         detail = client.get(
@@ -305,6 +327,63 @@ def test_catalog_lists_live_objects_and_describes_keys() -> None:
                 "target_relation": "customers",
                 "target_columns": ["id"],
             }
+        ]
+
+        customers_reference = str(uuid4())
+        orders_reference = str(uuid4())
+        suggestions = client.post(
+            f"/api/v1/connections/{connection_id}/catalog/join-suggestions",
+            json={
+                "relations": [
+                    {"id": customers_reference, "schema": SCHEMA, "name": "customers"},
+                    {"id": orders_reference, "schema": SCHEMA, "name": "orders"},
+                ]
+            },
+        )
+        assert suggestions.status_code == 200, suggestions.text
+        assert suggestions.json()["data"] == [
+            {
+                "foreign_key_name": "orders_customer_id_fkey",
+                "source_relation_id": orders_reference,
+                "target_relation_id": customers_reference,
+                "conditions": [{"source_column": "customer_id", "target_column": "id"}],
+            }
+        ]
+        duplicate_reference = client.post(
+            f"/api/v1/connections/{connection_id}/catalog/join-suggestions",
+            json={
+                "relations": [
+                    {"id": customers_reference, "schema": SCHEMA, "name": "customers"},
+                    {"id": customers_reference, "schema": SCHEMA, "name": "orders"},
+                ]
+            },
+        )
+        assert duplicate_reference.status_code == 422
+        assert duplicate_reference.json()["code"] == "catalog_join_suggestion_invalid"
+
+        tenant_customers_reference = str(uuid4())
+        tenant_orders_reference = str(uuid4())
+        composite = client.post(
+            f"/api/v1/connections/{connection_id}/catalog/join-suggestions",
+            json={
+                "relations": [
+                    {
+                        "id": tenant_customers_reference,
+                        "schema": SCHEMA,
+                        "name": "tenant_customers",
+                    },
+                    {
+                        "id": tenant_orders_reference,
+                        "schema": SCHEMA,
+                        "name": "tenant_orders",
+                    },
+                ]
+            },
+        )
+        assert composite.status_code == 200, composite.text
+        assert composite.json()["data"][0]["conditions"] == [
+            {"source_column": "tenant_id", "target_column": "tenant_id"},
+            {"source_column": "customer_id", "target_column": "id"},
         ]
 
         restricted_id = _create_connection(
@@ -497,6 +576,16 @@ def test_connection_scopes_union_filter_foreign_keys_and_revoke_immediately() ->
         )
         assert order_detail.status_code == 200
         assert order_detail.json()["foreign_keys"][0]["target_relation"] == "customers"
+        suggestion_relations = [
+            {"id": str(uuid4()), "schema": SCHEMA, "name": "customers"},
+            {"id": str(uuid4()), "schema": SCHEMA, "name": "orders"},
+        ]
+        suggestions = analyst.post(
+            f"/api/v1/connections/{connection_id}/catalog/join-suggestions",
+            json={"relations": suggestion_relations},
+        )
+        assert suggestions.status_code == 200
+        assert len(suggestions.json()["data"]) == 1
         assert (
             analyst.get(
                 f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations/order_amounts"
@@ -535,6 +624,11 @@ def test_connection_scopes_union_filter_foreign_keys_and_revoke_immediately() ->
             f"/api/v1/connections/{connection_id}/catalog/schemas/{SCHEMA}/relations/orders"
         )
         assert detail.json()["foreign_keys"] == []
+        concealed_suggestion = analyst.post(
+            f"/api/v1/connections/{connection_id}/catalog/join-suggestions",
+            json={"relations": suggestion_relations},
+        )
+        assert concealed_suggestion.status_code == 404
 
     with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
         _login(admin)
@@ -560,6 +654,8 @@ def test_connection_scopes_union_filter_foreign_keys_and_revoke_immediately() ->
             "customers",
             "order_amounts",
             "orders",
+            "tenant_customers",
+            "tenant_orders",
         }
 
     with TestClient(create_app(settings=TEST_SETTINGS)) as admin:
@@ -613,6 +709,8 @@ def test_connection_scopes_union_filter_foreign_keys_and_revoke_immediately() ->
             "customers",
             "order_amounts",
             "orders",
+            "tenant_customers",
+            "tenant_orders",
         }
 
     with TestClient(create_app(settings=TEST_SETTINGS)) as admin:

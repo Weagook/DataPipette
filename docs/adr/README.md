@@ -45,3 +45,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0015](0015-snapshot-bound-background-exports.md): Snapshot-bound background exports
 - [ADR-0016](0016-additive-dataset-access-control.md): Additive dataset access control with role ceilings
 - [ADR-0017](0017-scoped-connection-access.md): Scoped connection access and analyst dataset ownership
+- [ADR-0018](0018-versioned-visual-join-trees.md): Versioned visual join trees and advisory foreign-key suggestions

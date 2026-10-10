@@ -61,9 +61,11 @@ One of two forms:
 
 Generated SQL is an execution artifact of a visual definition, not its source of truth.
 
-Visual definitions are schema-versioned JSON documents. Source relations and output fields have stable UUIDs; labels and output names may change without changing those identities. The first implemented definition version contains exactly one source relation, one or more selected fields, display metadata, and no joins. Metadata PostgreSQL stores the complete document in JSONB and the application replaces it atomically rather than updating nested paths.
+Visual definitions are schema-versioned JSON documents. Source relations, joins, and output fields have stable UUIDs; aliases, labels, display formats, and output names may change without changing those identities. Version 1 contains exactly one source relation and no joins. Version 2 contains one to ten uniquely aliased relations connected as an ordered acyclic tree by explicit `INNER JOIN` or `LEFT JOIN` nodes with equality-only column pairs. The first relation is the root and every later relation is introduced exactly once. Metadata PostgreSQL stores the complete document in JSONB and the application replaces it atomically rather than updating nested paths.
 
-An analyst-created dataset is private to its owner and administrators. The owner can edit and execute it only while the referenced relation remains in their effective connection scope. Scope revocation blocks later source access but does not delete the definition or an existing published snapshot.
+Foreign-key relationships discovered from PostgreSQL are advisory join suggestions. They are not persisted separately and never mutate a definition until the client explicitly saves a corresponding join node. Manual conditions use the same bounded typed structure.
+
+An analyst-created dataset is private to its owner and administrators. The owner can edit and execute it only while every referenced relation remains in their effective connection scope. Scope revocation blocks later source access but does not delete the definition or an existing published snapshot.
 
 ### Draft and published versions
 

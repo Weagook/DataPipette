@@ -18,18 +18,24 @@ from datepipette.domain.datasets import (
     ValidationSeverity,
     VisualDatasetDefinition,
     VisualField,
+    VisualJoin,
+    VisualJoinCondition,
+    VisualJoinType,
     VisualRelation,
 )
+from datepipette.infrastructure.dataset_sql import compile_visual_select
 
 
 def _definition() -> VisualDatasetDefinition:
     relation_id = uuid4()
     return VisualDatasetDefinition(
-        relation=VisualRelation(
-            id=relation_id,
-            schema_name=" crm ",
-            relation_name=" customers ",
-            alias="customers",
+        relations=(
+            VisualRelation(
+                id=relation_id,
+                schema_name=" crm ",
+                relation_name=" customers ",
+                alias="customers",
+            ),
         ),
         fields=(
             VisualField(
@@ -69,7 +75,7 @@ def test_visual_definition_round_trips_as_versioned_json() -> None:
     [
         ("duplicate_id", "identifiers"),
         ("duplicate_name", "names"),
-        ("foreign_relation", "single source relation"),
+        ("foreign_relation", "source relation"),
         ("bad_output_name", "ASCII identifier"),
         ("empty_fields", "At least one field"),
     ],
@@ -108,19 +114,191 @@ def test_visual_definition_rejects_invalid_structure(change: str, message: str) 
             )
         elif change == "empty_fields":
             fields = []
-        VisualDatasetDefinition(relation=valid.relation, fields=tuple(fields))
+        VisualDatasetDefinition(relations=valid.relations, fields=tuple(fields))
 
 
-def test_stored_definition_rejects_joins_and_unknown_versions() -> None:
+def test_stored_v1_definition_rejects_joins_and_unknown_versions() -> None:
     document = _definition().to_document()
     document["joins"] = [{"type": "inner"}]
     with pytest.raises(ValueError, match="Stored visual definition"):
         VisualDatasetDefinition.from_document(document)
 
     document = _definition().to_document()
-    document["schema_version"] = 2
+    document["schema_version"] = 3
     with pytest.raises(ValueError, match="Stored visual definition"):
         VisualDatasetDefinition.from_document(document)
+
+
+def _joined_definition() -> VisualDatasetDefinition:
+    customers_id = uuid4()
+    orders_id = uuid4()
+    return VisualDatasetDefinition(
+        schema_version=2,
+        relations=(
+            VisualRelation(customers_id, "crm", "customers", "customers"),
+            VisualRelation(orders_id, "sales", "orders", "orders"),
+        ),
+        fields=(
+            VisualField(
+                uuid4(),
+                FieldSource(customers_id, "id"),
+                "customer_id",
+                FieldDisplay("Customer ID"),
+            ),
+            VisualField(
+                uuid4(),
+                FieldSource(orders_id, "amount"),
+                "order_amount",
+                FieldDisplay("Order amount"),
+            ),
+        ),
+        joins=(
+            VisualJoin(
+                uuid4(),
+                VisualJoinType.LEFT,
+                customers_id,
+                orders_id,
+                (VisualJoinCondition("id", "customer_id"),),
+            ),
+        ),
+    )
+
+
+def test_joined_definition_round_trips_and_compiles_identifier_safe_sql() -> None:
+    definition = _joined_definition()
+
+    document = definition.to_document()
+
+    assert document["schema_version"] == 2
+    assert len(document["source"]["relations"]) == 2
+    assert document["joins"][0]["type"] == "left"
+    assert VisualDatasetDefinition.from_document(document) == definition
+    assert compile_visual_select(definition).as_string() == (
+        'SELECT "customers"."id" AS "customer_id", '
+        '"orders"."amount" AS "order_amount" '
+        'FROM "crm"."customers" AS "customers" '
+        'LEFT JOIN "sales"."orders" AS "orders" '
+        'ON "customers"."id" = "orders"."customer_id"'
+    )
+
+    join = definition.joins[0]
+    inner = VisualDatasetDefinition(
+        schema_version=2,
+        relations=definition.relations,
+        fields=definition.fields,
+        joins=(
+            VisualJoin(
+                join.id,
+                VisualJoinType.INNER,
+                join.left_relation_id,
+                join.right_relation_id,
+                join.conditions,
+            ),
+        ),
+    )
+    assert " INNER JOIN " in compile_visual_select(inner).as_string()
+
+    hostile = VisualDatasetDefinition(
+        schema_version=2,
+        relations=definition.relations,
+        fields=definition.fields,
+        joins=(
+            VisualJoin(
+                join.id,
+                VisualJoinType.LEFT,
+                join.left_relation_id,
+                join.right_relation_id,
+                (VisualJoinCondition('id" OR true --', "customer_id"),),
+            ),
+        ),
+    )
+    hostile_sql = compile_visual_select(hostile).as_string()
+    assert '"id"" OR true --"' in hostile_sql
+    assert 'ON "customers"."id" OR true' not in hostile_sql
+
+
+@pytest.mark.parametrize(
+    "change, message",
+    [
+        ("duplicate_relation", "Relation identifiers"),
+        ("duplicate_alias", "Relation aliases"),
+        ("unknown_field_relation", "source relation"),
+        ("missing_join", "exactly one join"),
+        ("reused_right", "right relation must be new"),
+        ("unconnected_left", "left relation must already be connected"),
+        ("duplicate_join_id", "Join identifiers"),
+    ],
+)
+def test_joined_definition_rejects_ambiguous_or_disconnected_graphs(
+    change: str, message: str
+) -> None:
+    valid = _joined_definition()
+    relations = list(valid.relations)
+    fields = list(valid.fields)
+    joins = list(valid.joins)
+    if change == "duplicate_relation":
+        relations[1] = VisualRelation(
+            relations[0].id,
+            relations[1].schema_name,
+            relations[1].relation_name,
+            relations[1].alias,
+        )
+    elif change == "duplicate_alias":
+        relations[1] = VisualRelation(
+            relations[1].id,
+            relations[1].schema_name,
+            relations[1].relation_name,
+            "CUSTOMERS",
+        )
+    elif change == "unknown_field_relation":
+        fields[1] = VisualField(
+            fields[1].id,
+            FieldSource(uuid4(), fields[1].source.column),
+            fields[1].name,
+            fields[1].display,
+        )
+    elif change == "missing_join":
+        joins = []
+    elif change == "reused_right":
+        third_id = uuid4()
+        relations.append(VisualRelation(third_id, "sales", "payments", "payments"))
+        joins.append(
+            VisualJoin(
+                uuid4(),
+                VisualJoinType.INNER,
+                relations[0].id,
+                relations[1].id,
+                (VisualJoinCondition("id", "customer_id"),),
+            )
+        )
+    elif change == "unconnected_left":
+        joins[0] = VisualJoin(
+            joins[0].id,
+            joins[0].type,
+            relations[1].id,
+            relations[0].id,
+            joins[0].conditions,
+        )
+    elif change == "duplicate_join_id":
+        third_id = uuid4()
+        relations.append(VisualRelation(third_id, "sales", "payments", "payments"))
+        joins.append(
+            VisualJoin(
+                joins[0].id,
+                VisualJoinType.INNER,
+                relations[1].id,
+                third_id,
+                (VisualJoinCondition("id", "order_id"),),
+            )
+        )
+
+    with pytest.raises(ValueError, match=message):
+        VisualDatasetDefinition(
+            schema_version=2,
+            relations=tuple(relations),
+            fields=tuple(fields),
+            joins=tuple(joins),
+        )
 
 
 def test_dataset_validation_round_trips_as_revision_bound_json() -> None:

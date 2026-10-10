@@ -290,11 +290,13 @@ class LocalParquetSnapshotExecutor:
             if connection_model is None or actor_model is None:
                 return None
             definition = VisualDatasetDefinition.from_document(version.definition)
-            await self._authorizer.require_relation(
+            await self._authorizer.require_relations(
                 actor=to_user(actor_model),
                 connection_id=connection_model.id,
-                schema_name=definition.relation.schema_name,
-                relation_name=definition.relation.relation_name,
+                relations=(
+                    (relation.schema_name, relation.relation_name)
+                    for relation in definition.relations
+                ),
             )
             connection = to_connection(connection_model)
             password = self._cipher.decrypt(

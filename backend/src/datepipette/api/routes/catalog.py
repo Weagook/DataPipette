@@ -1,10 +1,10 @@
-"""Administrator endpoints for live PostgreSQL catalog discovery."""
+"""Authorized endpoints for live PostgreSQL catalog discovery."""
 
 from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Path, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from datepipette.api.dependencies.authentication import CurrentSession
 from datepipette.api.problems import ApiProblem, ProblemDetails
@@ -16,11 +16,21 @@ from datepipette.application.catalog import (
     InvalidCatalogCursorError,
     SourceCatalogUnavailableError,
 )
-from datepipette.domain.catalog import CatalogRelation, CatalogRelationDetail, RelationKind
+from datepipette.domain.catalog import (
+    CatalogJoinSuggestion,
+    CatalogRelation,
+    CatalogRelationDetail,
+    CatalogRelationReference,
+    RelationKind,
+)
 
 router = APIRouter(prefix="/connections/{connection_id}/catalog", tags=["catalog"])
 
 CatalogName = Annotated[str, Path(min_length=1, max_length=255)]
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class CursorMeta(BaseModel):
@@ -68,6 +78,32 @@ class CatalogRelationDetailResponse(CatalogRelationResponse):
     foreign_keys: list[CatalogForeignKeyResponse]
 
 
+class CatalogJoinRelationPayload(StrictModel):
+    id: UUID
+    schema_name: str = Field(alias="schema", min_length=1, max_length=255)
+    name: str = Field(min_length=1, max_length=255)
+
+
+class CatalogJoinSuggestionRequest(StrictModel):
+    relations: list[CatalogJoinRelationPayload] = Field(min_length=1, max_length=10)
+
+
+class CatalogJoinConditionResponse(BaseModel):
+    source_column: str
+    target_column: str
+
+
+class CatalogJoinSuggestionResponse(BaseModel):
+    foreign_key_name: str
+    source_relation_id: UUID
+    target_relation_id: UUID
+    conditions: list[CatalogJoinConditionResponse]
+
+
+class CatalogJoinSuggestionCollectionResponse(BaseModel):
+    data: list[CatalogJoinSuggestionResponse]
+
+
 def _service(request: Request) -> CatalogService:
     return cast(CatalogService, request.app.state.catalog_service)
 
@@ -104,6 +140,21 @@ def _detail_response(value: CatalogRelationDetail) -> CatalogRelationDetailRespo
                 target_columns=foreign_key.target_columns,
             )
             for foreign_key in value.foreign_keys
+        ],
+    )
+
+
+def _suggestion_response(value: CatalogJoinSuggestion) -> CatalogJoinSuggestionResponse:
+    return CatalogJoinSuggestionResponse(
+        foreign_key_name=value.foreign_key_name,
+        source_relation_id=value.source_relation_id,
+        target_relation_id=value.target_relation_id,
+        conditions=[
+            CatalogJoinConditionResponse(
+                source_column=condition.source_column,
+                target_column=condition.target_column,
+            )
+            for condition in value.conditions
         ],
     )
 
@@ -154,6 +205,49 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     422: {"model": ProblemDetails},
     502: {"model": ProblemDetails},
 }
+
+
+@router.post(
+    "/join-suggestions",
+    response_model=CatalogJoinSuggestionCollectionResponse,
+    responses=_ERROR_RESPONSES,
+)
+async def suggest_catalog_joins(
+    connection_id: UUID,
+    payload: CatalogJoinSuggestionRequest,
+    request: Request,
+    session: CurrentSession,
+) -> CatalogJoinSuggestionCollectionResponse:
+    try:
+        suggestions = await _service(request).suggest_joins(
+            actor=session.user,
+            connection_id=connection_id,
+            relations=tuple(
+                CatalogRelationReference(
+                    id=relation.id,
+                    schema_name=relation.schema_name,
+                    relation_name=relation.name,
+                )
+                for relation in payload.relations
+            ),
+        )
+    except ValueError as exc:
+        raise ApiProblem(
+            status_code=422,
+            code="catalog_join_suggestion_invalid",
+            title="Join suggestion request invalid",
+            detail="The requested relation references are inconsistent.",
+        ) from exc
+    except (
+        CatalogConnectionNotFoundError,
+        CatalogObjectNotFoundError,
+        CatalogSecretUnavailableError,
+        SourceCatalogUnavailableError,
+    ) as exc:
+        raise _translate_error(exc) from exc
+    return CatalogJoinSuggestionCollectionResponse(
+        data=[_suggestion_response(suggestion) for suggestion in suggestions]
+    )
 
 
 @router.get(

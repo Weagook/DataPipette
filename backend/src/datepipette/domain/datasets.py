@@ -9,6 +9,8 @@ from uuid import UUID
 
 _OUTPUT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 MAX_DATASET_FIELDS = 500
+MAX_DATASET_RELATIONS = 10
+MAX_JOIN_CONDITIONS = 8
 
 
 class DatasetVersionState(StrEnum):
@@ -31,12 +33,18 @@ class ValidationSeverity(StrEnum):
 class ValidationFindingCode(StrEnum):
     SOURCE_RELATION_NOT_FOUND = "source_relation_not_found"
     SOURCE_FIELD_NOT_FOUND = "source_field_not_found"
+    SOURCE_JOIN_COLUMN_NOT_FOUND = "source_join_column_not_found"
     LARGE_ESTIMATED_RESULT = "large_estimated_result"
 
 
 class PreviewTruncationReason(StrEnum):
     ROW_LIMIT = "row_limit"
     BYTE_LIMIT = "byte_limit"
+
+
+class VisualJoinType(StrEnum):
+    INNER = "inner"
+    LEFT = "left"
 
 
 class FieldDisplayFormat(StrEnum):
@@ -112,14 +120,57 @@ class VisualField:
 
 
 @dataclass(frozen=True, slots=True)
+class VisualJoinCondition:
+    left_column: str
+    right_column: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "left_column",
+            _required_text(self.left_column, "Left join column", 255),
+        )
+        object.__setattr__(
+            self,
+            "right_column",
+            _required_text(self.right_column, "Right join column", 255),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class VisualJoin:
+    id: UUID
+    type: VisualJoinType
+    left_relation_id: UUID
+    right_relation_id: UUID
+    conditions: tuple[VisualJoinCondition, ...]
+
+    def __post_init__(self) -> None:
+        if not self.conditions:
+            raise ValueError("At least one join condition is required")
+        if len(self.conditions) > MAX_JOIN_CONDITIONS:
+            raise ValueError(f"At most {MAX_JOIN_CONDITIONS} join conditions are allowed")
+        pairs = [(condition.left_column, condition.right_column) for condition in self.conditions]
+        if len(pairs) != len(set(pairs)):
+            raise ValueError("Join conditions must be unique")
+
+
+@dataclass(frozen=True, slots=True)
 class VisualDatasetDefinition:
-    relation: VisualRelation
+    relations: tuple[VisualRelation, ...]
     fields: tuple[VisualField, ...]
+    joins: tuple[VisualJoin, ...] = ()
     schema_version: int = 1
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1:
+        if self.schema_version not in {1, 2}:
             raise ValueError("Unsupported visual definition schema version")
+        if not self.relations:
+            raise ValueError("At least one source relation is required")
+        if len(self.relations) > MAX_DATASET_RELATIONS:
+            raise ValueError(f"At most {MAX_DATASET_RELATIONS} source relations are allowed")
+        if self.schema_version == 1 and (len(self.relations) != 1 or self.joins):
+            raise ValueError("Schema version 1 requires one relation and no joins")
         if not self.fields:
             raise ValueError("At least one field is required")
         if len(self.fields) > MAX_DATASET_FIELDS:
@@ -130,8 +181,39 @@ class VisualDatasetDefinition:
         output_names = [field.name.casefold() for field in self.fields]
         if len(output_names) != len(set(output_names)):
             raise ValueError("Output field names must be unique")
-        if any(field.source.relation_id != self.relation.id for field in self.fields):
-            raise ValueError("Every field must reference the single source relation")
+        relation_ids = [relation.id for relation in self.relations]
+        if len(relation_ids) != len(set(relation_ids)):
+            raise ValueError("Relation identifiers must be unique")
+        aliases = [relation.alias.casefold() for relation in self.relations]
+        if len(aliases) != len(set(aliases)):
+            raise ValueError("Relation aliases must be unique")
+        known_relations = set(relation_ids)
+        if any(field.source.relation_id not in known_relations for field in self.fields):
+            raise ValueError("Every field must reference a source relation")
+        join_ids = [join.id for join in self.joins]
+        if len(join_ids) != len(set(join_ids)):
+            raise ValueError("Join identifiers must be unique")
+        if len(self.joins) != len(self.relations) - 1:
+            raise ValueError("Every additional relation requires exactly one join")
+        connected = {self.relations[0].id}
+        for join in self.joins:
+            if join.left_relation_id not in connected:
+                raise ValueError("A join left relation must already be connected")
+            if join.right_relation_id not in known_relations:
+                raise ValueError("A join right relation must reference a source relation")
+            if join.right_relation_id in connected:
+                raise ValueError("A join right relation must be new")
+            if join.left_relation_id == join.right_relation_id:
+                raise ValueError("A join cannot connect a relation to itself")
+            connected.add(join.right_relation_id)
+        if connected != known_relations:
+            raise ValueError("Every source relation must be connected")
+
+    @property
+    def relation(self) -> VisualRelation:
+        """Return the root relation for compatibility with single-relation callers."""
+
+        return self.relations[0]
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -139,11 +221,12 @@ class VisualDatasetDefinition:
             "source": {
                 "relations": [
                     {
-                        "id": str(self.relation.id),
-                        "schema": self.relation.schema_name,
-                        "name": self.relation.relation_name,
-                        "alias": self.relation.alias,
+                        "id": str(relation.id),
+                        "schema": relation.schema_name,
+                        "name": relation.relation_name,
+                        "alias": relation.alias,
                     }
+                    for relation in self.relations
                 ]
             },
             "fields": [
@@ -162,7 +245,22 @@ class VisualDatasetDefinition:
                 }
                 for field in self.fields
             ],
-            "joins": [],
+            "joins": [
+                {
+                    "id": str(join.id),
+                    "type": join.type.value,
+                    "left_relation_id": str(join.left_relation_id),
+                    "right_relation_id": str(join.right_relation_id),
+                    "conditions": [
+                        {
+                            "left_column": condition.left_column,
+                            "right_column": condition.right_column,
+                        }
+                        for condition in join.conditions
+                    ],
+                }
+                for join in self.joins
+            ],
         }
 
     @classmethod
@@ -170,14 +268,14 @@ class VisualDatasetDefinition:
         try:
             relations = document["source"]["relations"]
             joins = document["joins"]
-            if len(relations) != 1 or joins:
-                raise ValueError
-            relation_value = relations[0]
-            relation = VisualRelation(
-                id=UUID(relation_value["id"]),
-                schema_name=relation_value["schema"],
-                relation_name=relation_value["name"],
-                alias=relation_value["alias"],
+            parsed_relations = tuple(
+                VisualRelation(
+                    id=UUID(relation_value["id"]),
+                    schema_name=relation_value["schema"],
+                    relation_name=relation_value["name"],
+                    alias=relation_value["alias"],
+                )
+                for relation_value in relations
             )
             fields = tuple(
                 VisualField(
@@ -201,8 +299,24 @@ class VisualDatasetDefinition:
             )
             return cls(
                 schema_version=document["schema_version"],
-                relation=relation,
+                relations=parsed_relations,
                 fields=fields,
+                joins=tuple(
+                    VisualJoin(
+                        id=UUID(value["id"]),
+                        type=VisualJoinType(value["type"]),
+                        left_relation_id=UUID(value["left_relation_id"]),
+                        right_relation_id=UUID(value["right_relation_id"]),
+                        conditions=tuple(
+                            VisualJoinCondition(
+                                left_column=condition["left_column"],
+                                right_column=condition["right_column"],
+                            )
+                            for condition in value["conditions"]
+                        ),
+                    )
+                    for value in joins
+                ),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("Stored visual definition is invalid") from exc
@@ -226,6 +340,8 @@ class DatasetValidationFinding:
     code: ValidationFindingCode
     severity: ValidationSeverity
     field_id: UUID | None = None
+    relation_id: UUID | None = None
+    join_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,6 +400,8 @@ class DatasetValidation:
                     "code": finding.code.value,
                     "severity": finding.severity.value,
                     "field_id": str(finding.field_id) if finding.field_id else None,
+                    "relation_id": str(finding.relation_id) if finding.relation_id else None,
+                    "join_id": str(finding.join_id) if finding.join_id else None,
                 }
                 for finding in self.findings
             ],
@@ -322,6 +440,10 @@ class DatasetValidation:
                         code=ValidationFindingCode(finding["code"]),
                         severity=ValidationSeverity(finding["severity"]),
                         field_id=(UUID(finding["field_id"]) if finding["field_id"] else None),
+                        relation_id=(
+                            UUID(finding["relation_id"]) if finding.get("relation_id") else None
+                        ),
+                        join_id=(UUID(finding["join_id"]) if finding.get("join_id") else None),
                     )
                     for finding in document["findings"]
                 ),
