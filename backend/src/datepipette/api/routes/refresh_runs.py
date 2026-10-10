@@ -22,7 +22,7 @@ from datepipette.application.refresh_runs import (
     RefreshRunNotFoundError,
     RefreshRunService,
 )
-from datepipette.domain.refresh import RefreshRun, RefreshRunState
+from datepipette.domain.refresh import RefreshRun, RefreshRunState, RefreshTriggerType
 
 router = APIRouter(prefix="/datasets/{dataset_id}/refresh-runs", tags=["refresh-runs"])
 
@@ -34,6 +34,8 @@ class RefreshRunResponse(BaseModel):
     requested_revision: int
     state: RefreshRunState
     requested_by: UUID
+    trigger_type: RefreshTriggerType
+    schedule_id: UUID | None
     dispatch_attempts: int
     dispatched_at: datetime | None
     attempt_count: int

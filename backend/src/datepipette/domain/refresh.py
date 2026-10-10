@@ -13,6 +13,11 @@ class RefreshRunState(StrEnum):
     FAILED = "failed"
 
 
+class RefreshTriggerType(StrEnum):
+    MANUAL = "manual"
+    SCHEDULED = "scheduled"
+
+
 class RefreshClaimOutcome(StrEnum):
     CLAIMED = "claimed"
     DEFERRED = "deferred"
@@ -28,6 +33,8 @@ class RefreshRun:
     requested_revision: int
     state: RefreshRunState
     requested_by: UUID
+    trigger_type: RefreshTriggerType
+    schedule_id: UUID | None
     dispatch_attempts: int
     dispatched_at: datetime | None
     attempt_count: int

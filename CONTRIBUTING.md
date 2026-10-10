@@ -47,6 +47,14 @@ uv run --package datepipette celery \
   worker --queues refresh,export --concurrency 1 --loglevel INFO
 ```
 
+Compose also starts the durable refresh scheduler. To run it directly, use:
+
+```bash
+uv run --package datepipette datepipette-scheduler
+```
+
+`DATEPIPETTE_INSTALLATION_TIMEZONE` selects the single IANA timezone used for daily schedules. `DATEPIPETTE_SCHEDULER_POLL_SECONDS` and `DATEPIPETTE_SCHEDULER_BATCH_SIZE` bound polling frequency and work per tick. Metadata PostgreSQL owns schedule state; stopping the scheduler delays work without losing the next due occurrence.
+
 Refresh state is durable in metadata PostgreSQL and Redis is only the transport. The development worker streams validated source rows into `.local/snapshots` by default; Compose uses its private `snapshot-data` volume. Never commit, share, or serve these files directly because they contain business data.
 
 Interactive snapshot reads use embedded DuckDB against the active Parquet object. `DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS`, `DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB`, `DATEPIPETTE_SNAPSHOT_QUERY_THREADS`, `DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY`, `DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB`, and `DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES` bound each local query. DuckDB provides parameterized projection, predicates, ordering, and pagination; `pytz` supports its timezone-aware Python timestamp conversion.
@@ -77,13 +85,13 @@ uv run --package datepipette python -c 'import base64, secrets; print(base64.url
 
 Back up this key separately from metadata PostgreSQL. Losing it makes stored source credentials unrecoverable.
 
-Stop local dependencies without deleting their volumes:
+Stop local services without deleting their volumes:
 
 ```bash
 docker compose -f deploy/compose/compose.yaml stop
 ```
 
-Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, `SNAPSHOT_STORAGE_PATH`, and the `SNAPSHOT_QUERY_*` limits documented above.
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, `INSTALLATION_TIMEZONE`, `SCHEDULER_POLL_SECONDS`, `SCHEDULER_BATCH_SIZE`, `SNAPSHOT_STORAGE_PATH`, and the `SNAPSHOT_QUERY_*` limits documented above.
 
 API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
 

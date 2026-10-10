@@ -72,9 +72,38 @@ services:
       retries: 12
     restart: unless-stopped
 
+  scheduler:
+    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    working_dir: /workspace
+    command:
+      - uv
+      - run
+      - --frozen
+      - --package
+      - datepipette
+      - datepipette-scheduler
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/datepipette/.venv
+      UV_LINK_MODE: copy
+      DATEPIPETTE_ENVIRONMENT: development
+      DATEPIPETTE_METADATA_DATABASE_URL: postgresql+psycopg://datepipette:${DATEPIPETTE_POSTGRES_PASSWORD:-datepipette_dev_only}@metadata-db:5432/${DATEPIPETTE_POSTGRES_DB:-datepipette}
+      DATEPIPETTE_REDIS_URL: redis://redis:6379/0
+      DATEPIPETTE_INSTALLATION_TIMEZONE: ${DATEPIPETTE_INSTALLATION_TIMEZONE:-UTC}
+    volumes:
+      - ../../:/workspace:ro
+      - scheduler-venv:/opt/datepipette/.venv
+      - uv-cache:/root/.cache/uv
+    depends_on:
+      metadata-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   metadata-data:
   redis-data:
   worker-venv:
+  scheduler-venv:
   uv-cache:
   snapshot-data:

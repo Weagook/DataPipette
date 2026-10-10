@@ -302,6 +302,29 @@ def test_groups_and_dataset_grants_are_effective_and_revocable() -> None:
         _login(analyst_client, "analyst-acl@example.com", USER_PASSWORD)
         _login(viewer_client, "viewer-acl@example.com", USER_PASSWORD)
         assert analyst_client.get("/api/v1/groups").status_code == 403
+        schedule_payload = {
+            "kind": "interval",
+            "interval_minutes": 60,
+            "daily_time": None,
+            "enabled": False,
+        }
+        schedule_url = f"/api/v1/datasets/{dataset_id}/refresh-schedule"
+        assert (
+            analyst_client.put(
+                schedule_url,
+                json=schedule_payload,
+                headers=_csrf(analyst_client),
+            ).status_code
+            == 404
+        )
+        assert (
+            viewer_client.put(
+                schedule_url,
+                json=schedule_payload,
+                headers=_csrf(viewer_client),
+            ).status_code
+            == 404
+        )
         assert analyst_client.get(f"/api/v1/datasets/{dataset_id}/grants").status_code == 200
         delegated = analyst_client.post(
             f"/api/v1/datasets/{dataset_id}/grants",

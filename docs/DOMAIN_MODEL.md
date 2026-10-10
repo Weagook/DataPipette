@@ -103,6 +103,12 @@ At most one run executes for a dataset and at most one additional run is coalesc
 
 Each manual request supplies an idempotency key. Metadata PostgreSQL stores its digest and mapping to the durable run; Redis carries only the run identifier. Dispatch and execution attempt counts are separate. A broker failure leaves the queued intent retryable, and duplicate task delivery cannot re-execute a running or terminal run. Success references the newly active snapshot; failure preserves the previous active snapshot.
 
+Refresh runs record whether they were requested manually or by a schedule. A scheduled run references its originating schedule and always targets the active published version; it never executes the separately editable draft.
+
+### Refresh schedule
+
+One optional owner-managed cadence for a dataset. It is either a fixed interval from 5 minutes through 7 days or one daily wall-clock minute in the installation timezone. Disabled schedules retain their configuration with no next occurrence. Enabled schedules store the next UTC occurrence and the last trigger time. The scheduler advances missed work to one next future occurrence, creates or coalesces a durable refresh run, and does not cancel already queued or running work when disabled.
+
 ### Dataset freshness
 
 A read-only projection derived from the active snapshot and bounded refresh-run history. Its data state is `not_published`, `refreshing`, `ready`, `stale`, or `failed`. `stale` means an active snapshot remains readable after a later refresh failure; a failed first publication has no readable snapshot and is therefore `failed`, not stale. A queued or running retry is `refreshing` while retaining the latest relevant safe error until successful snapshot activation.

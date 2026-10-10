@@ -1,5 +1,8 @@
 """Configuration safety behavior."""
 
+import pytest
+from pydantic import ValidationError
+
 from datepipette.config import Settings
 
 PRODUCTION_KEY = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
@@ -40,6 +43,12 @@ def test_production_always_uses_secure_session_cookies() -> None:
     assert Settings(
         environment="development", session_cookie_secure=True
     ).effective_session_cookie_secure
+
+
+def test_installation_timezone_requires_an_iana_name() -> None:
+    assert Settings(installation_timezone="Asia/Almaty").installation_timezone == "Asia/Almaty"
+    with pytest.raises(ValidationError):
+        Settings(installation_timezone="Mars/Olympus")
     assert Settings(
         environment="production",
         session_cookie_secure=False,

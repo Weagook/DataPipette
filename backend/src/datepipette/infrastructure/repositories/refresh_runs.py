@@ -22,6 +22,7 @@ from datepipette.domain.refresh import (
     RefreshRequestOutcome,
     RefreshRun,
     RefreshRunState,
+    RefreshTriggerType,
 )
 from datepipette.domain.snapshots import SnapshotArtifact, SnapshotState
 from datepipette.infrastructure.models import (
@@ -45,6 +46,8 @@ def _to_run(
         requested_revision=model.requested_revision,
         state=RefreshRunState(model.state),
         requested_by=model.requested_by,
+        trigger_type=RefreshTriggerType(model.trigger_type),
+        schedule_id=model.schedule_id,
         dispatch_attempts=model.dispatch_attempts,
         dispatched_at=model.dispatched_at,
         attempt_count=model.attempt_count,
@@ -163,6 +166,8 @@ class SqlAlchemyRefreshRunStore:
                 requested_revision=draft.revision,
                 state=RefreshRunState.QUEUED.value,
                 requested_by=actor_id,
+                trigger_type=RefreshTriggerType.MANUAL.value,
+                schedule_id=None,
                 dispatch_attempts=0,
                 dispatched_at=None,
                 attempt_count=0,

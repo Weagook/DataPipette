@@ -182,6 +182,8 @@ def _seed(settings: Settings, root: Path) -> tuple[str, str, str, str]:
                         requested_revision=1,
                         state="succeeded",
                         requested_by=user_id,
+                        trigger_type="manual",
+                        schedule_id=None,
                         dispatch_attempts=1,
                         dispatched_at=now,
                         attempt_count=1,

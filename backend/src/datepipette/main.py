@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
 
 import uvicorn
 from fastapi import FastAPI
@@ -33,6 +34,7 @@ from datepipette.application.datasets import DatasetService
 from datepipette.application.exports import DatasetExportService, ExportDownloadService
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.refresh_runs import RefreshRunService
+from datepipette.application.schedules import RefreshScheduleService
 from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
@@ -57,6 +59,7 @@ from datepipette.infrastructure.repositories.connections import SqlAlchemyConnec
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
+from datepipette.infrastructure.repositories.schedules import SqlAlchemyRefreshScheduleStore
 from datepipette.infrastructure.repositories.snapshot_queries import (
     SqlAlchemySnapshotQueryStore,
 )
@@ -80,6 +83,7 @@ def create_app(
     dataset_validation_service: DatasetValidationService | None = None,
     dataset_preview_service: DatasetPreviewService | None = None,
     refresh_run_service: RefreshRunService | None = None,
+    refresh_schedule_service: RefreshScheduleService | None = None,
     snapshot_query_service: DatasetSnapshotQueryService | None = None,
     export_service: DatasetExportService | None = None,
     export_download_service: ExportDownloadService | None = None,
@@ -113,6 +117,8 @@ def create_app(
                 app.state.dataset_preview_service = dataset_preview_service
             if refresh_run_service is not None:
                 app.state.refresh_run_service = refresh_run_service
+            if refresh_schedule_service is not None:
+                app.state.refresh_schedule_service = refresh_schedule_service
             if snapshot_query_service is not None:
                 app.state.snapshot_query_service = snapshot_query_service
             if export_service is not None:
@@ -210,6 +216,14 @@ def create_app(
             CeleryRefreshDispatcher(celery_app),
             dataset_store,
             connection_authorizer,
+        )
+        app.state.refresh_schedule_service = refresh_schedule_service or RefreshScheduleService(
+            SqlAlchemyRefreshScheduleStore(
+                resources.session_factory,
+                resolved_settings.installation_timezone,
+            ),
+            dataset_store,
+            ZoneInfo(resolved_settings.installation_timezone),
         )
         access_store = SqlAlchemyAccessControlStore(resources.session_factory)
         access_authorizer = DatasetAccessAuthorizer(access_store)

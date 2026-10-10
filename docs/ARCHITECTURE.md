@@ -87,6 +87,8 @@ The first preview slice is also synchronous but strictly bounded: the API requir
 
 Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, reloads the requesting user's effective relation scope, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The local executor recompiles the structured definition, streams named-cursor batches into typed Parquet, validates the completed object, and only then atomically activates snapshot metadata.
 
+Scheduled refresh uses an independent database-polling process. Bounded `SKIP LOCKED` claims advance due interval/daily schedules, target only the active published version, and create or coalesce the same durable refresh-run resources used by manual requests. Every poll also republishes queued UUIDs whose prior Redis dispatch did not complete, so scheduler restart heals durable broker-publication gaps without replaying every missed cadence.
+
 ### Execution
 
 Source query execution, bounded streaming, local Parquet writing, basic result statistics, and snapshot publication are implemented for version-1 single-relation and version-2 joined visual definitions. S3 storage, cancellation, progress, cleanup, and broader resource policies remain later execution capabilities.
