@@ -1,5 +1,7 @@
 """Configuration safety behavior."""
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,34 +10,42 @@ from datepipette.config import Settings
 PRODUCTION_KEY = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
 
 
+def _production_settings(**values: Any) -> Settings:
+    return Settings(
+        environment="production",
+        connection_encryption_key=PRODUCTION_KEY,
+        object_storage_backend="s3",
+        s3_bucket="datepipette",
+        s3_access_key_id="access-key",
+        s3_secret_access_key="secret-key",
+        **values,
+    )
+
+
 def test_settings_hide_connection_values_in_repr() -> None:
     database_url = "postgresql+psycopg://sensitive-user:sensitive-password@db/datepipette"
     redis_url = "redis://:sensitive-password@redis:6379/0"
 
-    settings = Settings(metadata_database_url=database_url, redis_url=redis_url)
+    settings = Settings(
+        metadata_database_url=database_url,
+        redis_url=redis_url,
+        s3_bucket="datepipette",
+        s3_access_key_id="sensitive-access",
+        s3_secret_access_key="sensitive-s3-secret",
+    )
 
     representation = repr(settings)
     assert "sensitive-password" not in representation
     assert database_url not in representation
     assert redis_url not in representation
+    assert "sensitive-access" not in representation
+    assert "sensitive-s3-secret" not in representation
 
 
 def test_api_docs_default_depends_on_environment() -> None:
     assert Settings(environment="development").api_docs_enabled is True
-    assert (
-        Settings(
-            environment="production", connection_encryption_key=PRODUCTION_KEY
-        ).api_docs_enabled
-        is False
-    )
-    assert (
-        Settings(
-            environment="production",
-            docs_enabled=True,
-            connection_encryption_key=PRODUCTION_KEY,
-        ).api_docs_enabled
-        is True
-    )
+    assert _production_settings().api_docs_enabled is False
+    assert _production_settings(docs_enabled=True).api_docs_enabled is True
 
 
 def test_production_always_uses_secure_session_cookies() -> None:
@@ -49,8 +59,16 @@ def test_installation_timezone_requires_an_iana_name() -> None:
     assert Settings(installation_timezone="Asia/Almaty").installation_timezone == "Asia/Almaty"
     with pytest.raises(ValidationError):
         Settings(installation_timezone="Mars/Olympus")
-    assert Settings(
-        environment="production",
-        session_cookie_secure=False,
-        connection_encryption_key=PRODUCTION_KEY,
-    ).effective_session_cookie_secure
+    assert _production_settings(session_cookie_secure=False).effective_session_cookie_secure
+
+
+def test_s3_configuration_is_complete_and_production_safe() -> None:
+    with pytest.raises(ValidationError, match="S3 storage requires"):
+        Settings(object_storage_backend="s3")
+    with pytest.raises(ValidationError, match="requires S3-compatible"):
+        Settings(environment="production", connection_encryption_key=PRODUCTION_KEY)
+    with pytest.raises(ValidationError, match="must use HTTPS"):
+        _production_settings(s3_endpoint_url="http://minio:9000")
+    assert _production_settings(s3_endpoint_url="https://objects.example").s3_bucket == (
+        "datepipette"
+    )

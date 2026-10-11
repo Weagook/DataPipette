@@ -128,6 +128,8 @@ class SqlAlchemySnapshotQueryStore:
             last_refresh_error=freshness.last_refresh_error,
             is_stale=freshness.is_stale,
             last_refresh_error_at=freshness.last_refresh_error_at,
+            byte_size=snapshot.byte_size,
+            checksum_sha256=snapshot.checksum_sha256,
         )
 
     @staticmethod

@@ -85,17 +85,17 @@ Validation is synchronous and supports version-1 single-relation and version-2 m
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
 
-Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, reloads the requesting user's effective relation scope, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The local executor recompiles either definition kind from its authoritative JSON document, streams named-cursor batches into typed Parquet, validates the completed object, and only then atomically activates snapshot metadata.
+Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, reloads the requesting user's effective relation scope, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The executor recompiles either definition kind from its authoritative JSON document, streams named-cursor batches into typed Parquet, validates the completed candidate, publishes it through the configured local or S3-compatible storage adapter, verifies the published object, and only then atomically activates snapshot metadata.
 
 Scheduled refresh uses an independent database-polling process. Bounded `SKIP LOCKED` claims advance due interval/daily schedules, target only the active published version, and create or coalesce the same durable refresh-run resources used by manual requests. Every poll also republishes queued UUIDs whose prior Redis dispatch did not complete, so scheduler restart heals durable broker-publication gaps without replaying every missed cadence.
 
 ### Execution
 
-Source query execution, bounded streaming, local Parquet writing, basic result statistics, and snapshot publication are implemented for version-1 single-relation visual definitions, version-2 joined visual definitions, and advanced read-only SQL definitions. S3 storage, cancellation, progress, cleanup, and broader resource policies remain later execution capabilities.
+Source query execution, bounded streaming, local candidate creation, verified local or S3-compatible Parquet publication, basic result statistics, and snapshot activation are implemented for version-1 single-relation visual definitions, version-2 joined visual definitions, and advanced read-only SQL definitions. Cancellation, progress, cleanup, orphan reconciliation, and broader resource policies remain later execution capabilities.
 
 ### Query
 
-Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local snapshots. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. Snapshot row responses reuse that projection. Chart query compilation, aggregation, S3 reads, distributed concurrency controls, and production benchmarks remain future work.
+Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local and S3-backed snapshots. S3 objects are materialized into unique ephemeral files and verified against persisted size and SHA-256 before DuckDB reads them. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. Snapshot row responses reuse that projection. Chart query compilation, aggregation, direct or ranged S3 reads, distributed concurrency controls, and production benchmarks remain future work.
 
 ### Visualization
 
@@ -103,7 +103,7 @@ Chart specifications, type validation, dashboard layouts, chart dependency track
 
 ### Export
 
-Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local artifact storage, and short-lived capability issuance are implemented. The worker validates the stored typed query against the captured snapshot schema, streams bounded DuckDB batches into a candidate file, neutralizes formula-like strings, and atomically publishes the artifact. Logical expiry is enforced after 24 hours; physical cleanup and S3-compatible storage remain future adapters.
+Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, and short-lived capability issuance are implemented. The worker validates the stored typed query against the captured snapshot schema, streams bounded DuckDB batches into a local candidate file, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file or redirects to an equally short-lived presigned private-object URL; physical cleanup remains future work.
 
 ### Audit and operations
 
@@ -154,9 +154,9 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 1. Authenticate, authorize direct dataset access, require CSRF and an idempotency key.
 2. Validate field UUIDs and typed filters/sorts against the active snapshot, then persist a job bound to that snapshot ID.
 3. Enqueue only the export UUID through Redis/Celery and atomically claim it in the worker.
-4. Stream the deterministic DuckDB result into a private CSV or XLSX candidate under row and resource limits.
-5. Atomically publish file metadata, retain it logically for 24 hours, and expose safe job history.
-6. Issue a reissuable encrypted five-minute download capability after dataset export authorization and export-job ownership checks.
+4. Materialize and verify the captured snapshot when it is remote, then stream the deterministic DuckDB result into a private CSV or XLSX candidate under row and resource limits.
+5. Publish the candidate to local or S3-compatible storage, verify the stored object, atomically publish file metadata, retain it logically for 24 hours, and expose safe job history.
+6. Issue a reissuable encrypted five-minute download capability after dataset export authorization and export-job ownership checks; resolve it to a local response or a five-minute presigned S3 redirect.
 
 ## Failure model
 

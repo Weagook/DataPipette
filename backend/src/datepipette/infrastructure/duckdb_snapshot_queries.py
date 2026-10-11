@@ -1,4 +1,4 @@
-"""Bounded DuckDB queries over private local Parquet snapshots."""
+"""Bounded DuckDB queries over private Parquet snapshot objects."""
 
 import asyncio
 import base64
@@ -26,6 +26,11 @@ from datepipette.domain.snapshot_queries import (
     SnapshotQueryFilter,
     SnapshotQuerySort,
     SnapshotSortDirection,
+)
+from datepipette.infrastructure.object_storage import (
+    LocalObjectStorage,
+    ObjectStorageRegistry,
+    ObjectStorageUnavailableError,
 )
 
 
@@ -193,10 +198,11 @@ def _compile_query(
     return statement, parameters
 
 
-class DuckDbLocalSnapshotQueryExecutor:
+class DuckDbSnapshotQueryExecutor:
     def __init__(
         self,
-        storage_root: Path,
+        storages: ObjectStorageRegistry,
+        work_root: Path,
         *,
         timeout_seconds: float,
         memory_limit_mb: int,
@@ -204,20 +210,13 @@ class DuckDbLocalSnapshotQueryExecutor:
         temporary_directory_limit_mb: int,
         maximum_concurrent_queries: int,
     ) -> None:
-        self._storage_root = storage_root.resolve()
+        self._storages = storages
+        self._work_root = work_root.resolve()
         self._timeout_seconds = timeout_seconds
         self._memory_limit_mb = memory_limit_mb
         self._threads = threads
         self._temporary_directory_limit_mb = temporary_directory_limit_mb
         self._semaphore = asyncio.Semaphore(maximum_concurrent_queries)
-
-    def _path(self, context: ActiveSnapshotQueryContext) -> Path:
-        if context.storage_backend != "local" or Path(context.object_key).is_absolute():
-            raise DatasetSnapshotUnavailableError
-        path = (self._storage_root / context.object_key).resolve()
-        if not path.is_relative_to(self._storage_root) or not path.is_file():
-            raise DatasetSnapshotUnavailableError
-        return path
 
     async def query(
         self,
@@ -258,10 +257,25 @@ class DuckDbLocalSnapshotQueryExecutor:
         page_size: int,
         maximum_bytes: int,
     ) -> SnapshotQueryExecution:
-        path = self._path(context)
-        temporary_directory = self._storage_root / ".query-tmp"
-        temporary_directory.mkdir(parents=True, exist_ok=True)
+        statement, parameters = _compile_query(
+            selected_fields=selected_fields,
+            all_fields=context.fields,
+            filters=filters,
+            sorts=sorts,
+            position=position,
+        )
         try:
+            materialized = self._storages.require(context.storage_backend).materialize(
+                context.object_key,
+                expected_byte_size=context.byte_size,
+                expected_checksum_sha256=context.checksum_sha256,
+            )
+            path = await asyncio.to_thread(materialized.__enter__)
+        except (OSError, ObjectStorageUnavailableError, ValueError) as exc:
+            raise DatasetSnapshotUnavailableError from exc
+        temporary_directory = self._work_root / ".query-tmp"
+        try:
+            temporary_directory.mkdir(parents=True, exist_ok=True)
             connection = duckdb.connect(
                 ":memory:",
                 config={
@@ -273,15 +287,9 @@ class DuckDbLocalSnapshotQueryExecutor:
                     "autoload_known_extensions": "false",
                 },
             )
-        except duckdb.Error as exc:
+        except (duckdb.Error, OSError) as exc:
+            await asyncio.to_thread(materialized.__exit__, None, None, None)
             raise DatasetSnapshotUnavailableError from exc
-        statement, parameters = _compile_query(
-            selected_fields=selected_fields,
-            all_fields=context.fields,
-            filters=filters,
-            sorts=sorts,
-            position=position,
-        )
         task = asyncio.create_task(
             asyncio.to_thread(
                 self._execute,
@@ -306,8 +314,15 @@ class DuckDbLocalSnapshotQueryExecutor:
         finally:
             if task.done():
                 connection.close()
+                await asyncio.to_thread(materialized.__exit__, None, None, None)
             else:
-                task.add_done_callback(lambda _: connection.close())
+
+                def cleanup(_: asyncio.Task[SnapshotQueryExecution]) -> None:
+                    connection.close()
+                    with suppress(Exception):
+                        materialized.__exit__(None, None, None)
+
+                task.add_done_callback(cleanup)
 
     @staticmethod
     def _execute(
@@ -352,4 +367,29 @@ class DuckDbLocalSnapshotQueryExecutor:
             rows=tuple(rows),
             next_position=next_position,
             truncated_by_bytes=truncated_by_bytes,
+        )
+
+
+class DuckDbLocalSnapshotQueryExecutor(DuckDbSnapshotQueryExecutor):
+    """Compatibility adapter for local development and focused tests."""
+
+    def __init__(
+        self,
+        storage_root: Path,
+        *,
+        timeout_seconds: float,
+        memory_limit_mb: int,
+        threads: int,
+        temporary_directory_limit_mb: int,
+        maximum_concurrent_queries: int,
+    ) -> None:
+        local = LocalObjectStorage(storage_root)
+        super().__init__(
+            ObjectStorageRegistry(local.backend, {local.backend: local}),
+            storage_root,
+            timeout_seconds=timeout_seconds,
+            memory_limit_mb=memory_limit_mb,
+            threads=threads,
+            temporary_directory_limit_mb=temporary_directory_limit_mb,
+            maximum_concurrent_queries=maximum_concurrent_queries,
         )

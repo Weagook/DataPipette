@@ -166,7 +166,7 @@ The durable orchestration boundary is recorded in [ADR-0012](adr/0012-durable-re
 - `cursor` is encrypted, authenticated, and bound to dataset, active snapshot, projection, normalized filters, and sorting. A changed query or newly active snapshot returns `400 invalid_snapshot_cursor`.
 - Responses enforce a two-MiB default encoded-row budget. `truncated_by_bytes` can be true before `page_size` is reached; `next_cursor` continues after the last returned row. A single row larger than the limit returns `413 snapshot_row_too_large`.
 - Metadata includes snapshot ID, total rows in the unfiltered snapshot, `last_success_at`, current refresh state, staleness, the last safe refresh error and its timestamp, and the next cursor. It intentionally omits an expensive filtered total count.
-- Missing publication returns `409 dataset_snapshot_not_published`; missing/corrupt local data returns redacted `503 snapshot_query_unavailable`; timeout returns `504 snapshot_query_timeout`.
+- Missing publication returns `409 dataset_snapshot_not_published`; missing, corrupt, or unavailable local/S3 data returns redacted `503 snapshot_query_unavailable`; timeout returns `504 snapshot_query_timeout`.
 - Decimal values are JSON strings, temporal values are ISO text normalized to UTC when timezone-aware, binary values are base64, and JSON snapshot fields are restored as JSON values.
 
 The query and cursor rationale is recorded in [ADR-0014](adr/0014-typed-snapshot-row-queries.md); the shared freshness projection is recorded in [ADR-0019](adr/0019-dataset-freshness-projection.md).
@@ -177,10 +177,10 @@ The query and cursor rationale is recorded in [ADR-0014](adr/0014-typed-snapshot
 - Creation returns `202`, `Location`, `X-DatePipette-Idempotent-Replay`, and a durable job bound to the active snapshot at request time. Retrying the same actor/dataset/key returns the same job.
 - `GET /api/v1/datasets/{dataset_id}/exports` returns at most 100 newest jobs; `GET .../{export_id}` returns durable state, safe error code, timestamps, row count, bytes, checksum, and logical expiry. Non-administrators with `export` see only their own jobs.
 - `POST .../{export_id}/download-link` requires `export` and, for non-administrators, ownership of that export job. It returns a relative five-minute capability URL only for a successful unexpired job and may be called repeatedly without regenerating the artifact.
-- `GET /api/v1/export-downloads?token=...` requires the encrypted capability rather than a session and returns the private file with an attachment filename. Invalid capabilities are concealed as `404`; expired exports return `410`.
+- `GET /api/v1/export-downloads?token=...` requires the encrypted capability rather than a session. It returns a private local file or a `307` redirect to an equally short-lived presigned private S3-compatible URL with attachment metadata. Invalid capabilities are concealed as `404`; expired exports return `410`; unavailable or corrupt storage returns a redacted `503`.
 - Jobs use `queued`, `running`, `succeeded`, and `failed`. Worker/audit failures expose stable safe codes and never affect the active dataset snapshot.
 
-The export lifecycle and security boundary are recorded in [ADR-0015](adr/0015-snapshot-bound-background-exports.md).
+The export lifecycle and security boundary are recorded in [ADR-0015](adr/0015-snapshot-bound-background-exports.md). The shared storage and presigned-download decision is recorded in [ADR-0022](adr/0022-shared-s3-compatible-object-storage.md).
 
 ## Success responses
 

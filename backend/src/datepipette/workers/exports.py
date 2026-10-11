@@ -7,7 +7,8 @@ from datepipette.application.exports import ExportWorkerService
 from datepipette.config import get_settings
 from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.local_exports import LocalDatasetExportExecutor
+from datepipette.infrastructure.local_exports import DatasetExportExecutor
+from datepipette.infrastructure.object_storage import create_object_storage_registry
 from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
 
 
@@ -16,9 +17,11 @@ async def _execute(export_id: UUID) -> None:
     engine = create_database_engine(settings)
     try:
         store = SqlAlchemyExportStore(create_session_factory(engine))
+        object_storages = create_object_storage_registry(settings)
         service = ExportWorkerService(
             store,
-            LocalDatasetExportExecutor(
+            DatasetExportExecutor(
+                object_storages,
                 settings.snapshot_storage_path,
                 memory_limit_mb=settings.export_memory_limit_mb,
                 threads=settings.export_threads,

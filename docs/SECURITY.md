@@ -70,7 +70,7 @@ Refresh requests are owner-or-administrator and CSRF-protected. They require the
 
 Refresh schedules are likewise owner-or-administrator and CSRF-protected, use optimistic ETags, and never carry source material through Redis. Scheduled runs target the active published version and execute as the dataset owner, so worker-time account and connection-scope revocation still applies. Scheduler audit events contain only dataset, schedule, run, cadence, revision, and dispatch metadata.
 
-Local Parquet files contain business data and therefore belong under a private runtime directory or volume, never the repository or a publicly served path. Metadata and audit events store only relative object keys, schema/type metadata, identifiers, counts, checksums, and safe error codes—not row values or host-specific absolute paths. Production must replace the local adapter with private encrypted S3-compatible storage and least-privilege credentials.
+Local Parquet files contain business data and therefore belong under a private runtime directory or volume, never the repository or a publicly served path. Metadata and audit events store only relative object keys, storage backend, schema/type metadata, identifiers, counts, checksums, and safe error codes—not row values, storage credentials, endpoints, bucket names, or host-specific absolute paths. Production requires the private S3-compatible adapter; custom production endpoints must use HTTPS, and deployments must use least-privilege credentials.
 
 A viewer with dashboard access may receive chart results but must not use that route to browse dataset rows, create exports, infer unrestricted schema metadata, or execute arbitrary chart definitions.
 
@@ -111,6 +111,8 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Snapshots and exports are private storage objects.
 - Object keys are generated, not derived directly from user input.
 - Publication is atomic at the metadata reference level.
+- S3 publication uploads a completed local candidate, records its SHA-256 in private object metadata, and verifies remote size and checksum metadata with `HEAD` before metadata success can be published.
+- S3 reads download to a unique ephemeral path, verify the persisted size and SHA-256 before use, and remove the temporary file after the bounded operation.
 - DuckDB queries use validated schema identifiers and bound filter values.
 - Query time, result rows, bytes, memory, and concurrency are limited.
 - Snapshot access is authorized before storage is touched.
@@ -118,19 +120,21 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Snapshot row requests resolve field UUIDs against the published schema and never accept SQL expressions. Filter values are normalized by type and parameter-bound.
 - Pagination cursors are encrypted and authenticated, contain no readable business values, and are bound to one dataset, snapshot, projection, filter set, and sort order.
 - Local snapshot paths are generated metadata keys, resolved under the configured storage root, and rejected if they escape it.
+- S3 bucket names, endpoints, and credentials are deployment configuration rather than object identity. Persisted keys remain relative and cannot select another bucket or endpoint.
 - Query audit events contain counts and safe identifiers only; rows, filters, cursor text, SQL, and absolute paths are excluded.
 
 ## Export safety
 
 - Export generation requires effective `view_rows` and `export` permissions.
 - Export history, job reads, and download-link issuance require effective `export`; non-administrators may access only export jobs they requested.
-- Signed URLs expire after five minutes; files expire after 24 hours.
+- DatePipette download capabilities and generated S3 presigned URLs expire after five minutes; files expire after 24 hours.
 - Storage buckets disallow public access.
 - CSV generation must mitigate formula injection for values beginning with spreadsheet control characters.
 - XLSX generation must preserve types and must not embed executable macros.
 - Implemented exports are bound to the immutable snapshot selected at creation; Celery receives only the export UUID and duplicate delivery cannot rerun a terminal job.
 - CSV and XLSX string cells beginning with spreadsheet formula/control prefixes are escaped with a leading apostrophe. Precision-sensitive decimal values remain text.
 - Download capabilities are issued only after dataset and job-ownership authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. A capability already issued before grant revocation remains valid until this short expiry. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
+- S3 download resolution verifies the private object before issuing a `307` redirect. The redirect is a bearer capability and is never treated as proof of authorization after its expiry.
 
 ## Audit
 

@@ -52,6 +52,11 @@ from datepipette.domain.snapshot_queries import (
 from datepipette.infrastructure.export_dispatch import CeleryExportDispatcher
 from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
 from datepipette.infrastructure.local_exports import LocalDatasetExportExecutor, LocalExportStorage
+from datepipette.infrastructure.object_storage import (
+    LocalObjectStorage,
+    ObjectExportDownloadResolver,
+    ObjectStorageRegistry,
+)
 
 DATASET_ID = uuid4()
 SNAPSHOT_ID = uuid4()
@@ -390,12 +395,14 @@ def test_download_tokens_and_service_are_reissuable_and_bounded(tmp_path: Path) 
         content_type="text/csv",
         row_count=1,
         byte_size=5,
-        checksum_sha256="0" * 64,
+        checksum_sha256=None,
+        storage_backend="local",
     )
+    local = LocalObjectStorage(tmp_path)
     service = ExportDownloadService(
         store,
         codec,
-        LocalExportStorage(tmp_path),
+        ObjectExportDownloadResolver(ObjectStorageRegistry(local.backend, {local.backend: local})),
         DatasetAccessAuthorizer(store),
     )
     token, expires_at = asyncio.run(
@@ -403,6 +410,7 @@ def test_download_tokens_and_service_are_reissuable_and_bounded(tmp_path: Path) 
     )
     assert expires_at <= datetime.now(UTC) + timedelta(minutes=5, seconds=1)
     download = asyncio.run(service.resolve(token))
+    assert download.path is not None
     assert Path(download.path) == target
     assert download.filename.endswith(".csv")
     middle = len(token) // 2

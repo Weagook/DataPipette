@@ -20,7 +20,7 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## Execution and storage
 
-- Validate DuckDB concurrency and S3/MinIO behavior under the reference workload.
+- Benchmark whole-object S3 materialization against direct/ranged DuckDB reads and a verified local cache under the reference workload.
 - Define Parquet file sizing, row-group sizing, compression, and object-key layout from benchmarks.
 - Define default refresh timeouts, retry classes, cancellation behavior, and dead-letter handling.
 - Define worker leases, heartbeats, and safe stale-`running` recovery before enabling long source execution.
@@ -38,7 +38,7 @@ These questions are intentionally unresolved. They are not permission to invent 
 - Define installation-key storage, backup, and rotation.
 - Define account recovery beyond the implemented first-administrator bootstrap.
 - Define metadata PostgreSQL backup and disaster-recovery objectives.
-- Choose supported S3 server-side encryption modes.
+- Decide whether production adds customer-managed KMS keys and workload-identity/STS credential providers beyond the implemented optional `AES256` request and static secret settings.
 - Publish the private vulnerability-reporting contact before the first release.
 
 ## Project

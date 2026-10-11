@@ -38,7 +38,7 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Foreign-key suggestions, table aliases, `INNER JOIN`, and `LEFT JOIN`
 - [x] Interval/daily refresh schedules, coalesced due runs, and undispatched-run recovery
 - [x] Advanced read-only SQL datasets
-- S3/MinIO result storage
+- [x] S3/MinIO-compatible result storage
 - Refresh cancellation, execution retry policies, and cleanup
 - Draft/published versions, schema comparison, and impact analysis
 - Extend the initial non-executing PostgreSQL plan guard into a configurable Query Safety Advisor

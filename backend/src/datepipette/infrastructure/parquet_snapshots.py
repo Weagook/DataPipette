@@ -1,5 +1,6 @@
-"""Bounded source streaming into immutable local Parquet snapshots."""
+"""Bounded source streaming into immutable Parquet snapshot objects."""
 
+import asyncio
 import hashlib
 import json
 import os
@@ -40,6 +41,11 @@ from datepipette.infrastructure.models import (
     DatasetVersionModel,
     PostgresConnectionModel,
     UserModel,
+)
+from datepipette.infrastructure.object_storage import (
+    LocalObjectStorage,
+    ObjectStorage,
+    ObjectStorageUnavailableError,
 )
 from datepipette.infrastructure.repositories.authentication import to_user
 from datepipette.infrastructure.repositories.connections import to_connection
@@ -221,20 +227,13 @@ def _schema_document(adapters: tuple[_ColumnAdapter, ...]) -> dict[str, Any]:
     }
 
 
-def _fsync_directory(path: Path) -> None:
-    descriptor = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-class LocalParquetSnapshotExecutor:
+class ParquetSnapshotExecutor:
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
         cipher: AesGcmSecretCipher,
-        storage_root: Path,
+        storage: ObjectStorage,
+        work_root: Path,
         connect_timeout_seconds: int,
         statement_timeout_seconds: int,
         batch_rows: int,
@@ -242,7 +241,8 @@ class LocalParquetSnapshotExecutor:
     ) -> None:
         self._session_factory = session_factory
         self._cipher = cipher
-        self._storage_root = storage_root.resolve()
+        self._storage = storage
+        self._work_root = work_root.resolve()
         self._connect_timeout = connect_timeout_seconds
         self._statement_timeout = statement_timeout_seconds
         self._batch_rows = batch_rows
@@ -263,7 +263,13 @@ class LocalParquetSnapshotExecutor:
             return RefreshExecutionResult(False, "connection_access_revoked")
         except (TimeoutError, psycopg.Error):
             return RefreshExecutionResult(False, "source_unavailable")
-        except (OSError, pa.ArrowException, ValueError, TypeError):
+        except (
+            OSError,
+            pa.ArrowException,
+            ObjectStorageUnavailableError,
+            ValueError,
+            TypeError,
+        ):
             return RefreshExecutionResult(False, "snapshot_write_failed")
 
     async def _context(self, run: RefreshRun) -> _ExecutionContext | None:
@@ -327,9 +333,7 @@ class LocalParquetSnapshotExecutor:
     ) -> SnapshotArtifact:
         snapshot_id = uuid4()
         object_key = f"datasets/{run.dataset_id}/snapshots/{snapshot_id}.parquet"
-        final_path = self._storage_root / object_key
-        staging_path = self._storage_root / ".staging" / f"{run.id}-{snapshot_id}.parquet"
-        final_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = self._work_root / ".staging" / f"{run.id}-{snapshot_id}.parquet"
         staging_path.parent.mkdir(parents=True, exist_ok=True)
         expected_fields = tuple((field.id, field.name) for field in context.definition.fields)
         validated_fields = tuple(
@@ -393,18 +397,50 @@ class LocalParquetSnapshotExecutor:
             with staging_path.open("rb") as stream:
                 while chunk := stream.read(1024 * 1024):
                     checksum.update(chunk)
-            os.replace(staging_path, final_path)
-            _fsync_directory(final_path.parent)
+            checksum_sha256 = checksum.hexdigest()
+            await asyncio.to_thread(
+                self._storage.publish_candidate,
+                staging_path,
+                object_key,
+                byte_size=byte_size,
+                checksum_sha256=checksum_sha256,
+                content_type="application/vnd.apache.parquet",
+            )
             return SnapshotArtifact(
                 id=snapshot_id,
-                storage_backend="local",
+                storage_backend=self._storage.backend,
                 object_key=object_key,
                 row_count=row_count,
                 byte_size=byte_size,
-                checksum_sha256=checksum.hexdigest(),
+                checksum_sha256=checksum_sha256,
                 schema_document=_schema_document(adapters),
             )
         finally:
             if writer is not None:
                 writer.close()
             staging_path.unlink(missing_ok=True)
+
+
+class LocalParquetSnapshotExecutor(ParquetSnapshotExecutor):
+    """Compatibility adapter for local development and focused tests."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        cipher: AesGcmSecretCipher,
+        storage_root: Path,
+        connect_timeout_seconds: int,
+        statement_timeout_seconds: int,
+        batch_rows: int,
+        authorizer: ConnectionAccessAuthorizer,
+    ) -> None:
+        super().__init__(
+            session_factory,
+            cipher,
+            LocalObjectStorage(storage_root),
+            storage_root,
+            connect_timeout_seconds,
+            statement_timeout_seconds,
+            batch_rows,
+            authorizer,
+        )

@@ -43,11 +43,14 @@ from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.dataset_preview import PsycopgSourceDatasetPreviewer
 from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
-from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbLocalSnapshotQueryExecutor
+from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbSnapshotQueryExecutor
 from datepipette.infrastructure.export_dispatch import CeleryExportDispatcher
 from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
-from datepipette.infrastructure.local_exports import LocalExportStorage
+from datepipette.infrastructure.object_storage import (
+    ObjectExportDownloadResolver,
+    create_object_storage_registry,
+)
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
 from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
@@ -227,6 +230,7 @@ def create_app(
         )
         access_store = SqlAlchemyAccessControlStore(resources.session_factory)
         access_authorizer = DatasetAccessAuthorizer(access_store)
+        object_storages = create_object_storage_registry(resolved_settings)
         app.state.group_service = group_service or GroupService(access_store)
         app.state.dataset_grant_service = dataset_grant_service or DatasetGrantService(
             access_store,
@@ -234,7 +238,8 @@ def create_app(
         )
         app.state.snapshot_query_service = snapshot_query_service or DatasetSnapshotQueryService(
             SqlAlchemySnapshotQueryStore(resources.session_factory),
-            DuckDbLocalSnapshotQueryExecutor(
+            DuckDbSnapshotQueryExecutor(
+                object_storages,
                 resolved_settings.snapshot_storage_path,
                 timeout_seconds=resolved_settings.snapshot_query_timeout_seconds,
                 memory_limit_mb=resolved_settings.snapshot_query_memory_limit_mb,
@@ -259,7 +264,7 @@ def create_app(
             EncryptedExportDownloadTokenCodec(
                 resolved_settings.connection_encryption_key.get_secret_value()
             ),
-            LocalExportStorage(resolved_settings.snapshot_storage_path),
+            ObjectExportDownloadResolver(object_storages),
             access_authorizer,
         )
         try:

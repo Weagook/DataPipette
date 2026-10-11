@@ -6,7 +6,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from datepipette.api.dependencies.authentication import (
@@ -99,7 +99,7 @@ def _download_service(request: Request) -> ExportDownloadService:
 def _response(job: ExportJob) -> ExportResponse:
     values = asdict(job)
     values.pop("query")
-    for internal in ("dispatched_at", "object_key", "content_type"):
+    for internal in ("dispatched_at", "object_key", "storage_backend", "content_type"):
         values.pop(internal)
     return ExportResponse(
         **values,
@@ -132,6 +132,10 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     422: {"model": ProblemDetails},
     428: {"model": ProblemDetails},
     503: {"model": ProblemDetails},
+}
+_DOWNLOAD_RESPONSES = {
+    **_RESPONSES,
+    307: {"description": "Redirect to a short-lived private object-storage URL"},
 }
 
 
@@ -292,10 +296,15 @@ async def issue_download_link(
     )
 
 
-@router.get("/export-downloads", response_class=FileResponse, responses=_RESPONSES)
+@router.get(
+    "/export-downloads",
+    response_class=FileResponse,
+    response_model=None,
+    responses=_DOWNLOAD_RESPONSES,
+)
 async def download_export(
     request: Request, token: str = Query(min_length=20, max_length=2048)
-) -> FileResponse:
+) -> FileResponse | RedirectResponse:
     try:
         download = await _download_service(request).resolve(token)
     except InvalidExportDownloadTokenError as exc:
@@ -326,4 +335,13 @@ async def download_export(
             title="Export file unavailable",
             detail="The private export file could not be read.",
         ) from exc
+    if download.redirect_url is not None:
+        return RedirectResponse(download.redirect_url, status_code=307)
+    if download.path is None:
+        raise ApiProblem(
+            status_code=503,
+            code="export_file_unavailable",
+            title="Export file unavailable",
+            detail="The private export file could not be read.",
+        )
     return FileResponse(download.path, media_type=download.content_type, filename=download.filename)

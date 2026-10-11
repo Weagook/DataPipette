@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -38,7 +39,17 @@ class Settings(BaseSettings):
     installation_timezone: str = "UTC"
     scheduler_poll_seconds: float = Field(default=15.0, ge=1.0, le=300.0)
     scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
+    object_storage_backend: Literal["local", "s3"] = "local"
     snapshot_storage_path: Path = Path(".local/snapshots")
+    s3_endpoint_url: str | None = None
+    s3_region: str = "us-east-1"
+    s3_bucket: str | None = None
+    s3_access_key_id: SecretStr | None = None
+    s3_secret_access_key: SecretStr | None = None
+    s3_addressing_style: Literal["path", "virtual"] = "path"
+    s3_server_side_encryption: Literal["AES256"] | None = None
+    s3_connect_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    s3_read_timeout_seconds: int = Field(default=60, ge=1, le=600)
     snapshot_query_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     snapshot_query_memory_limit_mb: int = Field(default=256, ge=64, le=4096)
     snapshot_query_threads: int = Field(default=2, ge=1, le=16)
@@ -77,6 +88,22 @@ class Settings(BaseSettings):
             == DEVELOPMENT_CONNECTION_ENCRYPTION_KEY
         ):
             raise ValueError("Production requires an explicit connection encryption key")
+        s3_values = (
+            self.s3_bucket,
+            self.s3_access_key_id,
+            self.s3_secret_access_key,
+        )
+        configured_s3_values = sum(value is not None for value in s3_values)
+        if configured_s3_values not in {0, len(s3_values)}:
+            raise ValueError("S3 bucket and access credentials must be configured together")
+        if self.object_storage_backend == "s3" and configured_s3_values != len(s3_values):
+            raise ValueError("S3 storage requires bucket and access credentials")
+        if self.environment == "production" and self.object_storage_backend != "s3":
+            raise ValueError("Production requires S3-compatible object storage")
+        if self.environment == "production" and self.s3_endpoint_url is not None:
+            endpoint = urlparse(self.s3_endpoint_url)
+            if endpoint.scheme != "https" or not endpoint.netloc:
+                raise ValueError("Production S3 endpoints must use HTTPS")
         return self
 
     @property
