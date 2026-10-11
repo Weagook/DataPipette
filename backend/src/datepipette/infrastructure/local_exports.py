@@ -1,11 +1,10 @@
-"""Streaming CSV/XLSX generation and private local export storage."""
+"""Streaming CSV/XLSX generation into private analytical object storage."""
 
 import asyncio
 import base64
 import csv
 import hashlib
 import json
-import os
 from collections.abc import Iterator
 from contextlib import suppress
 from datetime import UTC, date, datetime, time
@@ -24,6 +23,11 @@ from datepipette.infrastructure.duckdb_snapshot_queries import (
     _column,
     _compile_filters,
     _quote_identifier,
+)
+from datepipette.infrastructure.object_storage import (
+    LocalObjectStorage,
+    ObjectStorageRegistry,
+    ObjectStorageUnavailableError,
 )
 
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -60,21 +64,21 @@ def _export_value(field: SnapshotQueryField, value: Any, *, csv_mode: bool) -> A
 
 class LocalExportStorage:
     def __init__(self, storage_root: Path) -> None:
-        self.root = storage_root.resolve()
+        self._storage = LocalObjectStorage(storage_root)
+        self.root = self._storage.root
 
     def resolve(self, object_key: str) -> Path:
-        if Path(object_key).is_absolute():
-            raise ValueError("Absolute export key")
-        path = (self.root / object_key).resolve()
-        if not path.is_relative_to(self.root) or not path.is_file():
-            raise ValueError("Unavailable export object")
-        return path
+        try:
+            return self._storage.materialize_path(object_key)
+        except ObjectStorageUnavailableError as exc:
+            raise ValueError("Unavailable export object") from exc
 
 
-class LocalDatasetExportExecutor:
+class DatasetExportExecutor:
     def __init__(
         self,
-        storage_root: Path,
+        storages: ObjectStorageRegistry,
+        work_root: Path,
         *,
         memory_limit_mb: int,
         threads: int,
@@ -82,7 +86,9 @@ class LocalDatasetExportExecutor:
         maximum_rows: int,
         fetch_rows: int,
     ) -> None:
-        self._storage = LocalExportStorage(storage_root)
+        self._storages = storages
+        self._storage = storages.default
+        self._work_root = work_root.resolve()
         self._memory_limit_mb = memory_limit_mb
         self._threads = threads
         self._temporary_directory_limit_mb = temporary_directory_limit_mb
@@ -91,14 +97,6 @@ class LocalDatasetExportExecutor:
 
     async def execute(self, job: ExportJob, context: ActiveSnapshotQueryContext) -> ExportArtifact:
         return await asyncio.to_thread(self._execute, job, context)
-
-    def _snapshot_path(self, context: ActiveSnapshotQueryContext) -> Path:
-        if context.storage_backend != "local" or Path(context.object_key).is_absolute():
-            raise ValueError("Unsupported snapshot storage")
-        path = (self._storage.root / context.object_key).resolve()
-        if not path.is_relative_to(self._storage.root) or not path.is_file():
-            raise ValueError("Snapshot unavailable")
-        return path
 
     def _execute(self, job: ExportJob, context: ActiveSnapshotQueryContext) -> ExportArtifact:
         query = export_query_from_document(
@@ -120,14 +118,11 @@ class LocalDatasetExportExecutor:
             }
         )
         prepared = prepare_snapshot_query(context, query, require_page=False)
-        source = self._snapshot_path(context)
         suffix = job.format.value
         object_key = f"exports/{job.dataset_id}/{job.id}.{suffix}"
-        target = self._storage.root / object_key
-        target.parent.mkdir(parents=True, exist_ok=True)
-        candidate = target.with_suffix(target.suffix + ".part")
-        temporary = self._storage.root / ".export-tmp"
+        temporary = self._work_root / ".export-tmp"
         temporary.mkdir(parents=True, exist_ok=True)
+        candidate = temporary / f"{job.id}.{suffix}.part"
         connection = duckdb.connect(
             ":memory:",
             config={
@@ -140,25 +135,50 @@ class LocalDatasetExportExecutor:
             },
         )
         try:
-            statement, parameters = self._statement(
-                context, prepared.selected_fields, prepared.filters, prepared.sorts
-            )
-            cursor = connection.execute(
-                statement, [str(source), *parameters, self._maximum_rows + 1]
-            )
-            if job.format is ExportFormat.CSV:
-                row_count = self._write_csv(candidate, cursor, prepared.selected_fields)
-                content_type = "text/csv; charset=utf-8"
-            else:
-                row_count = self._write_xlsx(candidate, cursor, prepared.selected_fields)
-                content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            os.replace(candidate, target)
+            with self._storages.require(context.storage_backend).materialize(
+                context.object_key,
+                expected_byte_size=context.byte_size,
+                expected_checksum_sha256=context.checksum_sha256,
+            ) as source:
+                statement, parameters = self._statement(
+                    context, prepared.selected_fields, prepared.filters, prepared.sorts
+                )
+                cursor = connection.execute(
+                    statement, [str(source), *parameters, self._maximum_rows + 1]
+                )
+                if job.format is ExportFormat.CSV:
+                    row_count = self._write_csv(candidate, cursor, prepared.selected_fields)
+                    content_type = "text/csv; charset=utf-8"
+                else:
+                    row_count = self._write_xlsx(candidate, cursor, prepared.selected_fields)
+                    content_type = (
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+        except Exception:
+            candidate.unlink(missing_ok=True)
+            raise
         finally:
             connection.close()
+        try:
+            byte_size = candidate.stat().st_size
+            checksum = self._checksum(candidate)
+            self._storage.publish_candidate(
+                candidate,
+                object_key,
+                byte_size=byte_size,
+                checksum_sha256=checksum,
+                content_type=content_type,
+            )
+            return ExportArtifact(
+                object_key,
+                row_count,
+                byte_size,
+                checksum,
+                content_type,
+                self._storage.backend,
+            )
+        finally:
             candidate.unlink(missing_ok=True)
-        byte_size = target.stat().st_size
-        checksum = self._checksum(target)
-        return ExportArtifact(object_key, row_count, byte_size, checksum, content_type)
 
     def _statement(
         self,
@@ -242,3 +262,28 @@ class LocalDatasetExportExecutor:
             while chunk := stream.read(1024 * 1024):
                 digest.update(chunk)
         return digest.hexdigest()
+
+
+class LocalDatasetExportExecutor(DatasetExportExecutor):
+    """Compatibility adapter for local development and focused tests."""
+
+    def __init__(
+        self,
+        storage_root: Path,
+        *,
+        memory_limit_mb: int,
+        threads: int,
+        temporary_directory_limit_mb: int,
+        maximum_rows: int,
+        fetch_rows: int,
+    ) -> None:
+        local = LocalObjectStorage(storage_root)
+        super().__init__(
+            ObjectStorageRegistry(local.backend, {local.backend: local}),
+            storage_root,
+            memory_limit_mb=memory_limit_mb,
+            threads=threads,
+            temporary_directory_limit_mb=temporary_directory_limit_mb,
+            maximum_rows=maximum_rows,
+            fetch_rows=fetch_rows,
+        )

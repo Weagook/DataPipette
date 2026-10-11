@@ -309,7 +309,7 @@ class DatasetSnapshotModel(Base):
         CheckConstraint("state IN ('active', 'superseded')", name="state_valid"),
         CheckConstraint("row_count >= 0", name="row_count_nonnegative"),
         CheckConstraint("byte_size > 0", name="byte_size_positive"),
-        CheckConstraint("storage_backend IN ('local')", name="storage_backend_valid"),
+        CheckConstraint("storage_backend IN ('local', 's3')", name="storage_backend_valid"),
         CheckConstraint("jsonb_typeof(schema_document) = 'object'", name="schema_object"),
         Index(
             "uq_dataset_snapshots_one_active",
@@ -357,6 +357,15 @@ class DatasetExportModel(Base):
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
         CheckConstraint("row_count IS NULL OR row_count >= 0", name="row_count_nonnegative"),
         CheckConstraint("byte_size IS NULL OR byte_size > 0", name="byte_size_positive"),
+        CheckConstraint(
+            "storage_backend IS NULL OR storage_backend IN ('local', 's3')",
+            name="storage_backend_valid",
+        ),
+        CheckConstraint(
+            "(object_key IS NULL AND storage_backend IS NULL) OR "
+            "(object_key IS NOT NULL AND storage_backend IS NOT NULL)",
+            name="storage_object_shape_valid",
+        ),
         Index("ix_dataset_exports_dataset_requested", "dataset_id", "requested_at"),
         Index("ix_dataset_exports_expiry", "expires_at"),
     )
@@ -376,6 +385,7 @@ class DatasetExportModel(Base):
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer)
     object_key: Mapped[str | None] = mapped_column(String(1024), unique=True)
+    storage_backend: Mapped[str | None] = mapped_column(String(20))
     row_count: Mapped[int | None] = mapped_column(Integer)
     byte_size: Mapped[int | None] = mapped_column(Integer)
     checksum_sha256: Mapped[str | None] = mapped_column(String(64))

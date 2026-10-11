@@ -49,3 +49,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0019](0019-dataset-freshness-projection.md): Dataset freshness and refresh failure projection
 - [ADR-0020](0020-durable-refresh-scheduling.md): Durable database-polled refresh scheduling
 - [ADR-0021](0021-advanced-read-only-sql-datasets.md): Advanced read-only SQL dataset definitions
+- [ADR-0022](0022-shared-s3-compatible-object-storage.md): Shared S3-compatible analytical object storage

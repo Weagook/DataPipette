@@ -4,7 +4,7 @@
 
 DatePipette is an API-first, snapshot-based business intelligence platform for PostgreSQL. It is designed to work both as a standalone analytics application and as a headless BI backend embedded into other products.
 
-> **Project status:** pre-alpha. The backend implements local identity, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, validation, preview, manual and scheduled Parquet refresh with explicit freshness/failure states, typed snapshot queries, background exports, and dataset ACLs. Charts, dashboards, and production object storage remain under development.
+> **Project status:** pre-alpha. The backend implements local identity, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, validation, preview, manual and scheduled Parquet refresh, shared S3-compatible snapshot/export storage, typed snapshot queries, background exports, and dataset ACLs. Charts and dashboards remain under development.
 
 ## Why DatePipette?
 
@@ -26,7 +26,7 @@ The backend is the product core. The official web application is a client of the
 - Foreign-key relationship suggestions and manually configured joins (implemented)
 - Advanced read-only SQL datasets (implemented)
 - Draft, validation, preview, refresh, and atomic publication
-- Parquet snapshots in local development storage or S3-compatible storage
+- Parquet snapshots and exports in local or S3-compatible storage (implemented)
 - Scheduled and manual refresh through Celery
 - Tabular browsing, typed filters, pagination, CSV export, and XLSX export
 - Bar, line, pie/donut, and KPI visualizations
@@ -74,13 +74,14 @@ Start with the [documentation index](docs/README.md).
 
 ## Repository direction
 
-DatePipette is a uv workspace. The independently packaged backend lives in `backend/`; local PostgreSQL and Redis infrastructure lives in `deploy/compose/`. The frontend will be added as an independently buildable application when the first UI vertical slice begins.
+DatePipette is a uv workspace. The independently packaged backend lives in `backend/`; local PostgreSQL, Redis, and MinIO-compatible infrastructure lives in `deploy/compose/`. The frontend will be added as an independently buildable application when the first UI vertical slice begins.
 
 To run the current backend foundation:
 
 ```bash
 uv sync --locked --all-packages --all-groups
-docker compose -f deploy/compose/compose.yaml up -d --wait
+cp deploy/compose/.env.example .env
+docker compose --env-file .env -f deploy/compose/compose.yaml up -d --wait
 uv run --package datepipette alembic -c backend/alembic.ini upgrade head
 uv run --package datepipette datepipette-admin bootstrap-admin \
   --email admin@example.com \

@@ -15,15 +15,18 @@ Thank you for your interest in DatePipette. The project is pre-alpha and is esta
 Requirements:
 
 - uv with Python 3.12 support;
-- Docker with Compose v2 for PostgreSQL and Redis.
+- Docker with Compose v2 for PostgreSQL, Redis, and the MinIO-compatible development object store.
 
 Install the locked workspace, start local dependencies, and apply metadata migrations:
 
 ```bash
 uv sync --locked --all-packages --all-groups
-docker compose -f deploy/compose/compose.yaml up -d --wait
+cp deploy/compose/.env.example .env
+docker compose --env-file .env -f deploy/compose/compose.yaml up -d --wait
 uv run --package datepipette alembic -c backend/alembic.ini upgrade head
 ```
+
+The one-shot `minio-init` service creates the configured private bucket idempotently before the worker starts. The example credentials and HTTP endpoint are development-only.
 
 Create the first local administrator. The command prompts for the password twice and refuses to create another bootstrap administrator after the first account exists:
 
@@ -55,11 +58,13 @@ uv run --package datepipette datepipette-scheduler
 
 `DATEPIPETTE_INSTALLATION_TIMEZONE` selects the single IANA timezone used for daily schedules. `DATEPIPETTE_SCHEDULER_POLL_SECONDS` and `DATEPIPETTE_SCHEDULER_BATCH_SIZE` bound polling frequency and work per tick. Metadata PostgreSQL owns schedule state; stopping the scheduler delays work without losing the next due occurrence.
 
-Refresh state is durable in metadata PostgreSQL and Redis is only the transport. The development worker streams validated source rows into `.local/snapshots` by default; Compose uses its private `snapshot-data` volume. Never commit, share, or serve these files directly because they contain business data.
+Refresh state is durable in metadata PostgreSQL and Redis is only the transport. A directly started process uses local `.local/snapshots` storage by default; Compose selects the shared private S3-compatible bucket. Never commit, share, or publicly serve snapshots because they contain business data.
 
-Interactive snapshot reads use embedded DuckDB against the active Parquet object. `DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS`, `DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB`, `DATEPIPETTE_SNAPSHOT_QUERY_THREADS`, `DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY`, `DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB`, and `DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES` bound each local query. DuckDB provides parameterized projection, predicates, ordering, and pagination; `pytz` supports its timezone-aware Python timestamp conversion.
+Interactive snapshot reads use embedded DuckDB against the active Parquet object. S3-backed objects are downloaded to a unique temporary file, checked against their recorded size and SHA-256, queried, and then removed. `DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS`, `DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB`, `DATEPIPETTE_SNAPSHOT_QUERY_THREADS`, `DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY`, `DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB`, and `DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES` bound each query. DuckDB provides parameterized projection, predicates, ordering, and pagination; `pytz` supports its timezone-aware Python timestamp conversion.
 
-Background CSV/XLSX exports use the same private storage root and a separate Celery queue. `DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB`, `DATEPIPETTE_EXPORT_THREADS`, `DATEPIPETTE_EXPORT_TEMP_LIMIT_MB`, `DATEPIPETTE_EXPORT_MAX_ROWS`, and `DATEPIPETTE_EXPORT_FETCH_ROWS` bound local generation. Files are logically inaccessible 24 hours after success; local physical cleanup and production S3-compatible storage are not yet implemented.
+Background CSV/XLSX exports use the same configured private storage backend and a separate Celery queue. `DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB`, `DATEPIPETTE_EXPORT_THREADS`, `DATEPIPETTE_EXPORT_TEMP_LIMIT_MB`, `DATEPIPETTE_EXPORT_MAX_ROWS`, and `DATEPIPETTE_EXPORT_FETCH_ROWS` bound local candidate generation. Files are logically inaccessible 24 hours after success; physical cleanup is not yet implemented. S3-backed downloads keep the DatePipette five-minute capability check and then redirect to an equally short-lived presigned private-object URL.
+
+`DATEPIPETTE_OBJECT_STORAGE_BACKEND` selects `local` or `s3`. S3 additionally requires `DATEPIPETTE_S3_BUCKET`, `DATEPIPETTE_S3_ACCESS_KEY_ID`, and `DATEPIPETTE_S3_SECRET_ACCESS_KEY`; compatible installations can set `DATEPIPETTE_S3_ENDPOINT_URL`, region, and path/virtual addressing. Production requires the S3 backend and rejects non-HTTPS custom endpoints. Optional `DATEPIPETTE_S3_SERVER_SIDE_ENCRYPTION=AES256` asks the provider for server-side encryption.
 
 The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 
@@ -88,10 +93,10 @@ Back up this key separately from metadata PostgreSQL. Losing it makes stored sou
 Stop local services without deleting their volumes:
 
 ```bash
-docker compose -f deploy/compose/compose.yaml stop
+docker compose --env-file .env -f deploy/compose/compose.yaml stop
 ```
 
-Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD` and related variables through the shell or an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, `INSTALLATION_TIMEZONE`, `SCHEDULER_POLL_SECONDS`, `SCHEDULER_BATCH_SIZE`, `SNAPSHOT_STORAGE_PATH`, and the `SNAPSHOT_QUERY_*` limits documented above.
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD`, MinIO credentials, and related variables through an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, `INSTALLATION_TIMEZONE`, `SCHEDULER_POLL_SECONDS`, `SCHEDULER_BATCH_SIZE`, `OBJECT_STORAGE_BACKEND`, `SNAPSHOT_STORAGE_PATH`, the `S3_*` settings, and the `SNAPSHOT_QUERY_*` limits documented above.
 
 API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
 
@@ -109,8 +114,10 @@ uv run --package datepipette alembic -c backend/alembic.ini heads
 uv run --package datepipette alembic -c backend/alembic.ini check
 uv run --package datepipette python tools/export_openapi.py
 git diff --exit-code -- docs/openapi.json
-docker compose -f deploy/compose/compose.yaml config --quiet
+docker compose --env-file .env -f deploy/compose/compose.yaml config --quiet
 ```
+
+To include the real MinIO round-trip tests, export the `DATEPIPETTE_TEST_S3_ENDPOINT`, `DATEPIPETTE_TEST_S3_BUCKET`, `DATEPIPETTE_TEST_S3_ACCESS_KEY_ID`, and `DATEPIPETTE_TEST_S3_SECRET_ACCESS_KEY` values for the running development service before invoking `pytest`.
 
 `pytest` enforces at least 90% backend coverage. Keep the lockfile synchronized whenever project dependencies change.
 

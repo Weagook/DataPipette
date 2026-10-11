@@ -7528,6 +7528,9 @@
           "200": {
             "description": "Successful Response"
           },
+          "307": {
+            "description": "Redirect to a short-lived private object-storage URL"
+          },
           "400": {
             "content": {
               "application/json": {

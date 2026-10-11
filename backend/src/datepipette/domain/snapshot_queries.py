@@ -103,6 +103,8 @@ class ActiveSnapshotQueryContext:
     last_refresh_error: str | None
     is_stale: bool
     last_refresh_error_at: datetime | None = None
+    byte_size: int | None = None
+    checksum_sha256: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

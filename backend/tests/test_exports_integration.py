@@ -22,7 +22,7 @@ from datepipette.config import Settings
 from datepipette.domain.exports import ExportClaimOutcome
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
 from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
-from datepipette.infrastructure.local_exports import LocalDatasetExportExecutor, LocalExportStorage
+from datepipette.infrastructure.local_exports import LocalDatasetExportExecutor
 from datepipette.infrastructure.models import (
     AuditEventModel,
     DatasetModel,
@@ -31,6 +31,11 @@ from datepipette.infrastructure.models import (
     DatasetVersionModel,
     PostgresConnectionModel,
     UserModel,
+)
+from datepipette.infrastructure.object_storage import (
+    LocalObjectStorage,
+    ObjectExportDownloadResolver,
+    ObjectStorageRegistry,
 )
 from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
@@ -241,10 +246,16 @@ def test_export_api_worker_history_and_reissued_download(tmp_path: Path) -> None
     authorizer = DatasetAccessAuthorizer(SqlAlchemyAccessControlStore(session_factory))
     dispatcher = RecordingDispatcher()
     export_service = DatasetExportService(store, dispatcher, authorizer)
+    local_storage = LocalObjectStorage(tmp_path)
     download_service = ExportDownloadService(
         store,
         EncryptedExportDownloadTokenCodec(settings.connection_encryption_key.get_secret_value()),
-        LocalExportStorage(tmp_path),
+        ObjectExportDownloadResolver(
+            ObjectStorageRegistry(
+                local_storage.backend,
+                {local_storage.backend: local_storage},
+            )
+        ),
         authorizer,
     )
     app = create_app(

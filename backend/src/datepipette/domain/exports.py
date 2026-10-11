@@ -49,6 +49,7 @@ class ExportJob:
     finished_at: datetime | None
     expires_at: datetime
     updated_at: datetime
+    storage_backend: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,10 +66,12 @@ class ExportArtifact:
     byte_size: int
     checksum_sha256: str
     content_type: str
+    storage_backend: str = "local"
 
 
 @dataclass(frozen=True, slots=True)
 class ExportDownload:
-    path: str
+    path: str | None
     content_type: str
     filename: str
+    redirect_url: str | None = None

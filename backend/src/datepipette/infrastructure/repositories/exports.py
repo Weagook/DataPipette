@@ -48,6 +48,7 @@ def _to_job(model: DatasetExportModel) -> ExportJob:
         dispatched_at=model.dispatched_at,
         attempt_count=model.attempt_count,
         object_key=model.object_key,
+        storage_backend=model.storage_backend,
         row_count=model.row_count,
         byte_size=model.byte_size,
         checksum_sha256=model.checksum_sha256,
@@ -120,6 +121,7 @@ class SqlAlchemyExportStore:
                 dispatched_at=None,
                 attempt_count=0,
                 object_key=None,
+                storage_backend=None,
                 row_count=None,
                 byte_size=None,
                 checksum_sha256=None,
@@ -251,6 +253,7 @@ class SqlAlchemyExportStore:
                 artifact = result.artifact
                 model.state = ExportState.SUCCEEDED.value
                 model.object_key = artifact.object_key
+                model.storage_backend = artifact.storage_backend
                 model.row_count = artifact.row_count
                 model.byte_size = artifact.byte_size
                 model.checksum_sha256 = artifact.checksum_sha256
@@ -274,6 +277,7 @@ class SqlAlchemyExportStore:
                     occurred_at=occurred_at,
                     request_id=model.request_id,
                     details={
+                        "storage_backend": model.storage_backend,
                         "row_count": model.row_count,
                         "byte_size": model.byte_size,
                         "error_code": model.error_code,
@@ -315,6 +319,8 @@ class SqlAlchemyExportStore:
             refresh_state=SnapshotRefreshState.IDLE,
             last_refresh_error=None,
             is_stale=False,
+            byte_size=snapshot.byte_size,
+            checksum_sha256=snapshot.checksum_sha256,
         )
 
     @staticmethod

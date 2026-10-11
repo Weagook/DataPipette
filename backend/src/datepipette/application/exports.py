@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
@@ -115,7 +114,17 @@ class ExportDownloadTokenCodec(Protocol):
 
 
 class ExportFileResolver(Protocol):
-    def resolve(self, object_key: str) -> Path: ...
+    def resolve(
+        self,
+        storage_backend: str,
+        object_key: str,
+        *,
+        expires_seconds: int,
+        filename: str,
+        content_type: str,
+        expected_byte_size: int | None,
+        expected_checksum_sha256: str | None,
+    ) -> ExportDownload: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,7 +327,7 @@ class ExportDownloadService:
         now = datetime.now(UTC)
         if now >= job.expires_at:
             raise ExportExpiredError
-        if job.state.value != "succeeded" or job.object_key is None:
+        if job.state.value != "succeeded" or job.object_key is None or job.storage_backend is None:
             raise ExportNotReadyError
         expires_at = min(now + DOWNLOAD_TOKEN_TTL, job.expires_at)
         return self._codec.encode(
@@ -339,15 +348,26 @@ class ExportDownloadService:
             raise InvalidExportDownloadTokenError
         if now >= job.expires_at:
             raise ExportExpiredError
-        if job.state.value != "succeeded" or job.object_key is None or job.content_type is None:
+        if (
+            job.state.value != "succeeded"
+            or job.object_key is None
+            or job.content_type is None
+            or job.storage_backend is None
+        ):
             raise ExportNotReadyError
+        filename = f"dataset-{job.dataset_id}.{job.format.value}"
         try:
-            path = self._resolver.resolve(job.object_key)
+            return self._resolver.resolve(
+                job.storage_backend,
+                job.object_key,
+                expires_seconds=max(1, int((token_expiry - now).total_seconds())),
+                filename=filename,
+                content_type=job.content_type,
+                expected_byte_size=job.byte_size,
+                expected_checksum_sha256=job.checksum_sha256,
+            )
         except (OSError, ValueError) as exc:
             raise ExportFileUnavailableError from exc
-        return ExportDownload(
-            str(path), job.content_type, f"dataset-{job.dataset_id}.{job.format.value}"
-        )
 
     async def _find_by_id(self, export_id: UUID) -> ExportJob | None:
         return await self._store.get_by_id(export_id)

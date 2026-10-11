@@ -12,7 +12,8 @@ from datepipette.domain.refresh import RefreshClaimOutcome
 from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
+from datepipette.infrastructure.object_storage import create_object_storage_registry
+from datepipette.infrastructure.parquet_snapshots import ParquetSnapshotExecutor
 from datepipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
@@ -27,11 +28,13 @@ async def _execute(run_id: UUID) -> RefreshClaimOutcome:
         connection_authorizer = ConnectionAccessAuthorizer(
             SqlAlchemyConnectionAccessStore(session_factory)
         )
+        object_storages = create_object_storage_registry(settings)
         service = RefreshWorkerService(
             SqlAlchemyRefreshRunStore(session_factory),
-            LocalParquetSnapshotExecutor(
+            ParquetSnapshotExecutor(
                 session_factory,
                 AesGcmSecretCipher(settings.connection_encryption_key.get_secret_value()),
+                object_storages.default,
                 settings.snapshot_storage_path,
                 settings.source_connect_timeout_seconds,
                 settings.refresh_statement_timeout_seconds,
