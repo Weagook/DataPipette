@@ -39,6 +39,9 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **DAT-013:** Changing a draft definition shall invalidate prior validation; a concurrent change shall prevent stale validation from being attached.
 - **DAT-014:** Synchronous draft preview shall require validation of the same revision and enforce server-side row, response-size, statement-time, and memory bounds without creating a snapshot.
 - **DAT-015:** An active analyst shall author and execute only owned datasets whose referenced source relations remain inside the analyst's current effective connection scope; administrators retain operational access.
+- **DAT-016:** Owners and administrators shall be able to inspect bounded immutable published and superseded dataset-version history without exposing another owner's definition or generated SQL.
+- **DAT-017:** Impact analysis shall compare the exact current validated draft with the active published version by stable field identifier and classify compatible and breaking output-schema changes.
+- **DAT-018:** Impact analysis shall require the current draft revision and source authorization, shall not execute the business query, and shall expose only real downstream dependencies.
 
 ### Query safety advisor
 

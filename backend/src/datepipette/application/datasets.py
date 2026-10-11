@@ -2,6 +2,7 @@
 
 import base64
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
@@ -11,11 +12,14 @@ from datepipette.application.connection_access import (
     ConnectionAccessAuthorizer,
     ConnectionAccessDeniedError,
 )
+from datepipette.domain.dataset_impact import DatasetSchemaImpact, compare_dataset_schema
 from datepipette.domain.datasets import (
     Dataset,
     DatasetDefinition,
     DatasetDraft,
     DatasetValidation,
+    DatasetVersion,
+    DatasetVersionState,
     definition_relations,
 )
 from datepipette.domain.identity import AccountStatus, SystemRole, User
@@ -43,6 +47,10 @@ class InvalidDatasetCursorError(Exception):
     pass
 
 
+class DatasetDraftImpactNotValidatedError(Exception):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class DatasetCreate:
     name: str
@@ -53,6 +61,12 @@ class DatasetCreate:
 @dataclass(frozen=True, slots=True)
 class DatasetPage:
     datasets: list[Dataset]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetVersionPage:
+    versions: list[DatasetVersion]
     next_cursor: str | None
 
 
@@ -83,6 +97,17 @@ class DatasetStore(Protocol):
     async def get(self, dataset_id: UUID) -> Dataset | None: ...
 
     async def get_draft(self, dataset_id: UUID) -> DatasetDraft | None: ...
+
+    async def list_versions(
+        self,
+        *,
+        dataset_id: UUID,
+        before_created_at: datetime | None,
+        before_id: UUID | None,
+        limit: int,
+    ) -> Sequence[DatasetVersion]: ...
+
+    async def get_version(self, *, dataset_id: UUID, version_id: UUID) -> DatasetVersion | None: ...
 
     async def rename(
         self,
@@ -148,6 +173,17 @@ class DatasetStore(Protocol):
         occurred_at: datetime,
     ) -> None: ...
 
+    async def record_impact_analysis(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        impact: DatasetSchemaImpact,
+        expected_validated_at: datetime,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> bool: ...
+
 
 def require_dataset_owner(actor: User, dataset: Dataset) -> None:
     if actor.status is not AccountStatus.ACTIVE:
@@ -180,8 +216,8 @@ def _definition_document(definition: DatasetDefinition) -> dict[str, object]:
     return document
 
 
-def _encode_cursor(dataset: Dataset) -> str:
-    value = f"{dataset.created_at.isoformat()}|{dataset.id}".encode()
+def _encode_position(created_at: datetime, identifier: UUID) -> str:
+    value = f"{created_at.isoformat()}|{identifier}".encode()
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
 
@@ -198,6 +234,10 @@ def _decode_cursor(value: str | None) -> tuple[datetime | None, UUID | None]:
         return created_at, UUID(identifier)
     except (UnicodeDecodeError, ValueError) as exc:
         raise InvalidDatasetCursorError from exc
+
+
+def _encode_cursor(dataset: Dataset) -> str:
+    return _encode_position(dataset.created_at, dataset.id)
 
 
 class DatasetService:
@@ -275,6 +315,97 @@ class DatasetService:
         if draft is None:
             raise DatasetNotFoundError
         return draft
+
+    async def list_versions(
+        self,
+        *,
+        actor: User,
+        dataset_id: UUID,
+        cursor: str | None,
+        limit: int,
+    ) -> DatasetVersionPage:
+        dataset = await self._store.get(dataset_id)
+        if dataset is None:
+            raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
+        before_created_at, before_id = _decode_cursor(cursor)
+        items = await self._store.list_versions(
+            dataset_id=dataset_id,
+            before_created_at=before_created_at,
+            before_id=before_id,
+            limit=limit + 1,
+        )
+        visible = items[:limit]
+        return DatasetVersionPage(
+            versions=list(visible),
+            next_cursor=(
+                _encode_position(visible[-1].created_at, visible[-1].id)
+                if len(items) > limit
+                else None
+            ),
+        )
+
+    async def get_version(
+        self,
+        *,
+        actor: User,
+        dataset_id: UUID,
+        version_id: UUID,
+    ) -> DatasetVersion:
+        dataset = await self._store.get(dataset_id)
+        if dataset is None:
+            raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
+        version = await self._store.get_version(dataset_id=dataset_id, version_id=version_id)
+        if version is None or version.state is DatasetVersionState.DRAFT:
+            raise DatasetNotFoundError
+        return version
+
+    async def analyze_draft_impact(
+        self,
+        *,
+        actor: User,
+        dataset_id: UUID,
+        expected_revision: int,
+        request_id: str,
+    ) -> DatasetSchemaImpact:
+        dataset = await self._store.get(dataset_id)
+        draft = await self._store.get_draft(dataset_id)
+        if dataset is None or draft is None:
+            raise DatasetNotFoundError
+        require_dataset_owner(actor, dataset)
+        try:
+            await self._authorizer.require_relations(
+                actor=actor,
+                connection_id=dataset.connection_id,
+                relations=definition_relations(draft.definition),
+            )
+        except ConnectionAccessDeniedError as exc:
+            raise DatasetNotFoundError from exc
+        if draft.revision != expected_revision:
+            raise DatasetRevisionConflictError
+        if draft.validation is None or draft.validation.validated_revision != draft.revision:
+            raise DatasetDraftImpactNotValidatedError
+        baseline = None
+        if dataset.active_version_id is not None:
+            baseline = await self._store.get_version(
+                dataset_id=dataset_id,
+                version_id=dataset.active_version_id,
+            )
+            if baseline is None:  # pragma: no cover - foreign-key invariant
+                raise RuntimeError("Active dataset version disappeared")
+        impact = compare_dataset_schema(dataset_id=dataset_id, baseline=baseline, draft=draft)
+        recorded = await self._store.record_impact_analysis(
+            dataset_id=dataset_id,
+            actor_id=actor.id,
+            impact=impact,
+            expected_validated_at=draft.validation.validated_at,
+            request_id=request_id,
+            occurred_at=datetime.now(UTC),
+        )
+        if not recorded:
+            raise DatasetRevisionConflictError
+        return impact
 
     async def rename(
         self,

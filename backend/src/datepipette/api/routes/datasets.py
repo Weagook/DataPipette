@@ -28,10 +28,19 @@ from datepipette.application.datasets import (
     DatasetAlreadyExistsError,
     DatasetConnectionNotFoundError,
     DatasetCreate,
+    DatasetDraftImpactNotValidatedError,
     DatasetNotFoundError,
     DatasetRevisionConflictError,
     DatasetService,
     InvalidDatasetCursorError,
+)
+from datepipette.domain.dataset_impact import (
+    DatasetDependencyReference,
+    DatasetSchemaImpact,
+    DependencyResourceType,
+    ImpactField,
+    SchemaChangeCompatibility,
+    SchemaChangeKind,
 )
 from datepipette.domain.datasets import (
     Dataset,
@@ -41,6 +50,8 @@ from datepipette.domain.datasets import (
     DatasetPreview,
     DatasetValidation,
     DatasetValidationState,
+    DatasetVersion,
+    DatasetVersionState,
     FieldDisplay,
     FieldDisplayFormat,
     FieldSource,
@@ -238,6 +249,56 @@ class DatasetCollectionResponse(BaseModel):
     meta: CursorMeta
 
 
+class DatasetVersionResponse(BaseModel):
+    id: UUID
+    dataset_id: UUID
+    state: DatasetVersionState
+    revision: int
+    definition: DefinitionPayload
+    validation: DatasetValidationResponse | None
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class DatasetVersionCollectionResponse(BaseModel):
+    data: list[DatasetVersionResponse]
+    meta: CursorMeta
+
+
+class ImpactFieldResponse(BaseModel):
+    field_id: UUID
+    name: str
+    data_type: str | None
+    nullable: bool | None
+
+
+class DatasetSchemaChangeResponse(BaseModel):
+    kind: SchemaChangeKind
+    compatibility: SchemaChangeCompatibility
+    field_id: UUID
+    before: ImpactFieldResponse | None
+    after: ImpactFieldResponse | None
+
+
+class DatasetDependencyResponse(BaseModel):
+    resource_type: DependencyResourceType
+    resource_id: UUID
+
+
+class DatasetImpactResponse(BaseModel):
+    dataset_id: UUID
+    baseline_version_id: UUID | None
+    draft_version_id: UUID
+    draft_revision: int
+    draft_validation_state: DatasetValidationState
+    ready_for_publication: bool
+    breaking_change_count: int
+    changes: list[DatasetSchemaChangeResponse]
+    affected_dependencies: list[DatasetDependencyResponse]
+    blocking_dependencies: list[DatasetDependencyResponse]
+
+
 def _service(request: Request) -> DatasetService:
     return cast(DatasetService, request.app.state.dataset_service)
 
@@ -344,6 +405,68 @@ def _draft_response(value: DatasetDraft) -> DatasetDraftResponse:
         created_by=value.created_by,
         created_at=value.created_at,
         updated_at=value.updated_at,
+    )
+
+
+def _version_response(value: DatasetVersion) -> DatasetVersionResponse:
+    document = value.definition.to_document()
+    definition = (
+        SqlDefinitionPayload.model_validate(document)
+        if isinstance(value.definition, SqlDatasetDefinition)
+        else VisualDefinitionPayload.model_validate(document)
+    )
+    return DatasetVersionResponse(
+        id=value.id,
+        dataset_id=value.dataset_id,
+        state=value.state,
+        revision=value.revision,
+        definition=definition,
+        validation=_validation_response(value.validation) if value.validation else None,
+        created_by=value.created_by,
+        created_at=value.created_at,
+        updated_at=value.updated_at,
+    )
+
+
+def _impact_field_response(value: ImpactField | None) -> ImpactFieldResponse | None:
+    if value is None:
+        return None
+    return ImpactFieldResponse(
+        field_id=value.field_id,
+        name=value.name,
+        data_type=value.data_type,
+        nullable=value.nullable,
+    )
+
+
+def _dependency_response(value: DatasetDependencyReference) -> DatasetDependencyResponse:
+    return DatasetDependencyResponse(
+        resource_type=value.resource_type,
+        resource_id=value.resource_id,
+    )
+
+
+def _impact_response(value: DatasetSchemaImpact) -> DatasetImpactResponse:
+    return DatasetImpactResponse(
+        dataset_id=value.dataset_id,
+        baseline_version_id=value.baseline_version_id,
+        draft_version_id=value.draft_version_id,
+        draft_revision=value.draft_revision,
+        draft_validation_state=value.draft_validation_state,
+        ready_for_publication=value.ready_for_publication,
+        breaking_change_count=value.breaking_change_count,
+        changes=[
+            DatasetSchemaChangeResponse(
+                kind=change.kind,
+                compatibility=change.compatibility,
+                field_id=change.field_id,
+                before=_impact_field_response(change.before),
+                after=_impact_field_response(change.after),
+            )
+            for change in value.changes
+        ],
+        affected_dependencies=[_dependency_response(item) for item in value.affected_dependencies],
+        blocking_dependencies=[_dependency_response(item) for item in value.blocking_dependencies],
     )
 
 
@@ -526,6 +649,62 @@ async def read_dataset(
     return _dataset_response(value)
 
 
+@router.get(
+    "/{dataset_id}/versions",
+    response_model=DatasetVersionCollectionResponse,
+    responses={**_COMMON_RESPONSES, 400: {"model": ProblemDetails}},
+)
+async def list_dataset_versions(
+    dataset_id: UUID,
+    request: Request,
+    session: CurrentSession,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> DatasetVersionCollectionResponse:
+    try:
+        page = await _service(request).list_versions(
+            actor=session.user,
+            dataset_id=dataset_id,
+            cursor=cursor,
+            limit=limit,
+        )
+    except InvalidDatasetCursorError as exc:
+        raise ApiProblem(
+            status_code=400,
+            code="invalid_cursor",
+            title="Invalid pagination cursor",
+            detail="The supplied dataset-version pagination cursor is invalid.",
+        ) from exc
+    except DatasetNotFoundError as exc:
+        raise _not_found() from exc
+    return DatasetVersionCollectionResponse(
+        data=[_version_response(item) for item in page.versions],
+        meta=CursorMeta(next_cursor=page.next_cursor),
+    )
+
+
+@router.get(
+    "/{dataset_id}/versions/{version_id}",
+    response_model=DatasetVersionResponse,
+    responses=_COMMON_RESPONSES,
+)
+async def read_dataset_version(
+    dataset_id: UUID,
+    version_id: UUID,
+    request: Request,
+    session: CurrentSession,
+) -> DatasetVersionResponse:
+    try:
+        version = await _service(request).get_version(
+            actor=session.user,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+    except DatasetNotFoundError as exc:
+        raise _not_found() from exc
+    return _version_response(version)
+
+
 @router.patch(
     "/{dataset_id}",
     response_model=DatasetResponse,
@@ -573,6 +752,51 @@ async def read_dataset_draft(
         raise _not_found() from exc
     response.headers["ETag"] = draft_etag(draft.revision)
     return _draft_response(draft)
+
+
+@router.post(
+    "/{dataset_id}/draft/impact-analyses",
+    response_model=DatasetImpactResponse,
+    responses={
+        **_COMMON_RESPONSES,
+        200: {"headers": _ETAG_HEADER},
+        400: {"model": ProblemDetails},
+        409: {"model": ProblemDetails},
+        428: {"model": ProblemDetails},
+    },
+)
+async def analyze_dataset_draft_impact(
+    dataset_id: UUID,
+    request: Request,
+    response: Response,
+    session: CsrfSession,
+    if_match: Annotated[str | None, Header(alias="If-Match", max_length=64)] = None,
+) -> DatasetImpactResponse:
+    try:
+        impact = await _service(request).analyze_draft_impact(
+            actor=session.user,
+            dataset_id=dataset_id,
+            expected_revision=expected_draft_revision(if_match),
+            request_id=request_id(),
+        )
+    except DatasetRevisionConflictError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dataset_revision_conflict",
+            title="Dataset draft changed",
+            detail="Refetch and validate the latest draft before analyzing impact.",
+        ) from exc
+    except DatasetDraftImpactNotValidatedError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dataset_draft_not_validated",
+            title="Dataset draft is not validated",
+            detail="Validate the current draft before analyzing its schema impact.",
+        ) from exc
+    except DatasetNotFoundError as exc:
+        raise _not_found() from exc
+    response.headers["ETag"] = draft_etag(impact.draft_revision)
+    return _impact_response(impact)
 
 
 @router.put(
