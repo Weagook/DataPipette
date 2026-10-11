@@ -33,11 +33,14 @@ class DatasetDefinitionKind(StrEnum):
 class DatasetValidationState(StrEnum):
     VALID = "valid"
     VALID_WITH_WARNINGS = "valid_with_warnings"
+    BLOCKED = "blocked"
     INVALID = "invalid"
 
 
 class ValidationSeverity(StrEnum):
+    INFO = "info"
     WARNING = "warning"
+    BLOCKED = "blocked"
     ERROR = "error"
 
 
@@ -46,6 +49,12 @@ class ValidationFindingCode(StrEnum):
     SOURCE_FIELD_NOT_FOUND = "source_field_not_found"
     SOURCE_JOIN_COLUMN_NOT_FOUND = "source_join_column_not_found"
     LARGE_ESTIMATED_RESULT = "large_estimated_result"
+    HIGH_PLANNER_COST = "high_planner_cost"
+    TOO_MANY_JOINS = "too_many_joins"
+    LARGE_SEQUENTIAL_SCAN = "large_sequential_scan"
+    NO_VISIBLE_INDEX_FOR_LARGE_SCAN = "no_visible_index_for_large_scan"
+    LARGE_SORT = "large_sort"
+    STALE_RELATION_STATISTICS = "stale_relation_statistics"
     SQL_SOURCE_RELATION_NOT_FOUND = "sql_source_relation_not_found"
     SQL_QUERY_INVALID = "sql_query_invalid"
     SQL_RESULT_SCHEMA_MISMATCH = "sql_result_schema_mismatch"
@@ -501,6 +510,8 @@ class DatasetValidationFinding:
     field_id: UUID | None = None
     relation_id: UUID | None = None
     join_id: UUID | None = None
+    observed_value: float | None = None
+    threshold_value: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -517,6 +528,45 @@ class DatasetPlanSummary:
     estimated_rows: int
     startup_cost: float
     total_cost: float
+    node_count: int = 1
+    join_count: int = 0
+    sort_count: int = 0
+    max_plan_rows: int = 0
+    max_sequential_scan_rows: int = 0
+    max_sort_rows: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetRelationStatistics:
+    relation_id: UUID | None
+    schema_name: str
+    relation_name: str
+    approximate_rows: int
+    relation_bytes: int
+    index_bytes: int
+    visible_index_count: int
+    statistics_updated_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class QuerySafetyPolicy:
+    estimated_rows_warning: int = 1_000_000
+    estimated_rows_block: int = 10_000_000
+    total_cost_warning: float = 100_000.0
+    total_cost_block: float = 1_000_000.0
+    join_count_warning: int = 5
+    join_count_block: int = 9
+    sequential_scan_rows_warning: int = 250_000
+    sort_rows_warning: int = 500_000
+    stale_statistics_days: int = 30
+
+    def __post_init__(self) -> None:
+        if self.estimated_rows_warning >= self.estimated_rows_block:
+            raise ValueError("Estimated row warning threshold must be below block threshold")
+        if self.total_cost_warning >= self.total_cost_block:
+            raise ValueError("Planner cost warning threshold must be below block threshold")
+        if self.join_count_warning >= self.join_count_block:
+            raise ValueError("Join warning threshold must be below block threshold")
 
 
 @dataclass(frozen=True, slots=True)
@@ -528,6 +578,7 @@ class DatasetValidation:
     result_schema: tuple[ValidatedDatasetField, ...]
     plan: DatasetPlanSummary | None
     findings: tuple[DatasetValidationFinding, ...]
+    relation_statistics: tuple[DatasetRelationStatistics, ...] = ()
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -550,6 +601,12 @@ class DatasetValidation:
                     "estimated_rows": self.plan.estimated_rows,
                     "startup_cost": self.plan.startup_cost,
                     "total_cost": self.plan.total_cost,
+                    "node_count": self.plan.node_count,
+                    "join_count": self.plan.join_count,
+                    "sort_count": self.plan.sort_count,
+                    "max_plan_rows": self.plan.max_plan_rows,
+                    "max_sequential_scan_rows": self.plan.max_sequential_scan_rows,
+                    "max_sort_rows": self.plan.max_sort_rows,
                 }
                 if self.plan is not None
                 else None
@@ -561,8 +618,27 @@ class DatasetValidation:
                     "field_id": str(finding.field_id) if finding.field_id else None,
                     "relation_id": str(finding.relation_id) if finding.relation_id else None,
                     "join_id": str(finding.join_id) if finding.join_id else None,
+                    "observed_value": finding.observed_value,
+                    "threshold_value": finding.threshold_value,
                 }
                 for finding in self.findings
+            ],
+            "relation_statistics": [
+                {
+                    "relation_id": str(item.relation_id) if item.relation_id else None,
+                    "schema_name": item.schema_name,
+                    "relation_name": item.relation_name,
+                    "approximate_rows": item.approximate_rows,
+                    "relation_bytes": item.relation_bytes,
+                    "index_bytes": item.index_bytes,
+                    "visible_index_count": item.visible_index_count,
+                    "statistics_updated_at": (
+                        item.statistics_updated_at.isoformat()
+                        if item.statistics_updated_at is not None
+                        else None
+                    ),
+                }
+                for item in self.relation_statistics
             ],
         }
 
@@ -590,6 +666,14 @@ class DatasetValidation:
                         estimated_rows=int(plan_value["estimated_rows"]),
                         startup_cost=float(plan_value["startup_cost"]),
                         total_cost=float(plan_value["total_cost"]),
+                        node_count=int(plan_value.get("node_count", 1)),
+                        join_count=int(plan_value.get("join_count", 0)),
+                        sort_count=int(plan_value.get("sort_count", 0)),
+                        max_plan_rows=int(
+                            plan_value.get("max_plan_rows", plan_value["estimated_rows"])
+                        ),
+                        max_sequential_scan_rows=int(plan_value.get("max_sequential_scan_rows", 0)),
+                        max_sort_rows=int(plan_value.get("max_sort_rows", 0)),
                     )
                     if plan_value is not None
                     else None
@@ -603,8 +687,37 @@ class DatasetValidation:
                             UUID(finding["relation_id"]) if finding.get("relation_id") else None
                         ),
                         join_id=(UUID(finding["join_id"]) if finding.get("join_id") else None),
+                        observed_value=(
+                            float(finding["observed_value"])
+                            if finding.get("observed_value") is not None
+                            else None
+                        ),
+                        threshold_value=(
+                            float(finding["threshold_value"])
+                            if finding.get("threshold_value") is not None
+                            else None
+                        ),
                     )
                     for finding in document["findings"]
+                ),
+                relation_statistics=tuple(
+                    DatasetRelationStatistics(
+                        relation_id=(
+                            UUID(item["relation_id"]) if item.get("relation_id") else None
+                        ),
+                        schema_name=item["schema_name"],
+                        relation_name=item["relation_name"],
+                        approximate_rows=int(item["approximate_rows"]),
+                        relation_bytes=int(item["relation_bytes"]),
+                        index_bytes=int(item["index_bytes"]),
+                        visible_index_count=int(item["visible_index_count"]),
+                        statistics_updated_at=(
+                            datetime.fromisoformat(item["statistics_updated_at"])
+                            if item.get("statistics_updated_at")
+                            else None
+                        ),
+                    )
+                    for item in document.get("relation_statistics", ())
                 ),
             )
         except (KeyError, TypeError, ValueError) as exc:

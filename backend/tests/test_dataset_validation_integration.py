@@ -202,7 +202,17 @@ def test_validation_compiles_quoted_select_persists_types_and_is_invalidated() -
         ]
         assert result["plan"]["node_type"] == "Seq Scan"
         assert result["plan"]["estimated_rows"] >= 0
+        assert result["plan"]["node_count"] == 1
+        assert result["plan"]["max_sequential_scan_rows"] >= 0
         assert result["findings"] == []
+        assert len(result["relation_statistics"]) == 1
+        assert (
+            result["relation_statistics"][0]["relation_id"]
+            == (definition["source"]["relations"][0]["id"])
+        )
+        assert result["relation_statistics"][0]["schema_name"] == SCHEMA
+        assert result["relation_statistics"][0]["relation_name"] == "Order Data"
+        assert result["relation_statistics"][0]["visible_index_count"] == 0
 
         stored = client.get(f"/api/v1/datasets/{dataset_id}/draft")
         assert stored.status_code == 200
@@ -284,6 +294,8 @@ def test_validation_returns_structured_findings_for_source_drift() -> None:
                 "field_id": missing_column_definition["fields"][1]["id"],
                 "relation_id": missing_column_definition["source"]["relations"][0]["id"],
                 "join_id": None,
+                "observed_value": None,
+                "threshold_value": None,
             }
         ]
 
@@ -302,8 +314,45 @@ def test_validation_returns_structured_findings_for_source_drift() -> None:
                 "field_id": None,
                 "relation_id": missing_relation_definition["source"]["relations"][0]["id"],
                 "join_id": None,
+                "observed_value": None,
+                "threshold_value": None,
             }
         ]
+
+
+def test_query_safety_block_is_persisted_and_prevents_preview() -> None:
+    asyncio.run(_bootstrap_source())
+    settings = Settings(
+        environment="test",
+        docs_enabled=False,
+        query_safety_total_cost_warning=0.01,
+        query_safety_total_cost_block=0.02,
+    )
+    with TestClient(create_app(settings=settings)) as client:
+        _login(client)
+        definition = _definition()
+        dataset_id, etag = _dataset(client, _connection(client), definition)
+
+        validation = client.post(
+            f"/api/v1/datasets/{dataset_id}/draft/validations",
+            headers={**_csrf(client), "If-Match": etag},
+        )
+
+        assert validation.status_code == 200, validation.text
+        assert validation.json()["state"] == "blocked"
+        cost_finding = next(
+            item for item in validation.json()["findings"] if item["code"] == "high_planner_cost"
+        )
+        assert cost_finding["severity"] == "blocked"
+        assert cost_finding["observed_value"] >= cost_finding["threshold_value"]
+
+        preview = client.post(
+            f"/api/v1/datasets/{dataset_id}/draft/previews",
+            json={"limit": 1},
+            headers={**_csrf(client), "If-Match": etag},
+        )
+        assert preview.status_code == 409
+        assert preview.json()["code"] == "dataset_draft_not_validated"
 
 
 def test_validation_requires_csrf_revision_and_redacts_source_failures() -> None:

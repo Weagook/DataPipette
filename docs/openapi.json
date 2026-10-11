@@ -1402,6 +1402,13 @@
               }
             ]
           },
+          "relation_statistics": {
+            "items": {
+              "$ref": "#/components/schemas/RelationStatisticsResponse"
+            },
+            "title": "Relation Statistics",
+            "type": "array"
+          },
           "result_schema": {
             "items": {
               "$ref": "#/components/schemas/ValidatedFieldResponse"
@@ -1429,7 +1436,8 @@
           "compiled_sql",
           "result_schema",
           "plan",
-          "findings"
+          "findings",
+          "relation_statistics"
         ],
         "title": "DatasetValidationResponse",
         "type": "object"
@@ -1438,6 +1446,7 @@
         "enum": [
           "valid",
           "valid_with_warnings",
+          "blocked",
           "invalid"
         ],
         "title": "DatasetValidationState",
@@ -2167,9 +2176,33 @@
             "title": "Estimated Rows",
             "type": "integer"
           },
+          "join_count": {
+            "title": "Join Count",
+            "type": "integer"
+          },
+          "max_plan_rows": {
+            "title": "Max Plan Rows",
+            "type": "integer"
+          },
+          "max_sequential_scan_rows": {
+            "title": "Max Sequential Scan Rows",
+            "type": "integer"
+          },
+          "max_sort_rows": {
+            "title": "Max Sort Rows",
+            "type": "integer"
+          },
+          "node_count": {
+            "title": "Node Count",
+            "type": "integer"
+          },
           "node_type": {
             "title": "Node Type",
             "type": "string"
+          },
+          "sort_count": {
+            "title": "Sort Count",
+            "type": "integer"
           },
           "startup_cost": {
             "title": "Startup Cost",
@@ -2184,7 +2217,13 @@
           "node_type",
           "estimated_rows",
           "startup_cost",
-          "total_cost"
+          "total_cost",
+          "node_count",
+          "join_count",
+          "sort_count",
+          "max_plan_rows",
+          "max_sequential_scan_rows",
+          "max_sort_rows"
         ],
         "title": "PlanSummaryResponse",
         "type": "object"
@@ -2633,6 +2672,70 @@
         ],
         "title": "RelationKind",
         "type": "string"
+      },
+      "RelationStatisticsResponse": {
+        "properties": {
+          "approximate_rows": {
+            "title": "Approximate Rows",
+            "type": "integer"
+          },
+          "index_bytes": {
+            "title": "Index Bytes",
+            "type": "integer"
+          },
+          "relation_bytes": {
+            "title": "Relation Bytes",
+            "type": "integer"
+          },
+          "relation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation Id"
+          },
+          "relation_name": {
+            "title": "Relation Name",
+            "type": "string"
+          },
+          "schema_name": {
+            "title": "Schema Name",
+            "type": "string"
+          },
+          "statistics_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statistics Updated At"
+          },
+          "visible_index_count": {
+            "title": "Visible Index Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "relation_id",
+          "schema_name",
+          "relation_name",
+          "approximate_rows",
+          "relation_bytes",
+          "index_bytes",
+          "visible_index_count",
+          "statistics_updated_at"
+        ],
+        "title": "RelationStatisticsResponse",
+        "type": "object"
       },
       "ReplaceDraftRequest": {
         "additionalProperties": false,
@@ -3442,6 +3545,12 @@
           "source_field_not_found",
           "source_join_column_not_found",
           "large_estimated_result",
+          "high_planner_cost",
+          "too_many_joins",
+          "large_sequential_scan",
+          "no_visible_index_for_large_scan",
+          "large_sort",
+          "stale_relation_statistics",
           "sql_source_relation_not_found",
           "sql_query_invalid",
           "sql_result_schema_mismatch"
@@ -3478,6 +3587,17 @@
             ],
             "title": "Join Id"
           },
+          "observed_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Value"
+          },
           "relation_id": {
             "anyOf": [
               {
@@ -3492,6 +3612,17 @@
           },
           "severity": {
             "$ref": "#/components/schemas/ValidationSeverity"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
           }
         },
         "required": [
@@ -3499,14 +3630,18 @@
           "severity",
           "field_id",
           "relation_id",
-          "join_id"
+          "join_id",
+          "observed_value",
+          "threshold_value"
         ],
         "title": "ValidationFindingResponse",
         "type": "object"
       },
       "ValidationSeverity": {
         "enum": [
+          "info",
           "warning",
+          "blocked",
           "error"
         ],
         "title": "ValidationSeverity",

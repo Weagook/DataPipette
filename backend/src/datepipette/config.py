@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = Field(default=900, ge=60, le=86_400)
     source_connect_timeout_seconds: int = Field(default=5, ge=1, le=30)
     source_statement_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    query_safety_estimated_rows_warning: int = Field(default=1_000_000, ge=1)
+    query_safety_estimated_rows_block: int = Field(default=10_000_000, ge=2)
+    query_safety_total_cost_warning: float = Field(default=100_000.0, gt=0)
+    query_safety_total_cost_block: float = Field(default=1_000_000.0, gt=0)
+    query_safety_join_count_warning: int = Field(default=5, ge=1, le=63)
+    query_safety_join_count_block: int = Field(default=9, ge=2, le=64)
+    query_safety_sequential_scan_rows_warning: int = Field(default=250_000, ge=1)
+    query_safety_sort_rows_warning: int = Field(default=500_000, ge=1)
+    query_safety_stale_statistics_days: int = Field(default=30, ge=1, le=3650)
     refresh_statement_timeout_seconds: int = Field(default=1800, ge=1, le=86_400)
     refresh_batch_rows: int = Field(default=50_000, ge=1_000, le=100_000)
     refresh_max_attempts: int = Field(default=3, ge=1, le=10)
@@ -117,6 +126,12 @@ class Settings(BaseSettings):
                 raise ValueError("Production S3 endpoints must use HTTPS")
         if self.refresh_run_lease_seconds <= self.refresh_cancel_poll_seconds:
             raise ValueError("Refresh run lease must exceed the heartbeat polling interval")
+        if self.query_safety_estimated_rows_warning >= self.query_safety_estimated_rows_block:
+            raise ValueError("Query safety row warning threshold must be below block threshold")
+        if self.query_safety_total_cost_warning >= self.query_safety_total_cost_block:
+            raise ValueError("Query safety cost warning threshold must be below block threshold")
+        if self.query_safety_join_count_warning >= self.query_safety_join_count_block:
+            raise ValueError("Query safety join warning threshold must be below block threshold")
         return self
 
     @property

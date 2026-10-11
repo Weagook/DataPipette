@@ -114,7 +114,11 @@ class DatasetPreviewService:
             validation is None
             or validation.validated_revision != draft.revision
             or validation.compiled_sql is None
-            or validation.state is DatasetValidationState.INVALID
+            or validation.state
+            not in {
+                DatasetValidationState.VALID,
+                DatasetValidationState.VALID_WITH_WARNINGS,
+            }
             or validated_fields != expected_fields
         ):
             raise DatasetDraftNotValidatedError

@@ -25,6 +25,7 @@ from datepipette.domain.datasets import (
     DatasetDefinition,
     DatasetDraft,
     DatasetPlanSummary,
+    DatasetRelationStatistics,
     DatasetValidation,
     DatasetValidationFinding,
     DatasetValidationState,
@@ -45,6 +46,7 @@ class SourceValidationResult:
     result_schema: tuple[ValidatedDatasetField, ...]
     plan: DatasetPlanSummary | None
     findings: tuple[DatasetValidationFinding, ...]
+    relation_statistics: tuple[DatasetRelationStatistics, ...] = ()
 
 
 class SourceDatasetValidator(Protocol):
@@ -138,6 +140,7 @@ class DatasetValidationService:
             result_schema=source_result.result_schema,
             plan=source_result.plan,
             findings=source_result.findings,
+            relation_statistics=source_result.relation_statistics,
         )
         stored = await self._dataset_store.record_validation(
             dataset_id=dataset.id,
