@@ -54,3 +54,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0024](0024-refresh-cancellation-and-bounded-retries.md): Refresh cancellation and bounded execution retries
 - [ADR-0025](0025-dataset-version-history-and-schema-impact.md): Dataset version history and revision-bound schema impact
 - [ADR-0026](0026-bounded-query-safety-advisor.md): Bounded PostgreSQL Query Safety Advisor
+- [ADR-0027](0027-published-dataset-exploration-contract.md): Published dataset exploration contract

@@ -6,6 +6,8 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
+from datepipette.domain.datasets import FieldDisplayFormat
+
 
 class SnapshotFilterOperator(StrEnum):
     EQUALS = "eq"
@@ -65,6 +67,8 @@ class SnapshotQueryField:
     data_type: str
     nullable: bool
     visible: bool
+    label: str
+    display_format: FieldDisplayFormat | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,3 +137,30 @@ class SnapshotQueryPage:
     next_cursor: str | None
     truncated_by_bytes: bool
     last_refresh_error_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetExplorationColumn:
+    field_id: UUID
+    name: str
+    label: str
+    data_type: str
+    nullable: bool
+    visible: bool
+    display_format: FieldDisplayFormat | None
+    filter_operators: tuple[SnapshotFilterOperator, ...]
+    sortable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetExploration:
+    dataset_id: UUID
+    snapshot_id: UUID
+    snapshot_row_count: int
+    snapshot_activated_at: datetime
+    refresh_state: SnapshotRefreshState
+    last_refresh_error: str | None
+    last_refresh_error_at: datetime | None
+    is_stale: bool
+    columns: tuple[DatasetExplorationColumn, ...]
+    default_field_ids: tuple[UUID, ...]

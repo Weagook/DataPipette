@@ -899,6 +899,151 @@
         "title": "DatasetDraftResponse",
         "type": "object"
       },
+      "DatasetExplorationColumnResponse": {
+        "properties": {
+          "data_type": {
+            "title": "Data Type",
+            "type": "string"
+          },
+          "display_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FieldDisplayFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "field_id": {
+            "format": "uuid",
+            "title": "Field Id",
+            "type": "string"
+          },
+          "filter_operators": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotFilterOperator"
+            },
+            "title": "Filter Operators",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          },
+          "sortable": {
+            "title": "Sortable",
+            "type": "boolean"
+          },
+          "visible": {
+            "title": "Visible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "field_id",
+          "name",
+          "label",
+          "data_type",
+          "nullable",
+          "visible",
+          "display_format",
+          "filter_operators",
+          "sortable"
+        ],
+        "title": "DatasetExplorationColumnResponse",
+        "type": "object"
+      },
+      "DatasetExplorationResponse": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetExplorationColumnResponse"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "dataset_id": {
+            "format": "uuid",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "default_field_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Default Field Ids",
+            "type": "array"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "last_refresh_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh Error"
+          },
+          "last_refresh_error_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh Error At"
+          },
+          "refresh_state": {
+            "$ref": "#/components/schemas/SnapshotRefreshState"
+          },
+          "snapshot_activated_at": {
+            "format": "date-time",
+            "title": "Snapshot Activated At",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "format": "uuid",
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "snapshot_row_count": {
+            "title": "Snapshot Row Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "snapshot_id",
+          "snapshot_row_count",
+          "snapshot_activated_at",
+          "refresh_state",
+          "last_refresh_error",
+          "last_refresh_error_at",
+          "is_stale",
+          "columns",
+          "default_field_ids"
+        ],
+        "title": "DatasetExplorationResponse",
+        "type": "object"
+      },
       "DatasetFreshnessResponse": {
         "properties": {
           "active_refresh_run_id": {
@@ -2843,9 +2988,23 @@
             "title": "Data Type",
             "type": "string"
           },
+          "display_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FieldDisplayFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "field_id": {
             "format": "uuid",
             "title": "Field Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
             "type": "string"
           },
           "name": {
@@ -2855,13 +3014,20 @@
           "nullable": {
             "title": "Nullable",
             "type": "boolean"
+          },
+          "visible": {
+            "title": "Visible",
+            "type": "boolean"
           }
         },
         "required": [
           "field_id",
           "name",
           "data_type",
-          "nullable"
+          "nullable",
+          "label",
+          "visible",
+          "display_format"
         ],
         "title": "SnapshotColumnResponse",
         "type": "object"
@@ -6434,6 +6600,104 @@
         "summary": "Validate Dataset Draft",
         "tags": [
           "datasets"
+        ]
+      }
+    },
+    "/api/v1/datasets/{dataset_id}/exploration": {
+      "get": {
+        "operationId": "read_dataset_exploration_api_v1_datasets__dataset_id__exploration_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetExplorationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Read Dataset Exploration",
+        "tags": [
+          "dataset rows"
         ]
       }
     },

@@ -25,6 +25,7 @@ from datepipette.application.snapshot_queries import (
     InvalidSnapshotCursorError,
     InvalidSnapshotQueryError,
 )
+from datepipette.domain.datasets import FieldDisplayFormat
 from datepipette.domain.snapshot_queries import (
     DatasetDataState,
     SnapshotFilterOperator,
@@ -73,6 +74,34 @@ class SnapshotColumnResponse(BaseModel):
     name: str
     data_type: str
     nullable: bool
+    label: str
+    visible: bool
+    display_format: FieldDisplayFormat | None
+
+
+class DatasetExplorationColumnResponse(BaseModel):
+    field_id: UUID
+    name: str
+    label: str
+    data_type: str
+    nullable: bool
+    visible: bool
+    display_format: FieldDisplayFormat | None
+    filter_operators: list[SnapshotFilterOperator]
+    sortable: bool
+
+
+class DatasetExplorationResponse(BaseModel):
+    dataset_id: UUID
+    snapshot_id: UUID
+    snapshot_row_count: int
+    snapshot_activated_at: datetime
+    refresh_state: SnapshotRefreshState
+    last_refresh_error: str | None
+    last_refresh_error_at: datetime | None
+    is_stale: bool
+    columns: list[DatasetExplorationColumnResponse]
+    default_field_ids: list[UUID]
 
 
 class SnapshotRowsDataResponse(BaseModel):
@@ -180,6 +209,75 @@ async def read_dataset_freshness(
     )
 
 
+@router.get(
+    "/{dataset_id}/exploration",
+    response_model=DatasetExplorationResponse,
+    responses={
+        401: {"model": ProblemDetails},
+        403: {"model": ProblemDetails},
+        404: {"model": ProblemDetails},
+        409: {"model": ProblemDetails},
+        503: {"model": ProblemDetails},
+    },
+)
+async def read_dataset_exploration(
+    dataset_id: UUID,
+    request: Request,
+    session: CurrentSession,
+) -> DatasetExplorationResponse:
+    try:
+        value = await _service(request).exploration(
+            actor=session.user,
+            dataset_id=dataset_id,
+        )
+    except DatasetSnapshotNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dataset_not_found",
+            title="Dataset not found",
+            detail="The requested dataset does not exist.",
+        ) from exc
+    except DatasetSnapshotNotPublishedError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dataset_snapshot_not_published",
+            title="Dataset snapshot not published",
+            detail="Publish a successful dataset snapshot before exploring rows.",
+        ) from exc
+    except DatasetSnapshotUnavailableError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="snapshot_metadata_unavailable",
+            title="Snapshot metadata unavailable",
+            detail="The active snapshot metadata could not be read safely.",
+        ) from exc
+    return DatasetExplorationResponse(
+        dataset_id=value.dataset_id,
+        snapshot_id=value.snapshot_id,
+        snapshot_row_count=value.snapshot_row_count,
+        snapshot_activated_at=value.snapshot_activated_at,
+        refresh_state=value.refresh_state,
+        last_refresh_error=value.last_refresh_error,
+        last_refresh_error_at=value.last_refresh_error_at,
+        is_stale=value.is_stale,
+        columns=[
+            DatasetExplorationColumnResponse(
+                field_id=field.field_id,
+                name=field.name,
+                label=field.label,
+                data_type=field.data_type,
+                nullable=field.nullable,
+                visible=field.visible,
+                display_format=field.display_format,
+                filter_operators=list(field.filter_operators),
+                sortable=field.sortable,
+            )
+            for field in value.columns
+        ],
+        default_field_ids=list(value.default_field_ids),
+    )
+
+
 @router.post(
     "/{dataset_id}/rows:query",
     response_model=SnapshotRowsResponse,
@@ -272,6 +370,9 @@ async def query_dataset_rows(
                     name=field.name,
                     data_type=field.data_type,
                     nullable=field.nullable,
+                    label=field.label,
+                    visible=field.visible,
+                    display_format=field.display_format,
                 )
                 for field in page.columns
             ],

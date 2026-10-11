@@ -53,8 +53,8 @@ Outcome: teams can safely build and share production-shaped datasets.
 
 Outcome: analysts can inspect and extract governed detailed data.
 
-- Saved dataset display settings
-- Typed filters, sorting, and pagination
+- [x] Saved dataset display settings exposed from the active published version
+- [x] Typed filters, sorting, and pagination
 - [x] CSV and XLSX background exports
 - [x] Export history, logical expiry, and signed-download flow
 - [x] Formula-injection and authorization tests

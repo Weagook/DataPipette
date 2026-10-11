@@ -61,9 +61,11 @@ from datepipette.infrastructure.object_storage import (
 DATASET_ID = uuid4()
 SNAPSHOT_ID = uuid4()
 ACTOR_ID = uuid4()
-ID_FIELD = SnapshotQueryField(uuid4(), "record_id", "field_id", "bigint", False, True)
-TEXT_FIELD = SnapshotQueryField(uuid4(), "label", "field_text", "text", True, True)
-DATE_FIELD = SnapshotQueryField(uuid4(), "day", "field_date", "date", True, True)
+ID_FIELD = SnapshotQueryField(
+    uuid4(), "record_id", "field_id", "bigint", False, True, "Record ID", None
+)
+TEXT_FIELD = SnapshotQueryField(uuid4(), "label", "field_text", "text", True, True, "Label", None)
+DATE_FIELD = SnapshotQueryField(uuid4(), "day", "field_date", "date", True, True, "Day", None)
 FIELDS = (ID_FIELD, TEXT_FIELD, DATE_FIELD)
 
 

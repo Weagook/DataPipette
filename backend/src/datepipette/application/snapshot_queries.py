@@ -18,6 +18,8 @@ from datepipette.domain.access_control import DatasetPermission
 from datepipette.domain.identity import User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
+    DatasetExploration,
+    DatasetExplorationColumn,
     DatasetFreshness,
     SnapshotFilterOperator,
     SnapshotQuery,
@@ -207,6 +209,46 @@ def _type_family(data_type: str) -> str:
     raise InvalidSnapshotQueryError("The snapshot contains an unsupported field type")
 
 
+def supported_filter_operators(
+    field: SnapshotQueryField,
+) -> tuple[SnapshotFilterOperator, ...]:
+    """Return the stable No-Code filter vocabulary accepted for one field."""
+
+    try:
+        family = _type_family(field.data_type)
+    except InvalidSnapshotQueryError:
+        return ()
+    null_operators = (
+        SnapshotFilterOperator.IS_NULL,
+        SnapshotFilterOperator.IS_NOT_NULL,
+    )
+    equality_operators = (
+        SnapshotFilterOperator.EQUALS,
+        SnapshotFilterOperator.NOT_EQUALS,
+        SnapshotFilterOperator.IN,
+    )
+    if family == "binary":
+        return null_operators
+    if family == "text":
+        return (
+            *equality_operators,
+            SnapshotFilterOperator.CONTAINS,
+            SnapshotFilterOperator.STARTS_WITH,
+            *null_operators,
+        )
+    if family in {"integer", "number", "date", "datetime", "time"}:
+        return (
+            *equality_operators,
+            SnapshotFilterOperator.GREATER_THAN,
+            SnapshotFilterOperator.GREATER_THAN_OR_EQUAL,
+            SnapshotFilterOperator.LESS_THAN,
+            SnapshotFilterOperator.LESS_THAN_OR_EQUAL,
+            SnapshotFilterOperator.BETWEEN,
+            *null_operators,
+        )
+    return (*equality_operators, *null_operators)
+
+
 def _parse_datetime(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed.astimezone(UTC) if parsed.tzinfo is not None else parsed
@@ -267,8 +309,9 @@ def _normalize_filter(
     item: SnapshotQueryFilter,
     field: SnapshotQueryField,
 ) -> SnapshotQueryFilter:
-    family = _type_family(field.data_type)
     operator = item.operator
+    if operator not in supported_filter_operators(field):
+        raise InvalidSnapshotQueryError("Filter operator is invalid for this field")
     if operator in {
         SnapshotFilterOperator.IS_NULL,
         SnapshotFilterOperator.IS_NOT_NULL,
@@ -276,23 +319,6 @@ def _normalize_filter(
         if item.value is not None or item.values:
             raise InvalidSnapshotQueryError("Null filters do not accept values")
         return item
-    if family == "binary":
-        raise InvalidSnapshotQueryError("Binary fields support only null filters")
-    if operator in {
-        SnapshotFilterOperator.CONTAINS,
-        SnapshotFilterOperator.STARTS_WITH,
-    }:
-        if family != "text":
-            raise InvalidSnapshotQueryError("Text operators require a text field")
-    elif operator in {
-        SnapshotFilterOperator.GREATER_THAN,
-        SnapshotFilterOperator.GREATER_THAN_OR_EQUAL,
-        SnapshotFilterOperator.LESS_THAN,
-        SnapshotFilterOperator.LESS_THAN_OR_EQUAL,
-        SnapshotFilterOperator.BETWEEN,
-    } and family not in {"integer", "number", "date", "datetime", "time"}:
-        raise InvalidSnapshotQueryError("Comparison operator is invalid for this field")
-
     if operator in {SnapshotFilterOperator.IN, SnapshotFilterOperator.BETWEEN}:
         expected = 2 if operator is SnapshotFilterOperator.BETWEEN else None
         if not item.values or (expected is not None and len(item.values) != expected):
@@ -379,6 +405,47 @@ class DatasetSnapshotQueryService:
         if freshness is None:
             raise DatasetSnapshotNotFoundError
         return freshness
+
+    async def exploration(self, *, actor: User, dataset_id: UUID) -> DatasetExploration:
+        try:
+            await self._authorizer.require(
+                actor=actor,
+                dataset_id=dataset_id,
+                permissions=frozenset({DatasetPermission.VIEW_ROWS}),
+            )
+        except DatasetAccessDeniedError as exc:
+            raise DatasetSnapshotNotFoundError from exc
+        context = await self._store.get_active_context(dataset_id)
+        if context is None:
+            raise DatasetSnapshotNotFoundError
+        columns = tuple(
+            DatasetExplorationColumn(
+                field_id=field.field_id,
+                name=field.name,
+                label=field.label,
+                data_type=field.data_type,
+                nullable=field.nullable,
+                visible=field.visible,
+                display_format=field.display_format,
+                filter_operators=supported_filter_operators(field),
+                sortable=True,
+            )
+            for field in context.fields
+        )
+        return DatasetExploration(
+            dataset_id=context.dataset_id,
+            snapshot_id=context.snapshot_id,
+            snapshot_row_count=context.snapshot_row_count,
+            snapshot_activated_at=context.activated_at,
+            refresh_state=context.refresh_state,
+            last_refresh_error=context.last_refresh_error,
+            last_refresh_error_at=context.last_refresh_error_at,
+            is_stale=context.is_stale,
+            columns=columns,
+            default_field_ids=tuple(field.field_id for field in context.fields if field.visible)[
+                :MAX_QUERY_FIELDS
+            ],
+        )
 
     async def query(
         self,

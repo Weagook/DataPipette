@@ -99,7 +99,7 @@ Source query execution, bounded streaming, local candidate creation, verified lo
 
 ### Query
 
-Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local and S3-backed snapshots. S3 objects are materialized into unique ephemeral files and verified against persisted size and SHA-256 before DuckDB reads them. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. Snapshot row responses reuse that projection. Chart query compilation, aggregation, direct or ranged S3 reads, distributed concurrency controls, and production benchmarks remain future work.
+Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local and S3-backed snapshots. S3 objects are materialized into unique ephemeral files and verified against persisted size and SHA-256 before DuckDB reads them. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. An authorized exploration descriptor projects ordered saved display settings and type-compatible filter/sort capabilities from the active immutable version; row responses reuse that display contract and freshness projection. Chart query compilation, aggregation, direct or ranged S3 reads, distributed concurrency controls, and production benchmarks remain future work.
 
 ### Visualization
 
