@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     s3_server_side_encryption: Literal["AES256"] | None = None
     s3_connect_timeout_seconds: int = Field(default=5, ge=1, le=60)
     s3_read_timeout_seconds: int = Field(default=60, ge=1, le=600)
+    cleanup_enabled: bool = True
+    cleanup_interval_seconds: int = Field(default=300, ge=60, le=86_400)
+    cleanup_batch_size: int = Field(default=100, ge=1, le=1000)
+    cleanup_snapshot_grace_seconds: int = Field(default=3600, ge=60, le=604_800)
+    cleanup_export_grace_seconds: int = Field(default=300, ge=60, le=86_400)
+    cleanup_orphan_grace_seconds: int = Field(default=86_400, ge=3600, le=2_592_000)
     snapshot_query_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     snapshot_query_memory_limit_mb: int = Field(default=256, ge=64, le=4096)
     snapshot_query_threads: int = Field(default=2, ge=1, le=16)

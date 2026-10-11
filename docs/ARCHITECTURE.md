@@ -91,7 +91,7 @@ Scheduled refresh uses an independent database-polling process. Bounded `SKIP LO
 
 ### Execution
 
-Source query execution, bounded streaming, local candidate creation, verified local or S3-compatible Parquet publication, basic result statistics, and snapshot activation are implemented for version-1 single-relation visual definitions, version-2 joined visual definitions, and advanced read-only SQL definitions. Cancellation, progress, cleanup, orphan reconciliation, and broader resource policies remain later execution capabilities.
+Source query execution, bounded streaming, local candidate creation, verified local or S3-compatible Parquet publication, basic result statistics, and snapshot activation are implemented for version-1 single-relation visual definitions, version-2 joined visual definitions, and advanced read-only SQL definitions. Automatic cleanup removes eligible superseded objects after a grace period and reconciles sufficiently old unreferenced generated objects. Cancellation, progress, and broader resource policies remain later execution capabilities.
 
 ### Query
 
@@ -103,7 +103,7 @@ Chart specifications, type validation, dashboard layouts, chart dependency track
 
 ### Export
 
-Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, and short-lived capability issuance are implemented. The worker validates the stored typed query against the captured snapshot schema, streams bounded DuckDB batches into a local candidate file, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file or redirects to an equally short-lived presigned private-object URL; physical cleanup remains future work.
+Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, short-lived capability issuance, and automatic physical cleanup are implemented. The worker validates the stored typed query against the captured snapshot schema, streams bounded DuckDB batches into a local candidate file, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file or redirects to an equally short-lived presigned private-object URL. Cleanup removes the artifact after expiry plus a delivery grace while retaining job history.
 
 ### Audit and operations
 
@@ -164,6 +164,8 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 - If no successful snapshot exists, the dataset has no readable rows and exposes a failed state.
 - Dashboard charts fail independently.
 - Cleanup jobs are idempotent and retryable.
+- Cleanup never removes an active snapshot or a superseded snapshot required by queued, running, or unexpired exports.
+- Old unreferenced objects are reconciled through bounded prefix scans after a publication-safety grace.
 - Expired export files are represented explicitly; their former signed URLs are never treated as proof of access.
 - Schema drift is surfaced during validation or refresh and never silently changes a published visual definition.
 

@@ -121,6 +121,7 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Pagination cursors are encrypted and authenticated, contain no readable business values, and are bound to one dataset, snapshot, projection, filter set, and sort order.
 - Local snapshot paths are generated metadata keys, resolved under the configured storage root, and rejected if they escape it.
 - S3 bucket names, endpoints, and credentials are deployment configuration rather than object identity. Persisted keys remain relative and cannot select another bucket or endpoint.
+- Cleanup lists and deletes only generated `datasets/` and `exports/` prefixes. Active metadata references are authoritative; orphan deletion additionally requires a long age grace to avoid racing publication.
 - Query audit events contain counts and safe identifiers only; rows, filters, cursor text, SQL, and absolute paths are excluded.
 
 ## Export safety
@@ -135,6 +136,7 @@ A viewer with dashboard access may receive chart results but must not use that r
 - CSV and XLSX string cells beginning with spreadsheet formula/control prefixes are escaped with a leading apostrophe. Precision-sensitive decimal values remain text.
 - Download capabilities are issued only after dataset and job-ownership authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. A capability already issued before grant revocation remains valid until this short expiry. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
 - S3 download resolution verifies the private object before issuing a `307` redirect. The redirect is a bearer capability and is never treated as proof of authorization after its expiry.
+- Physical export deletion waits until logical expiry plus a delivery grace. Snapshot deletion waits for supersession grace and the absence of queued, running, or unexpired export references.
 
 ## Audit
 

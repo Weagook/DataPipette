@@ -38,6 +38,7 @@ class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], bytes] = {}
         self.metadata: dict[tuple[str, str], dict[str, str]] = {}
+        self.modified: dict[tuple[str, str], datetime] = {}
 
     def upload_file(
         self,
@@ -52,6 +53,7 @@ class FakeS3Client:
         identity = (bucket, key)
         self.objects[identity] = Path(filename).read_bytes()
         self.metadata[identity] = dict(ExtraArgs["Metadata"])
+        self.modified[identity] = datetime.now(UTC)
 
     def head_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:
         identity = (Bucket, Key)
@@ -83,6 +85,30 @@ class FakeS3Client:
         assert Params["ResponseContentDisposition"].startswith("attachment;")
         return f"https://objects.example/{Params['Key']}?expires={ExpiresIn}"
 
+    def delete_object(self, *, Bucket: str, Key: str) -> None:
+        identity = (Bucket, Key)
+        self.objects.pop(identity, None)
+        self.metadata.pop(identity, None)
+        self.modified.pop(identity, None)
+
+    def list_objects_v2(self, **parameters: Any) -> dict[str, Any]:
+        bucket = str(parameters["Bucket"])
+        prefix = str(parameters["Prefix"])
+        after = str(parameters.get("StartAfter", ""))
+        limit = int(parameters["MaxKeys"])
+        keys = sorted(
+            key
+            for stored_bucket, key in self.objects
+            if stored_bucket == bucket and key.startswith(prefix) and key > after
+        )
+        selected = keys[:limit]
+        return {
+            "Contents": [
+                {"Key": key, "LastModified": self.modified[(bucket, key)]} for key in selected
+            ],
+            "IsTruncated": len(keys) > limit,
+        }
+
 
 def _digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
@@ -113,6 +139,29 @@ def test_local_storage_publishes_atomically_and_rejects_unsafe_keys(tmp_path: Pa
         storage.materialize_path("datasets/one.parquet", expected_byte_size=99)
     with pytest.raises(ValueError):
         storage.materialize_path("../secret")
+
+
+def test_local_storage_lists_bounded_pages_and_deletes_idempotently(tmp_path: Path) -> None:
+    storage = LocalObjectStorage(tmp_path)
+    for key in ("datasets/b.parquet", "datasets/a.parquet", "exports/c.csv"):
+        path = tmp_path / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(key.encode())
+
+    first = storage.list_page("datasets/", after_key=None, limit=1)
+    assert [item.object_key for item in first.objects] == ["datasets/a.parquet"]
+    assert first.next_after_key == "datasets/a.parquet"
+    second = storage.list_page("datasets/", after_key=first.next_after_key, limit=2)
+    assert [item.object_key for item in second.objects] == ["datasets/b.parquet"]
+    assert second.next_after_key is None
+
+    storage.delete("datasets/a.parquet")
+    storage.delete("datasets/a.parquet")
+    assert not (tmp_path / "datasets/a.parquet").exists()
+    with pytest.raises(ValueError):
+        storage.list_page("datasets", after_key=None, limit=1)
+    with pytest.raises(ValueError):
+        storage.list_page("datasets/", after_key=None, limit=0)
 
 
 def test_s3_storage_verifies_upload_download_and_presigns(tmp_path: Path) -> None:
@@ -174,6 +223,10 @@ def test_s3_storage_verifies_upload_download_and_presigns(tmp_path: Path) -> Non
             expected_checksum_sha256=checksum,
         )
     client.metadata[("analytics", "datasets/snapshot.parquet")] = {"datepipette-sha256": checksum}
+
+    page = storage.list_page("datasets/", after_key=None, limit=1)
+    assert [item.object_key for item in page.objects] == ["datasets/snapshot.parquet"]
+    storage.delete("datasets/missing.parquet")
 
     client.objects[("analytics", "datasets/snapshot.parquet")] = b"tampered"
     with (
@@ -249,7 +302,7 @@ def test_minio_round_trip_with_runtime_factory(tmp_path: Path) -> None:
     payload = b"real-minio-object"
     candidate = tmp_path / "minio.part"
     candidate.write_bytes(payload)
-    key = "integration/object.bin"
+    key = f"exports/integration/{uuid4()}.bin"
 
     storage.publish_candidate(
         candidate,
@@ -275,6 +328,19 @@ def test_minio_round_trip_with_runtime_factory(tmp_path: Path) -> None:
     )
     assert download_url is not None
     assert download_url.startswith(settings.s3_endpoint_url or "")
+    page = storage.list_page("exports/", after_key=None, limit=1000)
+    assert key in {item.object_key for item in page.objects}
+    storage.delete(key)
+    storage.delete(key)
+    with (
+        pytest.raises(ObjectStorageUnavailableError),
+        storage.materialize(
+            key,
+            expected_byte_size=len(payload),
+            expected_checksum_sha256=_digest(payload),
+        ),
+    ):
+        pass
 
 
 @pytest.mark.skipif(

@@ -50,7 +50,7 @@ uv run --package datepipette celery \
   worker --queues refresh,export --concurrency 1 --loglevel INFO
 ```
 
-Compose also starts the durable refresh scheduler. To run it directly, use:
+Compose also starts the durable refresh scheduler and analytical-object cleanup loop. To run it directly, use:
 
 ```bash
 uv run --package datepipette datepipette-scheduler
@@ -58,11 +58,13 @@ uv run --package datepipette datepipette-scheduler
 
 `DATEPIPETTE_INSTALLATION_TIMEZONE` selects the single IANA timezone used for daily schedules. `DATEPIPETTE_SCHEDULER_POLL_SECONDS` and `DATEPIPETTE_SCHEDULER_BATCH_SIZE` bound polling frequency and work per tick. Metadata PostgreSQL owns schedule state; stopping the scheduler delays work without losing the next due occurrence.
 
+Cleanup is enabled by default. `DATEPIPETTE_CLEANUP_INTERVAL_SECONDS` and `DATEPIPETTE_CLEANUP_BATCH_SIZE` bound each tick. `DATEPIPETTE_CLEANUP_SNAPSHOT_GRACE_SECONDS` delays superseded-snapshot removal, `DATEPIPETTE_CLEANUP_EXPORT_GRACE_SECONDS` protects delivery after logical expiry, and `DATEPIPETTE_CLEANUP_ORPHAN_GRACE_SECONDS` protects the upload-to-metadata publication window. Disable physical deletion with `DATEPIPETTE_CLEANUP_ENABLED=false`; logical export expiry remains enforced.
+
 Refresh state is durable in metadata PostgreSQL and Redis is only the transport. A directly started process uses local `.local/snapshots` storage by default; Compose selects the shared private S3-compatible bucket. Never commit, share, or publicly serve snapshots because they contain business data.
 
 Interactive snapshot reads use embedded DuckDB against the active Parquet object. S3-backed objects are downloaded to a unique temporary file, checked against their recorded size and SHA-256, queried, and then removed. `DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS`, `DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB`, `DATEPIPETTE_SNAPSHOT_QUERY_THREADS`, `DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY`, `DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB`, and `DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES` bound each query. DuckDB provides parameterized projection, predicates, ordering, and pagination; `pytz` supports its timezone-aware Python timestamp conversion.
 
-Background CSV/XLSX exports use the same configured private storage backend and a separate Celery queue. `DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB`, `DATEPIPETTE_EXPORT_THREADS`, `DATEPIPETTE_EXPORT_TEMP_LIMIT_MB`, `DATEPIPETTE_EXPORT_MAX_ROWS`, and `DATEPIPETTE_EXPORT_FETCH_ROWS` bound local candidate generation. Files are logically inaccessible 24 hours after success; physical cleanup is not yet implemented. S3-backed downloads keep the DatePipette five-minute capability check and then redirect to an equally short-lived presigned private-object URL.
+Background CSV/XLSX exports use the same configured private storage backend and a separate Celery queue. `DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB`, `DATEPIPETTE_EXPORT_THREADS`, `DATEPIPETTE_EXPORT_TEMP_LIMIT_MB`, `DATEPIPETTE_EXPORT_MAX_ROWS`, and `DATEPIPETTE_EXPORT_FETCH_ROWS` bound local candidate generation. Files are logically inaccessible 24 hours after success and are physically removed after the configured cleanup grace while job history remains. S3-backed downloads keep the DatePipette five-minute capability check and then redirect to an equally short-lived presigned private-object URL.
 
 `DATEPIPETTE_OBJECT_STORAGE_BACKEND` selects `local` or `s3`. S3 additionally requires `DATEPIPETTE_S3_BUCKET`, `DATEPIPETTE_S3_ACCESS_KEY_ID`, and `DATEPIPETTE_S3_SECRET_ACCESS_KEY`; compatible installations can set `DATEPIPETTE_S3_ENDPOINT_URL`, region, and path/virtual addressing. Production requires the S3 backend and rejects non-HTTPS custom endpoints. Optional `DATEPIPETTE_S3_SERVER_SIDE_ENCRYPTION=AES256` asks the provider for server-side encryption.
 
@@ -96,7 +98,7 @@ Stop local services without deleting their volumes:
 docker compose --env-file .env -f deploy/compose/compose.yaml stop
 ```
 
-Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD`, MinIO credentials, and related variables through an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, `INSTALLATION_TIMEZONE`, `SCHEDULER_POLL_SECONDS`, `SCHEDULER_BATCH_SIZE`, `OBJECT_STORAGE_BACKEND`, `SNAPSHOT_STORAGE_PATH`, the `S3_*` settings, and the `SNAPSHOT_QUERY_*` limits documented above.
+Compose defaults are development-only. Override `DATEPIPETTE_POSTGRES_PASSWORD`, MinIO credentials, and related variables through an explicit Compose environment file for any shared environment. Application settings use the `DATEPIPETTE_` prefix; important values include `ENVIRONMENT`, `LOG_LEVEL`, `HOST`, `PORT`, `DOCS_ENABLED`, `METADATA_DATABASE_URL`, `REDIS_URL`, `READINESS_TIMEOUT_SECONDS`, `SESSION_TTL_SECONDS`, `SESSION_COOKIE_SECURE`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `CONNECTION_ENCRYPTION_KEY`, `SOURCE_CONNECT_TIMEOUT_SECONDS`, `SOURCE_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_STATEMENT_TIMEOUT_SECONDS`, `REFRESH_BATCH_ROWS`, `INSTALLATION_TIMEZONE`, `SCHEDULER_POLL_SECONDS`, `SCHEDULER_BATCH_SIZE`, `OBJECT_STORAGE_BACKEND`, `SNAPSHOT_STORAGE_PATH`, the `S3_*`, `CLEANUP_*`, and `SNAPSHOT_QUERY_*` settings documented above.
 
 API documentation is enabled by default only in the `development` environment. Connection URLs are represented as secrets and must never be printed or committed.
 
