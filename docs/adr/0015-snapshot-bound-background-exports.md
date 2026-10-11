@@ -26,6 +26,7 @@ Filtered dataset results can contain millions of rows and cannot be built safely
 - Metadata PostgreSQL is authoritative; Redis loss does not erase a requested job.
 - Formula-injection defenses slightly alter dangerous leading string values by adding a visible spreadsheet escape marker.
 - Logical expiry is enforced immediately by the API. Physical deletion is intentionally deferred to the cleanup workflow, so expired local files may remain inaccessible on disk until cleanup runs.
+- The deferred physical cleanup workflow was subsequently implemented by [ADR-0023](0023-analytical-object-lifecycle-cleanup.md).
 - XLSX cannot exceed its worksheet row limit; the configured export limit also bounds CSV.
 
 ## Alternatives considered

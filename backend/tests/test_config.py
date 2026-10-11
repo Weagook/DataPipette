@@ -72,3 +72,14 @@ def test_s3_configuration_is_complete_and_production_safe() -> None:
     assert _production_settings(s3_endpoint_url="https://objects.example").s3_bucket == (
         "datepipette"
     )
+
+
+def test_cleanup_defaults_are_bounded_and_require_a_safe_orphan_grace() -> None:
+    settings = Settings(environment="test")
+    assert settings.cleanup_enabled is True
+    assert settings.cleanup_batch_size == 100
+    assert settings.cleanup_snapshot_grace_seconds == 3600
+    assert settings.cleanup_export_grace_seconds == 300
+    assert settings.cleanup_orphan_grace_seconds == 86_400
+    with pytest.raises(ValidationError):
+        Settings(cleanup_orphan_grace_seconds=3599)

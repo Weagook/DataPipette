@@ -87,7 +87,7 @@ A transient, bounded read of source rows for the exact current validated revisio
 
 An immutable Parquet representation of one successful dataset execution. A dataset exposes one active snapshot. The previous snapshot remains readable until a replacement is fully published, then becomes eligible for cleanup.
 
-Implemented metadata includes the published dataset-version and refresh-run identities, durable storage backend (`local` or `s3`), relative immutable object key, state, row and byte counts, SHA-256 checksum, typed schema, and lifecycle timestamps. Local files are development/test objects. S3-compatible objects live in one configured private bucket and are verified after upload and before remote reads. Superseded objects remain until the cleanup workflow exists.
+Implemented metadata includes the published dataset-version and refresh-run identities, durable storage backend (`local` or `s3`), relative immutable object key, state, row and byte counts, SHA-256 checksum, typed schema, lifecycle timestamps, and an optional physical-purge timestamp. Local files are development/test objects. S3-compatible objects live in one configured private bucket and are verified after upload and before remote reads. Superseded objects remain through a cleanup grace and while any queued, running, or unexpired export references them; cleanup removes the private object but retains metadata history.
 
 ### Refresh run
 
@@ -142,7 +142,7 @@ queued -> running -> succeeded
                   -> failed
 ```
 
-Each job is bound to the active immutable snapshot at creation and stores selected field UUIDs plus the typed temporary filters and sorts needed to reproduce the request. Metadata PostgreSQL is authoritative; Redis carries only the export UUID. A successful job records its durable storage backend, immutable private object key, media metadata, size, and checksum. The completed file becomes logically unavailable 24 hours after success, while physical cleanup remains a separate workflow. Five-minute encrypted download capabilities can be reissued before expiry without regenerating the file. Local capabilities stream through DatePipette; S3-backed capabilities resolve to equally short-lived presigned private-object URLs after object verification.
+Each job is bound to the active immutable snapshot at creation and stores selected field UUIDs plus the typed temporary filters and sorts needed to reproduce the request. Metadata PostgreSQL is authoritative; Redis carries only the export UUID. A successful job records its durable storage backend, immutable private object key, media metadata, size, checksum, and eventual purge time. The completed file becomes logically unavailable 24 hours after success. Automatic cleanup removes it after an additional delivery grace while retaining job history. Five-minute encrypted download capabilities can be reissued before expiry without regenerating the file. Local capabilities stream through DatePipette; S3-backed capabilities resolve to equally short-lived presigned private-object URLs after object verification.
 
 ### Audit event
 

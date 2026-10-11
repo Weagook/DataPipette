@@ -22,6 +22,8 @@ Production will use private S3-compatible storage, but a local adapter is needed
 - Persist relative object keys rather than host-specific absolute paths. Audit only identifiers, counts, and stable safe failure codes.
 - Retain superseded files until an explicit asynchronous cleanup job exists. An object created immediately before a metadata failure is an unreferenced orphan and is likewise handled by future garbage collection.
 
+The cleanup workflow and orphan reconciliation were subsequently implemented by [ADR-0023](0023-analytical-object-lifecycle-cleanup.md).
+
 ## Consequences
 
 - Memory use is bounded by one source batch plus one Arrow batch rather than total result size.

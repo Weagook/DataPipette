@@ -5,6 +5,8 @@ import os
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from heapq import nsmallest
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 from uuid import uuid4
@@ -13,13 +15,14 @@ import boto3  # type: ignore[import-untyped]
 from boto3.s3.transfer import TransferConfig  # type: ignore[import-untyped]
 from botocore.config import Config  # type: ignore[import-untyped]
 
+from datepipette.application.storage_cleanup import StoredObject, StoredObjectPage
 from datepipette.config import Settings
 from datepipette.domain.exports import ExportDownload
 
 _TRANSFER_CHUNK_BYTES = 8 * 1024 * 1024
 
 
-class ObjectStorageUnavailableError(Exception):
+class ObjectStorageUnavailableError(OSError):
     """The configured private object could not be stored or read safely."""
 
 
@@ -55,11 +58,28 @@ class ObjectStorage(Protocol):
         expected_checksum_sha256: str | None,
     ) -> str | None: ...
 
+    def delete(self, object_key: str) -> None: ...
+
+    def list_page(
+        self,
+        prefix: str,
+        *,
+        after_key: str | None,
+        limit: int,
+    ) -> "StoredObjectPage": ...
+
 
 def _key(value: str) -> str:
     parsed = PurePosixPath(value)
     if not value or parsed.is_absolute() or ".." in parsed.parts or str(parsed) != value:
         raise ValueError("Object key must be a normalized relative POSIX path")
+    return value
+
+
+def _prefix(value: str) -> str:
+    if not value.endswith("/"):
+        raise ValueError("Object prefix must end with a slash")
+    _key(value[:-1])
     return value
 
 
@@ -169,6 +189,47 @@ class LocalObjectStorage:
             expected_checksum_sha256=expected_checksum_sha256,
         )
         return path
+
+    def delete(self, object_key: str) -> None:
+        self._path(object_key).unlink(missing_ok=True)
+
+    def list_page(
+        self,
+        prefix: str,
+        *,
+        after_key: str | None,
+        limit: int,
+    ) -> StoredObjectPage:
+        normalized_prefix = _prefix(prefix)
+        if limit < 1:
+            raise ValueError("Object listing limit must be positive")
+        if after_key is not None and not _key(after_key).startswith(normalized_prefix):
+            raise ValueError("Object listing cursor must remain inside its prefix")
+        prefix_root = self._path(normalized_prefix[:-1])
+
+        def candidates() -> Iterator[StoredObject]:
+            if not prefix_root.exists():
+                return
+            for candidate in prefix_root.rglob("*"):
+                resolved = candidate.resolve()
+                if (
+                    not candidate.is_file()
+                    or not resolved.is_relative_to(self.root)
+                    or candidate.is_symlink()
+                ):
+                    continue
+                object_key = candidate.relative_to(self.root).as_posix()
+                if after_key is not None and object_key <= after_key:
+                    continue
+                yield StoredObject(
+                    object_key,
+                    datetime.fromtimestamp(candidate.stat().st_mtime, UTC),
+                )
+
+        objects = nsmallest(limit + 1, candidates(), key=lambda item: item.object_key)
+        page = tuple(objects[:limit])
+        next_after_key = page[-1].object_key if len(objects) > limit else None
+        return StoredObjectPage(page, next_after_key)
 
 
 class S3ObjectStorage:
@@ -309,6 +370,42 @@ class S3ObjectStorage:
             raise
         except Exception as exc:
             raise ObjectStorageUnavailableError("S3 download signing failed") from exc
+
+    def delete(self, object_key: str) -> None:
+        try:
+            self._client.delete_object(Bucket=self._bucket, Key=_key(object_key))
+        except Exception as exc:
+            raise ObjectStorageUnavailableError("S3 object deletion failed") from exc
+
+    def list_page(
+        self,
+        prefix: str,
+        *,
+        after_key: str | None,
+        limit: int,
+    ) -> StoredObjectPage:
+        normalized_prefix = _prefix(prefix)
+        if limit < 1:
+            raise ValueError("Object listing limit must be positive")
+        if after_key is not None and not _key(after_key).startswith(normalized_prefix):
+            raise ValueError("Object listing cursor must remain inside its prefix")
+        parameters: dict[str, Any] = {
+            "Bucket": self._bucket,
+            "Prefix": normalized_prefix,
+            "MaxKeys": limit,
+        }
+        if after_key is not None:
+            parameters["StartAfter"] = _key(after_key)
+        try:
+            response = self._client.list_objects_v2(**parameters)
+            objects = tuple(
+                StoredObject(str(item["Key"]), item["LastModified"])
+                for item in response.get("Contents", [])
+            )
+        except Exception as exc:
+            raise ObjectStorageUnavailableError("S3 object listing failed") from exc
+        next_after_key = objects[-1].object_key if response.get("IsTruncated") and objects else None
+        return StoredObjectPage(objects, next_after_key)
 
 
 @dataclass(frozen=True, slots=True)

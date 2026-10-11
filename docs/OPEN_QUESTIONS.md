@@ -24,7 +24,6 @@ These questions are intentionally unresolved. They are not permission to invent 
 - Define Parquet file sizing, row-group sizing, compression, and object-key layout from benchmarks.
 - Define default refresh timeouts, retry classes, cancellation behavior, and dead-letter handling.
 - Define worker leases, heartbeats, and safe stale-`running` recovery before enabling long source execution.
-- Define orphan-object reconciliation after partial infrastructure failure.
 
 ## API
 

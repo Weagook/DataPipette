@@ -310,12 +310,21 @@ class DatasetSnapshotModel(Base):
         CheckConstraint("row_count >= 0", name="row_count_nonnegative"),
         CheckConstraint("byte_size > 0", name="byte_size_positive"),
         CheckConstraint("storage_backend IN ('local', 's3')", name="storage_backend_valid"),
+        CheckConstraint(
+            "purged_at IS NULL OR state = 'superseded'",
+            name="purged_only_when_superseded",
+        ),
         CheckConstraint("jsonb_typeof(schema_document) = 'object'", name="schema_object"),
         Index(
             "uq_dataset_snapshots_one_active",
             "dataset_id",
             unique=True,
             postgresql_where=text("state = 'active'"),
+        ),
+        Index(
+            "ix_dataset_snapshots_cleanup",
+            "superseded_at",
+            postgresql_where=text("state = 'superseded' AND purged_at IS NULL"),
         ),
     )
 
@@ -342,6 +351,8 @@ class DatasetSnapshotModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     activated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class DatasetExportModel(Base):
@@ -368,6 +379,11 @@ class DatasetExportModel(Base):
         ),
         Index("ix_dataset_exports_dataset_requested", "dataset_id", "requested_at"),
         Index("ix_dataset_exports_expiry", "expires_at"),
+        Index(
+            "ix_dataset_exports_cleanup",
+            "expires_at",
+            postgresql_where=text("object_key IS NOT NULL AND purged_at IS NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
@@ -396,6 +412,21 @@ class DatasetExportModel(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ObjectCleanupCursorModel(Base):
+    __tablename__ = "object_cleanup_cursors"
+    __table_args__ = (
+        CheckConstraint("storage_backend IN ('local', 's3')", name="backend_valid"),
+        CheckConstraint("prefix IN ('datasets/', 'exports/')", name="prefix_valid"),
+    )
+
+    storage_backend: Mapped[str] = mapped_column(String(20), primary_key=True)
+    prefix: Mapped[str] = mapped_column(String(20), primary_key=True)
+    after_key: Mapped[str | None] = mapped_column(String(1024))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
