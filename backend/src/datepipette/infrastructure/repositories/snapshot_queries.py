@@ -191,20 +191,25 @@ class SqlAlchemySnapshotQueryStore:
                 DatasetRefreshRunModel.finished_at >= snapshot.activated_at
             )
         latest_failure = await session.scalar(failure_statement)
+        latest_error = (
+            active_run
+            if active_run is not None and active_run.error_code is not None
+            else latest_failure
+        )
 
         refresh_state = SnapshotRefreshState.IDLE
         if active_run is not None and active_run.state == RefreshRunState.RUNNING.value:
             refresh_state = SnapshotRefreshState.RUNNING
         elif active_run is not None:
             refresh_state = SnapshotRefreshState.QUEUED
-        is_stale = snapshot is not None and latest_failure is not None
+        is_stale = snapshot is not None and latest_error is not None
         if active_run is not None:
             data_state = DatasetDataState.REFRESHING
         elif snapshot is not None and is_stale:
             data_state = DatasetDataState.STALE
         elif snapshot is not None:
             data_state = DatasetDataState.READY
-        elif latest_failure is not None:
+        elif latest_error is not None:
             data_state = DatasetDataState.FAILED
         else:
             data_state = DatasetDataState.NOT_PUBLISHED
@@ -218,9 +223,11 @@ class SqlAlchemySnapshotQueryStore:
             active_refresh_run_id=active_run.id if active_run is not None else None,
             refresh_requested_at=active_run.requested_at if active_run is not None else None,
             refresh_started_at=active_run.started_at if active_run is not None else None,
-            last_refresh_error=(latest_failure.error_code if latest_failure is not None else None),
+            last_refresh_error=(latest_error.error_code if latest_error is not None else None),
             last_refresh_error_at=(
-                latest_failure.finished_at if latest_failure is not None else None
+                (latest_error.finished_at or latest_error.updated_at)
+                if latest_error is not None
+                else None
             ),
             is_stale=is_stale,
         )

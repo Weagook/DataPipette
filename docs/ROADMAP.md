@@ -40,7 +40,7 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Advanced read-only SQL datasets
 - [x] S3/MinIO-compatible result storage
 - [x] Safe superseded-snapshot, expired-export, and orphan-object cleanup
-- Refresh cancellation and execution retry policies
+- [x] Refresh cancellation and execution retry policies
 - Draft/published versions, schema comparison, and impact analysis
 - Extend the initial non-executing PostgreSQL plan guard into a configurable Query Safety Advisor
 - Explainable warnings for large scans, missing or unsuitable indexes, expensive joins/sorts, stale statistics, and oversized results

@@ -11,7 +11,7 @@ The snapshot writer is not implemented yet. Introducing the queue before storage
 
 ## Decision
 
-- Store refresh runs and request-to-run idempotency mappings in metadata PostgreSQL. Runs use `queued`, `running`, `succeeded`, and `failed`; cancellation is deferred.
+- Store refresh runs and request-to-run idempotency mappings in metadata PostgreSQL. Runs initially use `queued`, `running`, `succeeded`, and `failed`; ADR-0024 subsequently adds durable cancellation and bounded execution retries.
 - Require the current draft ETag and an `Idempotency-Key` when requesting a refresh. Store only a SHA-256 digest of the key, scoped to actor and dataset.
 - Require a current `valid` or `valid_with_warnings` validation artifact for the exact requested revision.
 - Serialize creation with a dataset-row lock. Allow at most one running and one queued run per dataset. Additional requests coalesce into the queued run and retain their own idempotency mappings.

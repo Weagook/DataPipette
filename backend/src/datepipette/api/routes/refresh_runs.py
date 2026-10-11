@@ -21,6 +21,7 @@ from datepipette.application.refresh_runs import (
     RefreshDraftNotValidatedError,
     RefreshRunNotFoundError,
     RefreshRunService,
+    RefreshRunStateConflictError,
 )
 from datepipette.domain.refresh import RefreshRun, RefreshRunState, RefreshTriggerType
 
@@ -40,6 +41,9 @@ class RefreshRunResponse(BaseModel):
     dispatched_at: datetime | None
     attempt_count: int
     error_code: str | None
+    next_attempt_at: datetime | None
+    cancel_requested_at: datetime | None
+    cancelled_at: datetime | None
     snapshot_id: UUID | None
     requested_at: datetime
     started_at: datetime | None
@@ -150,5 +154,40 @@ async def read_refresh_run(
             code="refresh_run_not_found",
             title="Refresh run not found",
             detail="The requested refresh run does not exist for this dataset.",
+        ) from exc
+    return _response(run)
+
+
+@router.post(
+    "/{run_id}/cancel",
+    response_model=RefreshRunResponse,
+    responses=_RESPONSES,
+)
+async def cancel_refresh_run(
+    dataset_id: UUID,
+    run_id: UUID,
+    request: Request,
+    session: CsrfSession,
+) -> RefreshRunResponse:
+    try:
+        run = await _service(request).cancel(
+            actor=session.user,
+            dataset_id=dataset_id,
+            run_id=run_id,
+            request_id=request_id(),
+        )
+    except RefreshRunNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="refresh_run_not_found",
+            title="Refresh run not found",
+            detail="The requested refresh run does not exist for this dataset.",
+        ) from exc
+    except RefreshRunStateConflictError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="refresh_run_not_cancellable",
+            title="Refresh run cannot be cancelled",
+            detail="Only queued or running refresh runs can be cancelled.",
         ) from exc
     return _response(run)

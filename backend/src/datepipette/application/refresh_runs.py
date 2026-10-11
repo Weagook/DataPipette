@@ -16,7 +16,7 @@ from datepipette.application.datasets import (
 )
 from datepipette.domain.datasets import definition_relations
 from datepipette.domain.identity import User
-from datepipette.domain.refresh import RefreshRequestOutcome, RefreshRun
+from datepipette.domain.refresh import RefreshCancelOutcome, RefreshRequestOutcome, RefreshRun
 
 
 class RefreshRunNotFoundError(Exception):
@@ -28,6 +28,10 @@ class RefreshDraftNotValidatedError(Exception):
 
 
 class RefreshDispatchError(Exception):
+    pass
+
+
+class RefreshRunStateConflictError(Exception):
     pass
 
 
@@ -55,6 +59,16 @@ class RefreshRunStore(Protocol):
     async def record_dispatch_attempt(self, run_id: UUID, occurred_at: datetime) -> None: ...
 
     async def mark_dispatched(self, run_id: UUID, occurred_at: datetime) -> None: ...
+
+    async def cancel(
+        self,
+        *,
+        dataset_id: UUID,
+        run_id: UUID,
+        actor_id: UUID,
+        occurred_at: datetime,
+        request_id: str,
+    ) -> tuple[RefreshCancelOutcome, RefreshRun | None]: ...
 
 
 class RefreshDispatcher(Protocol):
@@ -136,4 +150,32 @@ class RefreshRunService:
         run = await self._store.get(dataset_id=dataset_id, run_id=run_id)
         if run is None:
             raise RefreshRunNotFoundError
+        return run
+
+    async def cancel(
+        self,
+        *,
+        actor: User,
+        dataset_id: UUID,
+        run_id: UUID,
+        request_id: str,
+    ) -> RefreshRun:
+        dataset = await self._dataset_store.get(dataset_id)
+        if dataset is None:
+            raise RefreshRunNotFoundError
+        try:
+            require_dataset_owner(actor, dataset)
+        except DatasetNotFoundError as exc:
+            raise RefreshRunNotFoundError from exc
+        outcome, run = await self._store.cancel(
+            dataset_id=dataset_id,
+            run_id=run_id,
+            actor_id=actor.id,
+            occurred_at=datetime.now(UTC),
+            request_id=request_id,
+        )
+        if outcome is RefreshCancelOutcome.NOT_FOUND or run is None:
+            raise RefreshRunNotFoundError
+        if outcome is RefreshCancelOutcome.CONFLICT:
+            raise RefreshRunStateConflictError
         return run

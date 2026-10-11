@@ -97,13 +97,17 @@ Implemented foundation states:
 
 ```text
 queued -> running -> succeeded
-                  -> failed
-                  -> cancelled
+   |        |----> failed
+   |        |----> queued (bounded transient retry)
+   |        `----> cancelled
+   `-------------> cancelled
 ```
 
 At most one run executes for a dataset and at most one additional run is coalesced as pending.
 
-Each manual request supplies an idempotency key. Metadata PostgreSQL stores its digest and mapping to the durable run; Redis carries only the run identifier. Dispatch and execution attempt counts are separate. A broker failure leaves the queued intent retryable, and duplicate task delivery cannot re-execute a running or terminal run. Success references the newly active snapshot; failure preserves the previous active snapshot.
+Each manual request supplies an idempotency key. Metadata PostgreSQL stores its digest and mapping to the durable run; Redis carries only the run identifier. Dispatch and execution attempt counts are separate. A broker failure leaves the queued intent retryable, and duplicate task delivery cannot re-execute a running or terminal run while its renewable execution lease is fresh. An expired running lease is reclaimable within the same attempt limit, so a lost worker does not leave permanent `running` state. Explicit transient source/storage failures return the same run to `queued` with a durable retry due time and bounded exponential backoff. A newer queued successor prevents retry of an older run.
+
+Queued cancellation is immediate. Running cancellation records durable intent and becomes terminal cooperatively at safe execution boundaries or atomically before publication. Repeated cancellation of a cancelled run is idempotent. Success references the newly active snapshot; failure or cancellation preserves the previous active snapshot.
 
 Refresh runs record whether they were requested manually or by a schedule. A scheduled run references its originating schedule and always targets the active published version; it never executes the separately editable draft.
 

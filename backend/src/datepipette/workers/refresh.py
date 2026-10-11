@@ -41,6 +41,11 @@ async def _execute(run_id: UUID) -> RefreshClaimOutcome:
                 settings.refresh_batch_rows,
                 connection_authorizer,
             ),
+            max_attempts=settings.refresh_max_attempts,
+            retry_base_seconds=settings.refresh_retry_base_seconds,
+            retry_max_seconds=settings.refresh_retry_max_seconds,
+            cancellation_poll_seconds=settings.refresh_cancel_poll_seconds,
+            run_lease_seconds=settings.refresh_run_lease_seconds,
         )
         return await service.execute(run_id)
     finally:

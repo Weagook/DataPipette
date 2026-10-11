@@ -78,6 +78,7 @@ A viewer with dashboard access may receive chart results but must not use that r
 
 - Administrators should configure a dedicated read-only PostgreSQL role.
 - Source operations use read-only transactions, statement timeouts, cancellation, and bounded fetch sizes.
+- Refresh cancellation requires the same owner/administrator authorization and CSRF protection as refresh creation. Durable cancellation is checked again before publication; Celery revoke is not an authorization or correctness boundary.
 - Visual queries are generated only from validated structured definitions.
 - SQL values are parameterized; source identifiers are resolved from inspected and authorized metadata.
 - Advanced SQL accepts one bounded PostgreSQL-dialect query expression with optional read-only CTEs. AST inspection rejects multiple statements, DDL/DML, data-modifying CTEs, `SELECT INTO`, row locks, external parameters, unqualified base relations, and cross-database names.

@@ -267,6 +267,8 @@ Refresh and export creation return a job resource immediately. Job representatio
 
 Job creation endpoints support an `Idempotency-Key` so clients can safely retry after a network failure. Idempotency is scoped to the authenticated principal and operation.
 
+Refresh cancellation is an explicit command on the job resource. A queued run becomes `cancelled` immediately; a running run first exposes `cancel_requested_at` and becomes `cancelled` when cooperative execution stops. Terminal success and failure cannot be rewritten by cancellation.
+
 ## Concurrency
 
 Mutable resources use optimistic concurrency, such as an opaque revision or ETag. Updates based on stale state fail instead of overwriting a newer edit silently.

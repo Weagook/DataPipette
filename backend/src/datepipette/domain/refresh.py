@@ -11,6 +11,7 @@ class RefreshRunState(StrEnum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class RefreshTriggerType(StrEnum):
@@ -22,6 +23,14 @@ class RefreshClaimOutcome(StrEnum):
     CLAIMED = "claimed"
     DEFERRED = "deferred"
     TERMINAL = "terminal"
+    NOT_FOUND = "not_found"
+
+
+class RefreshCancelOutcome(StrEnum):
+    CANCELLED = "cancelled"
+    REQUESTED = "requested"
+    ALREADY_CANCELLED = "already_cancelled"
+    CONFLICT = "conflict"
     NOT_FOUND = "not_found"
 
 
@@ -39,6 +48,10 @@ class RefreshRun:
     dispatched_at: datetime | None
     attempt_count: int
     error_code: str | None
+    next_attempt_at: datetime | None
+    cancel_requested_at: datetime | None
+    cancelled_at: datetime | None
+    lease_expires_at: datetime | None
     snapshot_id: UUID | None
     requested_at: datetime
     started_at: datetime | None

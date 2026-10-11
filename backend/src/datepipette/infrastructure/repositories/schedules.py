@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from datepipette.application.schedules import (
@@ -165,13 +165,33 @@ class SqlAlchemyRefreshScheduleStore:
             await session.flush()
             return _to_schedule(model, timezone)
 
-    async def undispatched_run_ids(self, *, limit: int) -> tuple[UUID, ...]:
+    async def recoverable_run_ids(
+        self,
+        *,
+        now: datetime,
+        limit: int,
+    ) -> tuple[UUID, ...]:
         async with self._session_factory() as session:
             values = await session.scalars(
                 select(DatasetRefreshRunModel.id)
                 .where(
-                    DatasetRefreshRunModel.state == RefreshRunState.QUEUED.value,
-                    DatasetRefreshRunModel.dispatched_at.is_(None),
+                    or_(
+                        and_(
+                            DatasetRefreshRunModel.state == RefreshRunState.QUEUED.value,
+                            DatasetRefreshRunModel.dispatched_at.is_(None),
+                            or_(
+                                DatasetRefreshRunModel.next_attempt_at.is_(None),
+                                DatasetRefreshRunModel.next_attempt_at <= now,
+                            ),
+                        ),
+                        and_(
+                            DatasetRefreshRunModel.state == RefreshRunState.RUNNING.value,
+                            or_(
+                                DatasetRefreshRunModel.lease_expires_at.is_(None),
+                                DatasetRefreshRunModel.lease_expires_at <= now,
+                            ),
+                        ),
+                    )
                 )
                 .order_by(DatasetRefreshRunModel.requested_at, DatasetRefreshRunModel.id)
                 .limit(limit)
@@ -247,6 +267,10 @@ class SqlAlchemyRefreshScheduleStore:
                         dispatched_at=None,
                         attempt_count=0,
                         error_code=None,
+                        next_attempt_at=None,
+                        cancel_requested_at=None,
+                        cancelled_at=None,
+                        lease_expires_at=None,
                         requested_at=now,
                         started_at=None,
                         finished_at=None,
@@ -272,21 +296,35 @@ class SqlAlchemyRefreshScheduleStore:
                         },
                     )
                 )
-                if queued.dispatched_at is None:
+                if queued.dispatched_at is None and (
+                    queued.next_attempt_at is None or queued.next_attempt_at <= now
+                ):
                     dispatch_ids.append(queued.id)
         return DueScheduleClaims(len(schedules), tuple(dispatch_ids))
 
     async def record_dispatch_attempt(self, run_id: UUID, occurred_at: datetime) -> None:
         async with self._session_factory() as session, session.begin():
             model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
-            if model is not None and model.state == RefreshRunState.QUEUED.value:
+            if model is not None and (
+                model.state == RefreshRunState.QUEUED.value
+                or (
+                    model.state == RefreshRunState.RUNNING.value
+                    and (model.lease_expires_at is None or model.lease_expires_at <= occurred_at)
+                )
+            ):
                 model.dispatch_attempts += 1
                 model.updated_at = occurred_at
 
     async def mark_dispatched(self, run_id: UUID, occurred_at: datetime) -> None:
         async with self._session_factory() as session, session.begin():
             model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
-            if model is not None and model.state == RefreshRunState.QUEUED.value:
+            if model is not None and (
+                model.state == RefreshRunState.QUEUED.value
+                or (
+                    model.state == RefreshRunState.RUNNING.value
+                    and (model.lease_expires_at is None or model.lease_expires_at <= occurred_at)
+                )
+            ):
                 model.dispatched_at = occurred_at
                 model.updated_at = occurred_at
 

@@ -56,7 +56,12 @@ class RefreshScheduleStore(Protocol):
 
 
 class SchedulerStore(Protocol):
-    async def undispatched_run_ids(self, *, limit: int) -> tuple[UUID, ...]: ...
+    async def recoverable_run_ids(
+        self,
+        *,
+        now: datetime,
+        limit: int,
+    ) -> tuple[UUID, ...]: ...
 
     async def claim_due(
         self,
@@ -159,7 +164,10 @@ class RefreshSchedulerService:
 
     async def tick(self, now: datetime | None = None) -> SchedulerTickResult:
         occurred_at = (now or datetime.now(UTC)).astimezone(UTC)
-        pending = await self._store.undispatched_run_ids(limit=self._batch_size)
+        pending = await self._store.recoverable_run_ids(
+            now=occurred_at,
+            limit=self._batch_size,
+        )
         due = await self._store.claim_due(
             now=occurred_at,
             timezone=self._timezone,

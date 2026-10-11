@@ -65,6 +65,9 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **REF-011:** A persisted run whose broker dispatch fails shall remain retryable through the original idempotent request.
 - **REF-012:** Snapshot writers shall derive a fixed output schema before reading rows and shall validate the completed object's schema, row count, byte size, and checksum before metadata activation.
 - **REF-013:** Snapshot metadata shall store portable relative object keys; local filesystem storage shall not be treated as horizontally scalable production storage.
+- **REF-014:** Dataset owners and administrators shall be able to cancel queued or running refresh runs without allowing a cancelled result to replace the active snapshot.
+- **REF-015:** Only explicitly transient refresh failures shall be retried automatically, with a configurable total-attempt limit and bounded exponential delay.
+- **REF-016:** Retry intent and due time shall be durable in metadata PostgreSQL; broker loss, duplicate delivery, restart, or a newer queued successor shall not violate the one-running/one-queued invariant.
 
 ### Data exploration and exports
 
