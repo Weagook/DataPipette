@@ -83,3 +83,20 @@ def test_cleanup_defaults_are_bounded_and_require_a_safe_orphan_grace() -> None:
     assert settings.cleanup_orphan_grace_seconds == 86_400
     with pytest.raises(ValidationError):
         Settings(cleanup_orphan_grace_seconds=3599)
+
+
+def test_refresh_retry_and_cancellation_defaults_are_bounded() -> None:
+    settings = Settings(environment="test")
+    assert settings.refresh_max_attempts == 3
+    assert settings.refresh_retry_base_seconds == 5
+    assert settings.refresh_retry_max_seconds == 300
+    assert settings.refresh_cancel_poll_seconds == 1.0
+    assert settings.refresh_run_lease_seconds == 30
+    with pytest.raises(ValidationError):
+        Settings(refresh_max_attempts=0)
+    with pytest.raises(ValidationError):
+        Settings(refresh_cancel_poll_seconds=0)
+    with pytest.raises(ValidationError):
+        Settings(refresh_run_lease_seconds=9)
+    with pytest.raises(ValidationError, match="must exceed"):
+        Settings(refresh_cancel_poll_seconds=10, refresh_run_lease_seconds=10)

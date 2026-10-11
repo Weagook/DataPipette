@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -61,7 +61,11 @@ class RecordingDispatcher:
 
 
 class SuccessfulExecutor:
-    async def execute(self, run: RefreshRun) -> RefreshExecutionResult:
+    async def execute(
+        self,
+        run: RefreshRun,
+        _cancellation: asyncio.Event,
+    ) -> RefreshExecutionResult:
         snapshot_id = uuid4()
         return RefreshExecutionResult(
             succeeded=True,
@@ -78,8 +82,25 @@ class SuccessfulExecutor:
 
 
 class FailingExecutor:
-    async def execute(self, _run: RefreshRun) -> RefreshExecutionResult:
+    async def execute(
+        self,
+        _run: RefreshRun,
+        _cancellation: asyncio.Event,
+    ) -> RefreshExecutionResult:
         raise RuntimeError("sensitive infrastructure detail")
+
+
+class RetryableExecutor:
+    async def execute(
+        self,
+        _run: RefreshRun,
+        _cancellation: asyncio.Event,
+    ) -> RefreshExecutionResult:
+        return RefreshExecutionResult(
+            False,
+            "source_unavailable",
+            retryable=True,
+        )
 
 
 async def _reset() -> None:
@@ -395,6 +416,367 @@ def test_worker_defers_successor_and_can_complete_with_injected_writer() -> None
         asyncio.run(engine.dispose())
 
 
+def test_refresh_cancellation_is_idempotent_and_wins_before_publication() -> None:
+    asyncio.run(_bootstrap())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    dispatcher = RecordingDispatcher()
+    service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory)),
+    )
+    try:
+        with TestClient(create_app(settings=TEST_SETTINGS, refresh_run_service=service)) as client:
+            _login(client)
+            dataset_id, etag, definition = _create_dataset(client)
+            asyncio.run(_mark_valid(dataset_id, definition))
+            url = f"/api/v1/datasets/{dataset_id}/refresh-runs"
+
+            queued = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "cancel-queued"},
+            ).json()
+            missing_csrf = client.post(f"{url}/{queued['id']}/cancel")
+            assert missing_csrf.status_code == 403
+            cancelled = client.post(
+                f"{url}/{queued['id']}/cancel",
+                headers=_csrf(client),
+            )
+            assert cancelled.status_code == 200
+            assert cancelled.json()["state"] == "cancelled"
+            assert cancelled.json()["cancel_requested_at"] is not None
+            assert cancelled.json()["cancelled_at"] is not None
+            repeated = client.post(
+                f"{url}/{queued['id']}/cancel",
+                headers=_csrf(client),
+            )
+            assert repeated.status_code == 200
+            assert repeated.json()["cancelled_at"] == cancelled.json()["cancelled_at"]
+            assert (
+                asyncio.run(
+                    RefreshWorkerService(store, SuccessfulExecutor()).execute(UUID(queued["id"]))
+                )
+                is RefreshClaimOutcome.TERMINAL
+            )
+
+            running = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "cancel-running"},
+            ).json()
+            claim, claimed = asyncio.run(store.claim(UUID(running["id"]), datetime.now(UTC)))
+            assert claim is RefreshClaimOutcome.CLAIMED
+            assert claimed is not None
+            requested = client.post(
+                f"{url}/{running['id']}/cancel",
+                headers=_csrf(client),
+            )
+            assert requested.status_code == 200
+            assert requested.json()["state"] == "running"
+            assert requested.json()["cancel_requested_at"] is not None
+            assert requested.json()["cancelled_at"] is None
+            repeated_running = client.post(
+                f"{url}/{running['id']}/cancel",
+                headers=_csrf(client),
+            )
+            assert repeated_running.status_code == 200
+            assert (
+                repeated_running.json()["cancel_requested_at"]
+                == requested.json()["cancel_requested_at"]
+            )
+            artifact = asyncio.run(SuccessfulExecutor().execute(claimed, asyncio.Event()))
+            asyncio.run(store.complete(UUID(running["id"]), artifact, datetime.now(UTC)))
+            terminal = client.get(f"{url}/{running['id']}").json()
+            assert terminal["state"] == "cancelled"
+            assert terminal["snapshot_id"] is None
+            assert (
+                client.post(
+                    f"{url}/{running['id']}/cancel",
+                    headers=_csrf(client),
+                ).status_code
+                == 200
+            )
+
+            succeeded = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "complete"},
+            ).json()
+            asyncio.run(
+                RefreshWorkerService(store, SuccessfulExecutor()).execute(UUID(succeeded["id"]))
+            )
+            conflict = client.post(
+                f"{url}/{succeeded['id']}/cancel",
+                headers=_csrf(client),
+            )
+            assert conflict.status_code == 409
+            assert conflict.json()["code"] == "refresh_run_not_cancellable"
+
+            async def cancellation_actions() -> list[str]:
+                async with session_factory() as session:
+                    return list(
+                        await session.scalars(
+                            select(AuditEventModel.action).where(
+                                AuditEventModel.action.in_(
+                                    [
+                                        "dataset.refresh_cancellation_requested",
+                                        "dataset.refresh_cancelled",
+                                    ]
+                                )
+                            )
+                        )
+                    )
+
+            actions = asyncio.run(cancellation_actions())
+            assert actions.count("dataset.refresh_cancellation_requested") == 1
+            assert actions.count("dataset.refresh_cancelled") == 2
+    finally:
+        asyncio.run(engine.dispose())
+
+
+def test_retry_policy_is_durable_bounded_and_yields_to_a_successor() -> None:
+    asyncio.run(_bootstrap())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    dispatcher = RecordingDispatcher()
+    service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory)),
+    )
+    schedule_store = SqlAlchemyRefreshScheduleStore(session_factory, "UTC")
+    scheduler = RefreshSchedulerService(schedule_store, dispatcher, ZoneInfo("UTC"), 100)
+    started = datetime(2026, 10, 11, 12, 0, tzinfo=UTC)
+
+    def clock(*values: datetime) -> Any:
+        moments = iter(values)
+        return lambda: next(moments)
+
+    try:
+        with TestClient(create_app(settings=TEST_SETTINGS, refresh_run_service=service)) as client:
+            _login(client)
+            dataset_id, etag, definition = _create_dataset(client)
+            asyncio.run(_mark_valid(dataset_id, definition))
+            url = f"/api/v1/datasets/{dataset_id}/refresh-runs"
+            first = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "retry-success"},
+            ).json()
+            dispatcher.run_ids.clear()
+            first_worker = RefreshWorkerService(
+                store,
+                RetryableExecutor(),
+                max_attempts=3,
+                retry_base_seconds=5,
+                retry_max_seconds=30,
+                clock=clock(started, started),
+            )
+            assert (
+                asyncio.run(first_worker.execute(UUID(first["id"]))) is RefreshClaimOutcome.CLAIMED
+            )
+            queued = client.get(f"{url}/{first['id']}").json()
+            assert queued["state"] == "queued"
+            assert queued["attempt_count"] == 1
+            assert queued["error_code"] == "source_unavailable"
+            assert datetime.fromisoformat(queued["next_attempt_at"]) == started + timedelta(
+                seconds=5
+            )
+            freshness = client.get(f"/api/v1/datasets/{dataset_id}/freshness").json()
+            assert freshness["data_state"] == "refreshing"
+            assert freshness["refresh_state"] == "queued"
+            assert freshness["last_refresh_error"] == "source_unavailable"
+            assert (
+                datetime.fromisoformat(freshness["last_refresh_error_at"].replace("Z", "+00:00"))
+                == started
+            )
+
+            early = asyncio.run(scheduler.tick(started + timedelta(seconds=4)))
+            assert early.dispatch_attempts == 0
+            due = asyncio.run(scheduler.tick(started + timedelta(seconds=5)))
+            assert due.dispatch_attempts == 1
+            assert dispatcher.run_ids == [UUID(first["id"])]
+            second_worker = RefreshWorkerService(
+                store,
+                SuccessfulExecutor(),
+                clock=clock(started + timedelta(seconds=5), started + timedelta(seconds=6)),
+            )
+            assert (
+                asyncio.run(second_worker.execute(UUID(first["id"]))) is RefreshClaimOutcome.CLAIMED
+            )
+            completed = client.get(f"{url}/{first['id']}").json()
+            assert completed["state"] == "succeeded"
+            assert completed["attempt_count"] == 2
+            assert completed["next_attempt_at"] is None
+
+            exhausted = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "retry-exhausted"},
+            ).json()
+            for attempt in range(2):
+                attempt_at = started + timedelta(minutes=attempt + 1)
+                worker = RefreshWorkerService(
+                    store,
+                    RetryableExecutor(),
+                    max_attempts=2,
+                    retry_base_seconds=1,
+                    retry_max_seconds=1,
+                    clock=clock(attempt_at, attempt_at),
+                )
+                asyncio.run(worker.execute(UUID(exhausted["id"])))
+            failed = client.get(f"{url}/{exhausted['id']}").json()
+            assert failed["state"] == "failed"
+            assert failed["attempt_count"] == 2
+            assert failed["next_attempt_at"] is None
+
+            older = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "older"},
+            ).json()
+            claim, _ = asyncio.run(store.claim(UUID(older["id"]), started + timedelta(hours=1)))
+            assert claim is RefreshClaimOutcome.CLAIMED
+            successor = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "successor"},
+            ).json()
+            assert successor["id"] != older["id"]
+            asyncio.run(
+                store.complete(
+                    UUID(older["id"]),
+                    RefreshExecutionResult(False, "source_unavailable", retryable=True),
+                    started + timedelta(hours=1, seconds=1),
+                    started + timedelta(hours=1, seconds=6),
+                )
+            )
+            older_terminal = client.get(f"{url}/{older['id']}").json()
+            assert older_terminal["state"] == "failed"
+            assert client.get(f"{url}/{successor['id']}").json()["state"] == "queued"
+
+            async def retry_actions() -> list[str]:
+                async with session_factory() as session:
+                    return list(
+                        await session.scalars(
+                            select(AuditEventModel.action).where(
+                                AuditEventModel.action == "dataset.refresh_retry_scheduled"
+                            )
+                        )
+                    )
+
+            assert len(asyncio.run(retry_actions())) == 2
+    finally:
+        asyncio.run(engine.dispose())
+
+
+def test_stale_running_lease_is_recovered_and_attempts_remain_bounded() -> None:
+    asyncio.run(_bootstrap())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    dispatcher = RecordingDispatcher()
+    service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        ConnectionAccessAuthorizer(SqlAlchemyConnectionAccessStore(session_factory)),
+    )
+    schedule_store = SqlAlchemyRefreshScheduleStore(session_factory, "UTC")
+    scheduler = RefreshSchedulerService(schedule_store, dispatcher, ZoneInfo("UTC"), 100)
+    started = datetime(2026, 10, 11, 12, 0, tzinfo=UTC)
+    try:
+        with TestClient(create_app(settings=TEST_SETTINGS, refresh_run_service=service)) as client:
+            _login(client)
+            dataset_id, etag, definition = _create_dataset(client)
+            asyncio.run(_mark_valid(dataset_id, definition))
+            url = f"/api/v1/datasets/{dataset_id}/refresh-runs"
+            run = client.post(
+                url,
+                headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "lease"},
+            ).json()
+            run_id = UUID(run["id"])
+            first, claimed = asyncio.run(
+                store.claim(
+                    run_id,
+                    started,
+                    started + timedelta(seconds=10),
+                    3,
+                )
+            )
+            assert first is RefreshClaimOutcome.CLAIMED
+            assert claimed is not None and claimed.attempt_count == 1
+            dispatcher.run_ids.clear()
+
+            assert (
+                asyncio.run(scheduler.tick(started + timedelta(seconds=9))).dispatch_attempts == 0
+            )
+            stale = asyncio.run(scheduler.tick(started + timedelta(seconds=10)))
+            assert stale.dispatch_attempts == 1
+            assert dispatcher.run_ids == [run_id]
+            reclaimed, second = asyncio.run(
+                store.claim(
+                    run_id,
+                    started + timedelta(seconds=10),
+                    started + timedelta(seconds=20),
+                    3,
+                )
+            )
+            assert reclaimed is RefreshClaimOutcome.CLAIMED
+            assert second is not None and second.attempt_count == 2
+            assert (
+                asyncio.run(
+                    store.heartbeat(
+                        run_id,
+                        started + timedelta(seconds=15),
+                        started + timedelta(seconds=30),
+                    )
+                )
+                is False
+            )
+            assert (
+                asyncio.run(scheduler.tick(started + timedelta(seconds=29))).dispatch_attempts == 0
+            )
+
+            third_claim, third = asyncio.run(
+                store.claim(
+                    run_id,
+                    started + timedelta(seconds=30),
+                    started + timedelta(seconds=40),
+                    3,
+                )
+            )
+            assert third_claim is RefreshClaimOutcome.CLAIMED
+            assert third is not None and third.attempt_count == 3
+            exhausted, terminal = asyncio.run(
+                store.claim(
+                    run_id,
+                    started + timedelta(seconds=40),
+                    started + timedelta(seconds=50),
+                    3,
+                )
+            )
+            assert exhausted is RefreshClaimOutcome.TERMINAL
+            assert terminal is not None
+            assert terminal.state is RefreshRunState.FAILED
+            assert terminal.error_code == "worker_lost"
+
+            async def lease_actions() -> list[str]:
+                async with session_factory() as session:
+                    return list(
+                        await session.scalars(
+                            select(AuditEventModel.action).where(
+                                AuditEventModel.resource_id == run_id
+                            )
+                        )
+                    )
+
+            actions = asyncio.run(lease_actions())
+            assert actions.count("dataset.refresh_reclaimed") == 2
+            assert actions.count("dataset.refresh_failed") == 1
+    finally:
+        asyncio.run(engine.dispose())
+
+
 def test_celery_contract_uses_json_late_ack_and_deterministic_task_id() -> None:
     app = create_celery_app(TEST_SETTINGS)
     assert app.conf.accept_content == ["json"]
@@ -562,7 +944,7 @@ def test_schedule_api_and_scheduler_create_coalesce_and_recover_runs() -> None:
             asyncio.run(force_due(dataset_id, second_due))
             failed_dispatch = asyncio.run(scheduler.tick(second_due))
             assert failed_dispatch.dispatch_failures == 1
-            pending = asyncio.run(schedule_store.undispatched_run_ids(limit=10))
+            pending = asyncio.run(schedule_store.recoverable_run_ids(now=second_due, limit=10))
             assert len(pending) == 1
             undispatched_id = pending[0]
             dispatcher.fail = False
@@ -577,9 +959,15 @@ def test_schedule_api_and_scheduler_create_coalesce_and_recover_runs() -> None:
             asyncio.run(force_due(dataset_id, third_due))
             successor = asyncio.run(scheduler.tick(third_due))
             assert successor.due_schedules == 1
-            assert successor.dispatch_attempts == 1
-            successor_id = dispatcher.run_ids[-1]
+            assert successor.dispatch_attempts == 2
+            dispatched = dispatcher.run_ids[-2:]
+            assert undispatched_id in dispatched
+            successor_id = next(run_id for run_id in dispatched if run_id != undispatched_id)
             assert successor_id != undispatched_id
+            stale_claim, stale_run = asyncio.run(run_store.claim(undispatched_id, third_due))
+            assert stale_claim is RefreshClaimOutcome.TERMINAL
+            assert stale_run is not None
+            assert stale_run.error_code == "worker_lost"
 
             fourth_due = datetime(2026, 10, 14, 8, 0, tzinfo=UTC)
             asyncio.run(force_due(dataset_id, fourth_due))

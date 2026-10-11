@@ -6,6 +6,7 @@ import json
 import os
 import re
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -59,6 +60,23 @@ _CHARACTER = re.compile(r"^(?:character varying|varchar|character|char)(?:\([0-9
 
 class UnsupportedSourceTypeError(ValueError):
     pass
+
+
+class RefreshCancelledError(Exception):
+    pass
+
+
+def _raise_if_cancelled(cancellation: asyncio.Event) -> None:
+    if cancellation.is_set():
+        raise RefreshCancelledError
+
+
+async def _cancel_source_when_requested(
+    source: psycopg.AsyncConnection[Any],
+    cancellation: asyncio.Event,
+) -> None:
+    await cancellation.wait()
+    await source.cancel_safe()
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,13 +266,21 @@ class ParquetSnapshotExecutor:
         self._batch_rows = batch_rows
         self._authorizer = authorizer
 
-    async def execute(self, run: RefreshRun) -> RefreshExecutionResult:
+    async def execute(
+        self,
+        run: RefreshRun,
+        cancellation: asyncio.Event,
+    ) -> RefreshExecutionResult:
         try:
+            _raise_if_cancelled(cancellation)
             context = await self._context(run)
             if context is None:
                 return RefreshExecutionResult(False, "draft_changed")
-            artifact = await self._write(run, context)
+            _raise_if_cancelled(cancellation)
+            artifact = await self._write(run, context, cancellation)
             return RefreshExecutionResult(True, snapshot=artifact)
+        except RefreshCancelledError:
+            return RefreshExecutionResult(False, cancelled=True)
         except UnsupportedSourceTypeError:
             return RefreshExecutionResult(False, "unsupported_source_type")
         except ConnectionSecretUnavailableError:
@@ -262,11 +288,16 @@ class ParquetSnapshotExecutor:
         except ConnectionAccessDeniedError:
             return RefreshExecutionResult(False, "connection_access_revoked")
         except (TimeoutError, psycopg.Error):
-            return RefreshExecutionResult(False, "source_unavailable")
+            return RefreshExecutionResult(False, "source_unavailable", retryable=True)
+        except ObjectStorageUnavailableError:
+            return RefreshExecutionResult(
+                False,
+                "object_storage_unavailable",
+                retryable=True,
+            )
         except (
             OSError,
             pa.ArrowException,
-            ObjectStorageUnavailableError,
             ValueError,
             TypeError,
         ):
@@ -330,6 +361,7 @@ class ParquetSnapshotExecutor:
         self,
         run: RefreshRun,
         context: _ExecutionContext,
+        cancellation: asyncio.Event,
     ) -> SnapshotArtifact:
         snapshot_id = uuid4()
         object_key = f"datasets/{run.dataset_id}/snapshots/{snapshot_id}.parquet"
@@ -345,6 +377,7 @@ class ParquetSnapshotExecutor:
         row_count = 0
         writer: pq.ParquetWriter | None = None
         try:
+            _raise_if_cancelled(cancellation)
             writer = pq.ParquetWriter(
                 staging_path,
                 schema,
@@ -361,28 +394,45 @@ class ParquetSnapshotExecutor:
                 statement_timeout_seconds=self._statement_timeout,
             ) as source:
                 cursor_name = f"datepipette_refresh_{run.id.hex}"
-                async with source.cursor(name=cursor_name) as cursor:
-                    await cursor.execute(compile_dataset_select(context.definition))
-                    while rows := await cursor.fetchmany(self._batch_rows):
-                        if any(len(row) != len(adapters) for row in rows):
-                            raise ValueError("Source refresh column count changed")
-                        arrays = [
-                            pa.array(
-                                [
-                                    adapter.convert(row[index])
-                                    for row in rows
-                                    if adapter.nullable or row[index] is not None
-                                ],
-                                type=adapter.arrow_type,
-                                from_pandas=False,
-                            )
-                            for index, adapter in enumerate(adapters)
-                        ]
-                        if any(len(array) != len(rows) for array in arrays):
-                            raise ValueError("Non-nullable source field returned null")
-                        batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
-                        writer.write_batch(batch)
-                        row_count += batch.num_rows
+                source_cancellation = asyncio.create_task(
+                    _cancel_source_when_requested(source, cancellation)
+                )
+                try:
+                    async with source.cursor(name=cursor_name) as cursor:
+                        _raise_if_cancelled(cancellation)
+                        await cursor.execute(compile_dataset_select(context.definition))
+                        while True:
+                            _raise_if_cancelled(cancellation)
+                            rows = await cursor.fetchmany(self._batch_rows)
+                            _raise_if_cancelled(cancellation)
+                            if not rows:
+                                break
+                            if any(len(row) != len(adapters) for row in rows):
+                                raise ValueError("Source refresh column count changed")
+                            arrays = [
+                                pa.array(
+                                    [
+                                        adapter.convert(row[index])
+                                        for row in rows
+                                        if adapter.nullable or row[index] is not None
+                                    ],
+                                    type=adapter.arrow_type,
+                                    from_pandas=False,
+                                )
+                                for index, adapter in enumerate(adapters)
+                            ]
+                            if any(len(array) != len(rows) for array in arrays):
+                                raise ValueError("Non-nullable source field returned null")
+                            batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
+                            writer.write_batch(batch)
+                            row_count += batch.num_rows
+                except psycopg.errors.QueryCanceled:
+                    _raise_if_cancelled(cancellation)
+                    raise
+                finally:
+                    source_cancellation.cancel()
+                    with suppress(asyncio.CancelledError, psycopg.Error):
+                        await source_cancellation
             writer.close()
             writer = None
             with staging_path.open("rb") as stream:
@@ -398,6 +448,7 @@ class ParquetSnapshotExecutor:
                 while chunk := stream.read(1024 * 1024):
                     checksum.update(chunk)
             checksum_sha256 = checksum.hexdigest()
+            _raise_if_cancelled(cancellation)
             await asyncio.to_thread(
                 self._storage.publish_candidate,
                 staging_path,

@@ -25,7 +25,7 @@ Dataset refresh intent and execution are already durable in metadata PostgreSQL,
 - Horizontal scheduler replicas can share work safely, although duplicate Celery publication remains possible and is handled by existing idempotent claims.
 - Editing a draft cannot silently change scheduled output; a manual validated publication is required first.
 - Long downtime skips intermediate occurrences, avoiding a source-query storm on recovery.
-- Arbitrary cron syntax, calendars, execution retries, cancellation, and cleanup remain later capabilities.
+- Arbitrary cron syntax and calendars remain later capabilities. ADR-0023 subsequently adds cleanup, and ADR-0024 adds cancellation plus durable bounded execution retries.
 
 ## Alternatives considered
 

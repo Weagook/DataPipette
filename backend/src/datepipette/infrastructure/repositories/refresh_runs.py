@@ -1,7 +1,7 @@
 """Transactional persistence and publication for dataset refresh runs."""
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -18,6 +18,7 @@ from datepipette.domain.datasets import (
     DatasetVersionState,
 )
 from datepipette.domain.refresh import (
+    RefreshCancelOutcome,
     RefreshClaimOutcome,
     RefreshRequestOutcome,
     RefreshRun,
@@ -52,6 +53,10 @@ def _to_run(
         dispatched_at=model.dispatched_at,
         attempt_count=model.attempt_count,
         error_code=model.error_code,
+        next_attempt_at=model.next_attempt_at,
+        cancel_requested_at=model.cancel_requested_at,
+        cancelled_at=model.cancelled_at,
+        lease_expires_at=model.lease_expires_at,
         snapshot_id=snapshot_id,
         requested_at=model.requested_at,
         started_at=model.started_at,
@@ -116,6 +121,10 @@ class SqlAlchemyRefreshRunStore:
                     dispatch_required=(
                         existing_run.state == RefreshRunState.QUEUED.value
                         and existing_run.dispatched_at is None
+                        and (
+                            existing_run.next_attempt_at is None
+                            or existing_run.next_attempt_at <= occurred_at
+                        )
                     ),
                 )
 
@@ -172,6 +181,10 @@ class SqlAlchemyRefreshRunStore:
                 dispatched_at=None,
                 attempt_count=0,
                 error_code=None,
+                next_attempt_at=None,
+                cancel_requested_at=None,
+                cancelled_at=None,
+                lease_expires_at=None,
                 requested_at=occurred_at,
                 started_at=None,
                 finished_at=None,
@@ -207,7 +220,10 @@ class SqlAlchemyRefreshRunStore:
             return RefreshRequestOutcome(
                 run=_to_run(run),
                 coalesced=coalesced,
-                dispatch_required=run.dispatched_at is None,
+                dispatch_required=(
+                    run.dispatched_at is None
+                    and (run.next_attempt_at is None or run.next_attempt_at <= occurred_at)
+                ),
             )
 
     async def get(self, *, dataset_id: UUID, run_id: UUID) -> RefreshRun | None:
@@ -241,17 +257,141 @@ class SqlAlchemyRefreshRunStore:
                 model.dispatched_at = occurred_at
                 model.updated_at = occurred_at
 
+    async def cancel(
+        self,
+        *,
+        dataset_id: UUID,
+        run_id: UUID,
+        actor_id: UUID,
+        occurred_at: datetime,
+        request_id: str,
+    ) -> tuple[RefreshCancelOutcome, RefreshRun | None]:
+        async with self._session_factory() as session, session.begin():
+            model = await session.scalar(
+                select(DatasetRefreshRunModel)
+                .where(
+                    DatasetRefreshRunModel.id == run_id,
+                    DatasetRefreshRunModel.dataset_id == dataset_id,
+                )
+                .with_for_update()
+            )
+            if model is None:
+                return RefreshCancelOutcome.NOT_FOUND, None
+            if model.state == RefreshRunState.CANCELLED.value:
+                return RefreshCancelOutcome.ALREADY_CANCELLED, _to_run(model)
+            if model.state not in {
+                RefreshRunState.QUEUED.value,
+                RefreshRunState.RUNNING.value,
+            }:
+                return RefreshCancelOutcome.CONFLICT, _to_run(model)
+            if model.cancel_requested_at is not None:
+                return RefreshCancelOutcome.REQUESTED, _to_run(model)
+            model.cancel_requested_at = occurred_at
+            if model.state == RefreshRunState.QUEUED.value:
+                self._cancel(model, occurred_at)
+                action = "dataset.refresh_cancelled"
+                outcome = RefreshCancelOutcome.CANCELLED
+            else:
+                action = "dataset.refresh_cancellation_requested"
+                outcome = RefreshCancelOutcome.REQUESTED
+            model.updated_at = occurred_at
+            session.add(
+                self._audit(
+                    actor_id=actor_id,
+                    action=action,
+                    dataset_id=dataset_id,
+                    run_id=run_id,
+                    occurred_at=occurred_at,
+                    request_id=request_id,
+                    details={"state": model.state},
+                )
+            )
+            await session.flush()
+            return outcome, _to_run(model)
+
+    async def is_cancel_requested(self, run_id: UUID) -> bool:
+        async with self._session_factory() as session:
+            value = await session.scalar(
+                select(DatasetRefreshRunModel.cancel_requested_at).where(
+                    DatasetRefreshRunModel.id == run_id,
+                    DatasetRefreshRunModel.state == RefreshRunState.RUNNING.value,
+                )
+            )
+            return value is not None
+
+    async def heartbeat(
+        self,
+        run_id: UUID,
+        occurred_at: datetime,
+        lease_expires_at: datetime,
+    ) -> bool:
+        async with self._session_factory() as session, session.begin():
+            model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
+            if model is None or model.state != RefreshRunState.RUNNING.value:
+                return True
+            model.lease_expires_at = lease_expires_at
+            model.updated_at = occurred_at
+            return model.cancel_requested_at is not None
+
     async def claim(
         self,
         run_id: UUID,
         occurred_at: datetime,
+        lease_expires_at: datetime | None = None,
+        max_attempts: int = 3,
     ) -> tuple[RefreshClaimOutcome, RefreshRun | None]:
         async with self._session_factory() as session, session.begin():
             model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
             if model is None:
                 return RefreshClaimOutcome.NOT_FOUND, None
-            if model.state != RefreshRunState.QUEUED.value:
+            reclaimed = model.state == RefreshRunState.RUNNING.value
+            if reclaimed:
+                if model.cancel_requested_at is not None:
+                    self._cancel(model, occurred_at)
+                    session.add(
+                        self._audit(
+                            actor_id=None,
+                            action="dataset.refresh_cancelled",
+                            dataset_id=model.dataset_id,
+                            run_id=model.id,
+                            occurred_at=occurred_at,
+                            request_id="worker",
+                            details={"attempt": model.attempt_count},
+                        )
+                    )
+                    return RefreshClaimOutcome.TERMINAL, _to_run(model)
+                if model.lease_expires_at is not None and model.lease_expires_at > occurred_at:
+                    return RefreshClaimOutcome.DEFERRED, _to_run(model)
+                successor = await session.scalar(
+                    select(DatasetRefreshRunModel.id).where(
+                        DatasetRefreshRunModel.dataset_id == model.dataset_id,
+                        DatasetRefreshRunModel.state == RefreshRunState.QUEUED.value,
+                        DatasetRefreshRunModel.id != model.id,
+                    )
+                )
+                if successor is not None or model.attempt_count >= max_attempts:
+                    self._fail(model, "worker_lost", occurred_at)
+                    session.add(
+                        self._audit(
+                            actor_id=None,
+                            action="dataset.refresh_failed",
+                            dataset_id=model.dataset_id,
+                            run_id=model.id,
+                            occurred_at=occurred_at,
+                            request_id="worker",
+                            details={"error_code": "worker_lost"},
+                            outcome=AuditOutcome.FAILURE,
+                        )
+                    )
+                    return RefreshClaimOutcome.TERMINAL, _to_run(model)
+            elif model.state != RefreshRunState.QUEUED.value:
                 return RefreshClaimOutcome.TERMINAL, _to_run(model)
+            if (
+                not reclaimed
+                and model.next_attempt_at is not None
+                and model.next_attempt_at > occurred_at
+            ):
+                return RefreshClaimOutcome.DEFERRED, _to_run(model)
             draft = await session.get(DatasetVersionModel, model.dataset_version_id)
             if (
                 draft is None
@@ -282,13 +422,18 @@ class SqlAlchemyRefreshRunStore:
             if running is not None:
                 return RefreshClaimOutcome.DEFERRED, _to_run(model)
             model.state = RefreshRunState.RUNNING.value
-            model.started_at = occurred_at
+            if model.started_at is None:
+                model.started_at = occurred_at
+            model.next_attempt_at = None
+            model.lease_expires_at = lease_expires_at or occurred_at + timedelta(seconds=30)
             model.attempt_count += 1
             model.updated_at = occurred_at
             session.add(
                 self._audit(
                     actor_id=None,
-                    action="dataset.refresh_started",
+                    action=(
+                        "dataset.refresh_reclaimed" if reclaimed else "dataset.refresh_started"
+                    ),
                     dataset_id=model.dataset_id,
                     run_id=model.id,
                     occurred_at=occurred_at,
@@ -304,10 +449,25 @@ class SqlAlchemyRefreshRunStore:
         run_id: UUID,
         result: RefreshExecutionResult,
         occurred_at: datetime,
+        retry_at: datetime | None = None,
     ) -> None:
         async with self._session_factory() as session, session.begin():
             model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
             if model is None or model.state != RefreshRunState.RUNNING.value:
+                return
+            if model.cancel_requested_at is not None or result.cancelled:
+                self._cancel(model, occurred_at)
+                session.add(
+                    self._audit(
+                        actor_id=None,
+                        action="dataset.refresh_cancelled",
+                        dataset_id=model.dataset_id,
+                        run_id=model.id,
+                        occurred_at=occurred_at,
+                        request_id="worker",
+                        details={"attempt": model.attempt_count},
+                    )
+                )
                 return
             if result.succeeded and result.snapshot is not None:
                 published = await self._publish_snapshot(
@@ -321,7 +481,39 @@ class SqlAlchemyRefreshRunStore:
             elif result.succeeded:
                 result = RefreshExecutionResult(False, "snapshot_write_failed")
             if not result.succeeded:
-                self._fail(model, result.error_code or "refresh_execution_failed", occurred_at)
+                error_code = result.error_code or "refresh_execution_failed"
+                successor = await session.scalar(
+                    select(DatasetRefreshRunModel.id).where(
+                        DatasetRefreshRunModel.dataset_id == model.dataset_id,
+                        DatasetRefreshRunModel.state == RefreshRunState.QUEUED.value,
+                        DatasetRefreshRunModel.id != model.id,
+                    )
+                )
+                if retry_at is not None and result.retryable and successor is None:
+                    model.state = RefreshRunState.QUEUED.value
+                    model.error_code = error_code
+                    model.dispatched_at = None
+                    model.next_attempt_at = retry_at
+                    model.lease_expires_at = None
+                    model.finished_at = None
+                    model.updated_at = occurred_at
+                    session.add(
+                        self._audit(
+                            actor_id=None,
+                            action="dataset.refresh_retry_scheduled",
+                            dataset_id=model.dataset_id,
+                            run_id=model.id,
+                            occurred_at=occurred_at,
+                            request_id="worker",
+                            details={
+                                "attempt": model.attempt_count,
+                                "error_code": error_code,
+                                "next_attempt_at": retry_at.isoformat(),
+                            },
+                        )
+                    )
+                    return
+                self._fail(model, error_code, occurred_at)
             session.add(
                 self._audit(
                     actor_id=None,
@@ -435,6 +627,8 @@ class SqlAlchemyRefreshRunStore:
         dataset.updated_at = occurred_at
         run.state = RefreshRunState.SUCCEEDED.value
         run.error_code = None
+        run.next_attempt_at = None
+        run.lease_expires_at = None
         run.finished_at = occurred_at
         run.updated_at = occurred_at
         return True
@@ -443,6 +637,20 @@ class SqlAlchemyRefreshRunStore:
     def _fail(model: DatasetRefreshRunModel, error_code: str, occurred_at: datetime) -> None:
         model.state = RefreshRunState.FAILED.value
         model.error_code = error_code
+        model.next_attempt_at = None
+        model.lease_expires_at = None
+        model.finished_at = occurred_at
+        model.updated_at = occurred_at
+
+    @staticmethod
+    def _cancel(model: DatasetRefreshRunModel, occurred_at: datetime) -> None:
+        model.state = RefreshRunState.CANCELLED.value
+        model.error_code = None
+        model.dispatched_at = None
+        model.next_attempt_at = None
+        model.lease_expires_at = None
+        model.cancel_requested_at = model.cancel_requested_at or occurred_at
+        model.cancelled_at = occurred_at
         model.finished_at = occurred_at
         model.updated_at = occurred_at
 

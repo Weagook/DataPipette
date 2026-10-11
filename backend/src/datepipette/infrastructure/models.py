@@ -186,12 +186,28 @@ class DatasetRefreshRunModel(Base):
     __tablename__ = "dataset_refresh_runs"
     __table_args__ = (
         CheckConstraint(
-            "state IN ('queued', 'running', 'succeeded', 'failed')",
+            "state IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
             name="state_valid",
         ),
         CheckConstraint("requested_revision >= 1", name="requested_revision_positive"),
         CheckConstraint("dispatch_attempts >= 0", name="dispatch_attempts_nonnegative"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        CheckConstraint(
+            "(state = 'cancelled') = (cancelled_at IS NOT NULL)",
+            name="cancelled_timestamp_matches_state",
+        ),
+        CheckConstraint(
+            "cancel_requested_at IS NULL OR state IN ('running', 'cancelled')",
+            name="cancel_request_state_valid",
+        ),
+        CheckConstraint(
+            "next_attempt_at IS NULL OR state = 'queued'",
+            name="retry_due_only_when_queued",
+        ),
+        CheckConstraint(
+            "lease_expires_at IS NULL OR state = 'running'",
+            name="lease_only_when_running",
+        ),
         CheckConstraint(
             "(trigger_type = 'manual' AND schedule_id IS NULL) OR "
             "(trigger_type = 'scheduled' AND schedule_id IS NOT NULL)",
@@ -207,6 +223,17 @@ class DatasetRefreshRunModel(Base):
             "uq_dataset_refresh_runs_one_running",
             "dataset_id",
             unique=True,
+            postgresql_where=text("state = 'running'"),
+        ),
+        Index(
+            "ix_dataset_refresh_runs_retry_dispatch",
+            "next_attempt_at",
+            "requested_at",
+            postgresql_where=text("state = 'queued' AND dispatched_at IS NULL"),
+        ),
+        Index(
+            "ix_dataset_refresh_runs_running_lease",
+            "lease_expires_at",
             postgresql_where=text("state = 'running'"),
         ),
     )
@@ -231,6 +258,10 @@ class DatasetRefreshRunModel(Base):
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer)
     error_code: Mapped[str | None] = mapped_column(String(50))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

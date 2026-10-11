@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     source_statement_timeout_seconds: int = Field(default=5, ge=1, le=60)
     refresh_statement_timeout_seconds: int = Field(default=1800, ge=1, le=86_400)
     refresh_batch_rows: int = Field(default=50_000, ge=1_000, le=100_000)
+    refresh_max_attempts: int = Field(default=3, ge=1, le=10)
+    refresh_retry_base_seconds: int = Field(default=5, ge=1, le=3600)
+    refresh_retry_max_seconds: int = Field(default=300, ge=1, le=86_400)
+    refresh_cancel_poll_seconds: float = Field(default=1.0, ge=0.1, le=10.0)
+    refresh_run_lease_seconds: int = Field(default=30, ge=10, le=300)
     installation_timezone: str = "UTC"
     scheduler_poll_seconds: float = Field(default=15.0, ge=1.0, le=300.0)
     scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
@@ -110,6 +115,8 @@ class Settings(BaseSettings):
             endpoint = urlparse(self.s3_endpoint_url)
             if endpoint.scheme != "https" or not endpoint.netloc:
                 raise ValueError("Production S3 endpoints must use HTTPS")
+        if self.refresh_run_lease_seconds <= self.refresh_cancel_poll_seconds:
+            raise ValueError("Refresh run lease must exceed the heartbeat polling interval")
         return self
 
     @property

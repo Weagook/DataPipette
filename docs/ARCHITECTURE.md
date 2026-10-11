@@ -91,7 +91,7 @@ Scheduled refresh uses an independent database-polling process. Bounded `SKIP LO
 
 ### Execution
 
-Source query execution, bounded streaming, local candidate creation, verified local or S3-compatible Parquet publication, basic result statistics, and snapshot activation are implemented for version-1 single-relation visual definitions, version-2 joined visual definitions, and advanced read-only SQL definitions. Automatic cleanup removes eligible superseded objects after a grace period and reconciles sufficiently old unreferenced generated objects. Cancellation, progress, and broader resource policies remain later execution capabilities.
+Source query execution, bounded streaming, local candidate creation, verified local or S3-compatible Parquet publication, basic result statistics, and snapshot activation are implemented for version-1 single-relation visual definitions, version-2 joined visual definitions, and advanced read-only SQL definitions. Owner-authorized cancellation is durable and cooperative, with cancellation checked before atomic publication. Explicit transient source/storage failures use durable bounded exponential retries dispatched by the scheduler; renewable running leases recover worker loss without making Redis authoritative, while permanent failures remain terminal. Automatic cleanup removes eligible superseded objects after a grace period and reconciles sufficiently old unreferenced generated objects. Progress and broader resource policies remain later execution capabilities.
 
 ### Query
 

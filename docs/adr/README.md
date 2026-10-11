@@ -51,3 +51,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0021](0021-advanced-read-only-sql-datasets.md): Advanced read-only SQL dataset definitions
 - [ADR-0022](0022-shared-s3-compatible-object-storage.md): Shared S3-compatible analytical object storage
 - [ADR-0023](0023-analytical-object-lifecycle-cleanup.md): Analytical object lifecycle cleanup
+- [ADR-0024](0024-refresh-cancellation-and-bounded-retries.md): Refresh cancellation and bounded execution retries
