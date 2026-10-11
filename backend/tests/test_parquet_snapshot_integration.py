@@ -424,7 +424,7 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert UUID(dataset["active_snapshot_id"]) == first_snapshot_id
             assert dataset["active_version_id"] is not None
             draft = client.get(f"/api/v1/datasets/{dataset_id}/draft")
-            assert draft.json()["definition"] == original_definition
+            assert draft.json()["definition"] == {"kind": "visual", **original_definition}
             assert draft.json()["validation"]["state"] == "valid"
 
             first_snapshot = asyncio.run(_snapshot(first_snapshot_id))
@@ -888,6 +888,167 @@ def test_joined_definition_validates_previews_and_publishes_left_join_snapshot(
                     "join_id": invalid_definition["joins"][0]["id"],
                 }
             ]
+    finally:
+        asyncio.run(engine.dispose())
+
+
+def test_advanced_sql_definition_validates_previews_publishes_and_queries_snapshot(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(_bootstrap_source())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    dispatcher = RecordingDispatcher()
+    connection_authorizer = ConnectionAccessAuthorizer(
+        SqlAlchemyConnectionAccessStore(session_factory)
+    )
+    refresh_service = RefreshRunService(
+        store,
+        dispatcher,
+        SqlAlchemyDatasetStore(session_factory),
+        connection_authorizer,
+    )
+    worker = RefreshWorkerService(
+        store,
+        LocalParquetSnapshotExecutor(
+            session_factory,
+            AesGcmSecretCipher(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
+            tmp_path,
+            connect_timeout_seconds=5,
+            statement_timeout_seconds=30,
+            batch_rows=1,
+            authorizer=connection_authorizer,
+        ),
+    )
+    field_ids = {name: str(uuid4()) for name in ("record_id", "label", "amount")}
+    definition: dict[str, Any] = {
+        "kind": "sql",
+        "schema_version": 1,
+        "statement": (
+            f'WITH active_records AS (SELECT id, label, amount FROM "{SCHEMA}".records '
+            "WHERE active) SELECT id AS record_id, label AS label, amount AS amount "
+            "FROM active_records"
+        ),
+        "fields": [
+            {
+                "id": field_ids[name],
+                "name": name,
+                "display": {"label": name.title(), "format": None, "visible": True},
+            }
+            for name in ("record_id", "label", "amount")
+        ],
+    }
+    try:
+        with TestClient(
+            create_app(
+                settings=TEST_SETTINGS,
+                refresh_run_service=refresh_service,
+                snapshot_query_service=_snapshot_query_service(session_factory, tmp_path),
+            )
+        ) as client:
+            _login(client)
+            connection_id = _connection(client)
+            unsafe = client.post(
+                "/api/v1/datasets",
+                json={
+                    "name": "Unsafe SQL",
+                    "connection_id": connection_id,
+                    "definition": {**definition, "statement": f'DELETE FROM "{SCHEMA}".records'},
+                },
+                headers=_csrf(client),
+            )
+            assert unsafe.status_code == 422
+            assert unsafe.json()["code"] == "dataset_definition_invalid"
+
+            created = client.post(
+                "/api/v1/datasets",
+                json={
+                    "name": "Active records SQL",
+                    "connection_id": connection_id,
+                    "definition": definition,
+                },
+                headers=_csrf(client),
+            )
+            assert created.status_code == 201, created.text
+            dataset_id = cast(str, created.json()["id"])
+            etag = created.headers["etag"]
+            stored = client.get(f"/api/v1/datasets/{dataset_id}/draft")
+            assert stored.status_code == 200
+            stored_definition = stored.json()["definition"]
+            assert stored_definition == definition
+
+            validated = client.post(
+                f"/api/v1/datasets/{dataset_id}/draft/validations",
+                headers={**_csrf(client), "If-Match": etag},
+            )
+            assert validated.status_code == 200, validated.text
+            validation = validated.json()
+            assert validation["state"] == "valid"
+            assert [field["name"] for field in validation["result_schema"]] == [
+                "record_id",
+                "label",
+                "amount",
+            ]
+            assert validation["compiled_sql"] == definition["statement"]
+            assert all(field["nullable"] for field in validation["result_schema"])
+
+            preview = client.post(
+                f"/api/v1/datasets/{dataset_id}/draft/previews",
+                json={"limit": 10},
+                headers={**_csrf(client), "If-Match": etag},
+            )
+            assert preview.status_code == 200, preview.text
+            assert preview.json()["rows"] == [
+                {"record_id": 1, "label": "Alpha private value", "amount": "12.30"}
+            ]
+
+            requested = client.post(
+                f"/api/v1/datasets/{dataset_id}/refresh-runs",
+                headers={
+                    **_csrf(client),
+                    "If-Match": etag,
+                    "Idempotency-Key": "sql-snapshot",
+                },
+            )
+            assert requested.status_code == 202, requested.text
+            run_id = UUID(requested.json()["id"])
+            assert asyncio.run(worker.execute(run_id)) is RefreshClaimOutcome.CLAIMED
+            completed = client.get(f"/api/v1/datasets/{dataset_id}/refresh-runs/{run_id}").json()
+            assert completed["state"] == "succeeded"
+
+            rows = client.post(
+                f"/api/v1/datasets/{dataset_id}/rows:query",
+                json={
+                    "fields": [field_ids["record_id"], field_ids["label"]],
+                    "filters": [
+                        {
+                            "field_id": field_ids["record_id"],
+                            "operator": "gte",
+                            "value": 1,
+                        }
+                    ],
+                },
+            )
+            assert rows.status_code == 200, rows.text
+            assert rows.json()["data"]["rows"] == [{"record_id": 1, "label": "Alpha private value"}]
+
+            mismatch = {**definition, "fields": [*definition["fields"]]}
+            mismatch["fields"][0] = {**mismatch["fields"][0], "name": "wrong_name"}
+            replaced = client.put(
+                f"/api/v1/datasets/{dataset_id}/draft",
+                json={"definition": mismatch},
+                headers={**_csrf(client), "If-Match": etag},
+            )
+            mismatch_validation = client.post(
+                f"/api/v1/datasets/{dataset_id}/draft/validations",
+                headers={**_csrf(client), "If-Match": replaced.headers["etag"]},
+            )
+            assert mismatch_validation.status_code == 200
+            assert mismatch_validation.json()["state"] == "invalid"
+            assert mismatch_validation.json()["findings"][0]["code"] == (
+                "sql_result_schema_mismatch"
+            )
     finally:
         asyncio.run(engine.dispose())
 

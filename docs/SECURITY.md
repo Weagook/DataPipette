@@ -80,8 +80,10 @@ A viewer with dashboard access may receive chart results but must not use that r
 - Source operations use read-only transactions, statement timeouts, cancellation, and bounded fetch sizes.
 - Visual queries are generated only from validated structured definitions.
 - SQL values are parameterized; source identifiers are resolved from inspected and authorized metadata.
-- Advanced SQL accepts one `SELECT` or `WITH` statement and rejects multiple statements, DDL, and DML.
-- SQL parsing is defense in depth, not the primary security boundary. Database privileges and read-only transactions remain mandatory.
+- Advanced SQL accepts one bounded PostgreSQL-dialect query expression with optional read-only CTEs. AST inspection rejects multiple statements, DDL/DML, data-modifying CTEs, `SELECT INTO`, row locks, external parameters, unqualified base relations, and cross-database names.
+- SQL definitions preserve original editor text but derive canonical execution SQL and schema-qualified source relations on every load. Every relation is scope-authorized at create/replace, validation, preview, refresh request, and worker execution.
+- SQL validation uses `EXPLAIN (FORMAT JSON)` without `ANALYZE` plus a zero-row wrapper for result metadata. Preview and refresh rebuild and wrap execution SQL from the definition; they never trust a stored validation artifact as executable authority.
+- SQL parsing is defense in depth, not the primary security boundary. Database privileges and read-only transactions remain mandatory. The dedicated source role should have `EXECUTE` only on trusted functions because functions and views can hide behavior that static relation lineage cannot fully describe.
 - Connection scopes narrow but never expand the configured PostgreSQL role. They are enforced during discovery, dataset create/replace, validation, preview, refresh request, and refresh worker execution.
 - Analyst catalog collections are filtered before pagination. Inaccessible connections, schemas, and relations are concealed with the same not-found boundaries used for absent resources.
 - Catalog discovery requires effective schema `USAGE` and relation `SELECT`; column metadata requires column-level `SELECT`. Foreign-key targets are omitted unless their schema and relation are also visible.

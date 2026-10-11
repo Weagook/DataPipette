@@ -1,4 +1,4 @@
-"""Owner-authorized endpoints for private visual dataset drafts."""
+"""Owner-authorized endpoints for private dataset drafts."""
 
 from datetime import datetime
 from typing import Annotated, Any, Literal, cast
@@ -35,6 +35,8 @@ from datepipette.application.datasets import (
 )
 from datepipette.domain.datasets import (
     Dataset,
+    DatasetDefinition,
+    DatasetDefinitionKind,
     DatasetDraft,
     DatasetPreview,
     DatasetValidation,
@@ -43,6 +45,8 @@ from datepipette.domain.datasets import (
     FieldDisplayFormat,
     FieldSource,
     PreviewTruncationReason,
+    SqlDatasetDefinition,
+    SqlField,
     ValidationFindingCode,
     ValidationSeverity,
     VisualDatasetDefinition,
@@ -103,16 +107,33 @@ class VisualJoinPayload(StrictModel):
 
 
 class VisualDefinitionPayload(StrictModel):
+    kind: Literal[DatasetDefinitionKind.VISUAL] = DatasetDefinitionKind.VISUAL
     schema_version: Literal[1, 2]
     source: VisualSourcePayload
     fields: list[VisualFieldPayload] = Field(min_length=1, max_length=500)
     joins: list[VisualJoinPayload] = Field(default_factory=list, max_length=9)
 
 
+class SqlFieldPayload(StrictModel):
+    id: UUID
+    name: str = Field(min_length=1, max_length=100)
+    display: FieldDisplayPayload
+
+
+class SqlDefinitionPayload(StrictModel):
+    kind: Literal[DatasetDefinitionKind.SQL]
+    schema_version: Literal[1]
+    statement: str = Field(min_length=1, max_length=65_536)
+    fields: list[SqlFieldPayload] = Field(min_length=1, max_length=500)
+
+
+DefinitionPayload = VisualDefinitionPayload | SqlDefinitionPayload
+
+
 class CreateDatasetRequest(StrictModel):
     name: str = Field(min_length=1, max_length=100)
     connection_id: UUID
-    definition: VisualDefinitionPayload
+    definition: DefinitionPayload
 
     @field_validator("name")
     @classmethod
@@ -136,7 +157,7 @@ class UpdateDatasetRequest(StrictModel):
 
 
 class ReplaceDraftRequest(StrictModel):
-    definition: VisualDefinitionPayload
+    definition: DefinitionPayload
 
 
 class PreviewDatasetDraftRequest(StrictModel):
@@ -191,7 +212,7 @@ class DatasetDraftResponse(BaseModel):
     id: UUID
     dataset_id: UUID
     revision: int
-    definition: VisualDefinitionPayload
+    definition: DefinitionPayload
     validation: DatasetValidationResponse | None
     created_by: UUID
     created_at: datetime
@@ -229,7 +250,24 @@ def _preview_service(request: Request) -> DatasetPreviewService:
     return cast(DatasetPreviewService, request.app.state.dataset_preview_service)
 
 
-def _definition(payload: VisualDefinitionPayload) -> VisualDatasetDefinition:
+def _definition(payload: DefinitionPayload) -> DatasetDefinition:
+    if isinstance(payload, SqlDefinitionPayload):
+        return SqlDatasetDefinition(
+            schema_version=payload.schema_version,
+            statement=payload.statement,
+            fields=tuple(
+                SqlField(
+                    id=item.id,
+                    name=item.name,
+                    display=FieldDisplay(
+                        label=item.display.label,
+                        format=item.display.format,
+                        visible=item.display.visible,
+                    ),
+                )
+                for item in payload.fields
+            ),
+        )
     return VisualDatasetDefinition(
         schema_version=payload.schema_version,
         relations=tuple(
@@ -291,11 +329,17 @@ def _dataset_response(value: Dataset) -> DatasetResponse:
 
 
 def _draft_response(value: DatasetDraft) -> DatasetDraftResponse:
+    document = value.definition.to_document()
+    definition = (
+        SqlDefinitionPayload.model_validate(document)
+        if isinstance(value.definition, SqlDatasetDefinition)
+        else VisualDefinitionPayload.model_validate(document)
+    )
     return DatasetDraftResponse(
         id=value.id,
         dataset_id=value.dataset_id,
         revision=value.revision,
-        definition=VisualDefinitionPayload.model_validate(value.definition.to_document()),
+        definition=definition,
         validation=_validation_response(value.validation) if value.validation else None,
         created_by=value.created_by,
         created_at=value.created_at,
@@ -375,7 +419,7 @@ def _invalid_definition() -> ApiProblem:
         status_code=422,
         code="dataset_definition_invalid",
         title="Dataset definition invalid",
-        detail="The visual dataset definition is inconsistent.",
+        detail="The dataset definition is inconsistent or unsafe.",
     )
 
 

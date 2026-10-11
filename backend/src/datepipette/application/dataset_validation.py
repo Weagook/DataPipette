@@ -1,4 +1,4 @@
-"""Explicit live validation of visual dataset drafts."""
+"""Explicit live validation of dataset drafts."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,13 +22,14 @@ from datepipette.application.datasets import (
 )
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
+    DatasetDefinition,
     DatasetDraft,
     DatasetPlanSummary,
     DatasetValidation,
     DatasetValidationFinding,
     DatasetValidationState,
     ValidatedDatasetField,
-    VisualDatasetDefinition,
+    definition_relations,
 )
 from datepipette.domain.identity import User
 
@@ -53,7 +54,7 @@ class SourceDatasetValidator(Protocol):
         *,
         password: str,
         ca_certificate: str | None,
-        definition: VisualDatasetDefinition,
+        definition: DatasetDefinition,
     ) -> SourceValidationResult: ...
 
 
@@ -91,10 +92,7 @@ class DatasetValidationService:
             await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=dataset.connection_id,
-                relations=(
-                    (relation.schema_name, relation.relation_name)
-                    for relation in draft.definition.relations
-                ),
+                relations=definition_relations(draft.definition),
             )
         except ConnectionAccessDeniedError as exc:
             raise DatasetNotFoundError from exc

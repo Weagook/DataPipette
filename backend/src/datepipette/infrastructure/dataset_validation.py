@@ -1,4 +1,4 @@
-"""PostgreSQL validation and safe SQL compilation for one-relation datasets."""
+"""PostgreSQL validation and safe SQL compilation for dataset drafts."""
 
 from typing import Any
 from uuid import UUID
@@ -12,16 +12,17 @@ from datepipette.application.dataset_validation import (
 )
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
+    DatasetDefinition,
     DatasetPlanSummary,
     DatasetValidationFinding,
     DatasetValidationState,
+    SqlDatasetDefinition,
     ValidatedDatasetField,
     ValidationFindingCode,
     ValidationSeverity,
-    VisualDatasetDefinition,
     VisualJoinType,
 )
-from datepipette.infrastructure.dataset_sql import compile_visual_select
+from datepipette.infrastructure.dataset_sql import compile_dataset_select, compile_visual_select
 from datepipette.infrastructure.source_postgres import open_read_only_source
 
 LARGE_ESTIMATED_RESULT_ROWS = 1_000_000
@@ -61,7 +62,7 @@ class PsycopgSourceDatasetValidator:
         *,
         password: str,
         ca_certificate: str | None,
-        definition: VisualDatasetDefinition,
+        definition: DatasetDefinition,
     ) -> SourceValidationResult:
         try:
             async with (
@@ -74,6 +75,8 @@ class PsycopgSourceDatasetValidator:
                 ) as source,
                 source.cursor() as cursor,
             ):
+                if isinstance(definition, SqlDatasetDefinition):
+                    return await self._validate_sql(source, cursor, definition)
                 relation_columns: dict[UUID, dict[str, tuple[str, bool]]] = {}
                 relation_findings: list[DatasetValidationFinding] = []
                 for relation in definition.relations:
@@ -182,6 +185,101 @@ class PsycopgSourceDatasetValidator:
                 )
         except (TimeoutError, psycopg.Error, IndexError, KeyError, TypeError, ValueError) as exc:
             raise SourceDatasetValidationUnavailableError from exc
+
+    async def _validate_sql(
+        self,
+        source: psycopg.AsyncConnection[Any],
+        cursor: psycopg.AsyncCursor[Any],
+        definition: SqlDatasetDefinition,
+    ) -> SourceValidationResult:
+        for relation in definition.source_relations:
+            await cursor.execute(
+                _RELATION_SQL,
+                (relation.schema_name, relation.relation_name),
+            )
+            if await cursor.fetchone() is None:
+                return SourceValidationResult(
+                    state=DatasetValidationState.INVALID,
+                    compiled_sql=None,
+                    result_schema=(),
+                    plan=None,
+                    findings=(
+                        DatasetValidationFinding(
+                            code=ValidationFindingCode.SQL_SOURCE_RELATION_NOT_FOUND,
+                            severity=ValidationSeverity.ERROR,
+                        ),
+                    ),
+                )
+
+        select_query = compile_dataset_select(definition)
+        try:
+            await cursor.execute(sql.SQL("EXPLAIN (FORMAT JSON) {}").format(select_query))
+            explain_row = await cursor.fetchone()
+            plan = self._plan_summary(explain_row)
+            await cursor.execute(
+                sql.SQL('SELECT * FROM ({}) AS "_datepipette_validation" LIMIT 0').format(
+                    select_query
+                )
+            )
+        except psycopg.ProgrammingError:
+            await source.rollback()
+            return SourceValidationResult(
+                state=DatasetValidationState.INVALID,
+                compiled_sql=None,
+                result_schema=(),
+                plan=None,
+                findings=(
+                    DatasetValidationFinding(
+                        code=ValidationFindingCode.SQL_QUERY_INVALID,
+                        severity=ValidationSeverity.ERROR,
+                    ),
+                ),
+            )
+        description = cursor.description
+        if description is None:
+            raise ValueError("PostgreSQL returned no SQL result metadata")
+        actual_names = tuple(column.name for column in description)
+        expected_names = tuple(field.name for field in definition.fields)
+        if actual_names != expected_names:
+            return SourceValidationResult(
+                state=DatasetValidationState.INVALID,
+                compiled_sql=None,
+                result_schema=(),
+                plan=plan,
+                findings=(
+                    DatasetValidationFinding(
+                        code=ValidationFindingCode.SQL_RESULT_SCHEMA_MISMATCH,
+                        severity=ValidationSeverity.ERROR,
+                    ),
+                ),
+            )
+        type_oids = tuple({int(column.type_code) for column in description})
+        await cursor.execute(
+            """
+            SELECT type.oid, pg_catalog.format_type(type.oid, NULL)
+            FROM pg_catalog.pg_type AS type
+            WHERE type.oid = ANY(%s::oid[])
+            """,
+            (list(type_oids),),
+        )
+        types = {int(row[0]): str(row[1]) for row in await cursor.fetchall()}
+        result_schema = tuple(
+            ValidatedDatasetField(
+                field_id=field.id,
+                name=field.name,
+                data_type=types[int(column.type_code)],
+                nullable=True,
+            )
+            for field, column in zip(definition.fields, description, strict=True)
+        )
+        state, findings = self._classify(plan)
+        return SourceValidationResult(
+            state=state,
+            compiled_sql=select_query.as_string(source),
+            result_schema=result_schema,
+            plan=plan,
+            findings=findings,
+        )
 
     @staticmethod
     def _plan_summary(explain_row: tuple[Any, ...] | None) -> DatasetPlanSummary:

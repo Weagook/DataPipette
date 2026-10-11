@@ -705,7 +705,15 @@
             "type": "string"
           },
           "definition": {
-            "$ref": "#/components/schemas/VisualDefinitionPayload"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualDefinitionPayload"
+              },
+              {
+                "$ref": "#/components/schemas/SqlDefinitionPayload"
+              }
+            ],
+            "title": "Definition"
           },
           "name": {
             "maxLength": 100,
@@ -825,7 +833,15 @@
             "type": "string"
           },
           "definition": {
-            "$ref": "#/components/schemas/VisualDefinitionPayload"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualDefinitionPayload"
+              },
+              {
+                "$ref": "#/components/schemas/SqlDefinitionPayload"
+              }
+            ],
+            "title": "Definition"
           },
           "id": {
             "format": "uuid",
@@ -2295,7 +2311,15 @@
         "additionalProperties": false,
         "properties": {
           "definition": {
-            "$ref": "#/components/schemas/VisualDefinitionPayload"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualDefinitionPayload"
+              },
+              {
+                "$ref": "#/components/schemas/SqlDefinitionPayload"
+              }
+            ],
+            "title": "Definition"
           }
         },
         "required": [
@@ -2647,6 +2671,70 @@
           "field_id"
         ],
         "title": "SnapshotSortPayload",
+        "type": "object"
+      },
+      "SqlDefinitionPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/SqlFieldPayload"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Fields",
+            "type": "array"
+          },
+          "kind": {
+            "const": "sql",
+            "title": "Kind",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "statement": {
+            "maxLength": 65536,
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "schema_version",
+          "statement",
+          "fields"
+        ],
+        "title": "SqlDefinitionPayload",
+        "type": "object"
+      },
+      "SqlFieldPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "$ref": "#/components/schemas/FieldDisplayPayload"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "display"
+        ],
+        "title": "SqlFieldPayload",
         "type": "object"
       },
       "SystemRole": {
@@ -3003,7 +3091,10 @@
           "source_relation_not_found",
           "source_field_not_found",
           "source_join_column_not_found",
-          "large_estimated_result"
+          "large_estimated_result",
+          "sql_source_relation_not_found",
+          "sql_query_invalid",
+          "sql_result_schema_mismatch"
         ],
         "title": "ValidationFindingCode",
         "type": "string"
@@ -3090,6 +3181,12 @@
             "maxItems": 9,
             "title": "Joins",
             "type": "array"
+          },
+          "kind": {
+            "const": "visual",
+            "default": "visual",
+            "title": "Kind",
+            "type": "string"
           },
           "schema_version": {
             "enum": [

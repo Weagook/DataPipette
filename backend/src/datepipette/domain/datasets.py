@@ -1,22 +1,33 @@
-"""Visual dataset draft vocabulary and invariants."""
+"""Dataset draft vocabulary and invariants."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
+import sqlglot
+from sqlglot import exp
+from sqlglot.errors import ParseError
+from sqlglot.optimizer.scope import traverse_scope
+
 _OUTPUT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 MAX_DATASET_FIELDS = 500
 MAX_DATASET_RELATIONS = 10
 MAX_JOIN_CONDITIONS = 8
+MAX_SQL_STATEMENT_BYTES = 65_536
 
 
 class DatasetVersionState(StrEnum):
     DRAFT = "draft"
     PUBLISHED = "published"
     SUPERSEDED = "superseded"
+
+
+class DatasetDefinitionKind(StrEnum):
+    VISUAL = "visual"
+    SQL = "sql"
 
 
 class DatasetValidationState(StrEnum):
@@ -35,6 +46,9 @@ class ValidationFindingCode(StrEnum):
     SOURCE_FIELD_NOT_FOUND = "source_field_not_found"
     SOURCE_JOIN_COLUMN_NOT_FOUND = "source_join_column_not_found"
     LARGE_ESTIMATED_RESULT = "large_estimated_result"
+    SQL_SOURCE_RELATION_NOT_FOUND = "sql_source_relation_not_found"
+    SQL_QUERY_INVALID = "sql_query_invalid"
+    SQL_RESULT_SCHEMA_MISMATCH = "sql_result_schema_mismatch"
 
 
 class PreviewTruncationReason(StrEnum):
@@ -217,6 +231,7 @@ class VisualDatasetDefinition:
 
     def to_document(self) -> dict[str, Any]:
         return {
+            "kind": DatasetDefinitionKind.VISUAL.value,
             "schema_version": self.schema_version,
             "source": {
                 "relations": [
@@ -320,6 +335,150 @@ class VisualDatasetDefinition:
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("Stored visual definition is invalid") from exc
+
+
+@dataclass(frozen=True, slots=True)
+class SqlSourceRelation:
+    schema_name: str
+    relation_name: str
+
+
+def _inspect_sql(statement: str) -> tuple[str, tuple[SqlSourceRelation, ...]]:
+    normalized_input = statement.strip()
+    if not normalized_input:
+        raise ValueError("SQL statement must not be empty")
+    if len(normalized_input.encode("utf-8")) > MAX_SQL_STATEMENT_BYTES:
+        raise ValueError("SQL statement exceeds the maximum serialized size")
+    try:
+        parsed = sqlglot.parse(normalized_input, read="postgres")
+    except ParseError as exc:
+        raise ValueError("SQL statement is not valid PostgreSQL syntax") from exc
+    if len(parsed) != 1 or not isinstance(parsed[0], exp.Query):
+        raise ValueError("SQL definition must contain exactly one SELECT statement")
+    root = parsed[0]
+    if any(not isinstance(cte.this, exp.Query) for cte in root.find_all(exp.CTE)):
+        raise ValueError("SQL statement must be read-only and cannot modify data")
+    if root.find(exp.Into) is not None or root.find(exp.Lock) is not None:
+        raise ValueError("SQL statement must be read-only and cannot lock rows")
+    if root.find(exp.Parameter) is not None or root.find(exp.Placeholder) is not None:
+        raise ValueError("SQL dataset statements cannot contain external parameters")
+    relations: set[SqlSourceRelation] = set()
+    for scope in traverse_scope(root):
+        for source in scope.sources.values():
+            if not isinstance(source, exp.Table):
+                continue
+            if source.catalog or not source.db:
+                raise ValueError("Every SQL source relation must be schema-qualified")
+            relations.add(SqlSourceRelation(source.db, source.name))
+    return (
+        root.sql(dialect="postgres", pretty=False),
+        tuple(sorted(relations, key=lambda item: (item.schema_name, item.relation_name))),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SqlField:
+    id: UUID
+    name: str
+    display: FieldDisplay
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "name", _output_name(self.name, "Output field name"))
+
+
+@dataclass(frozen=True, slots=True)
+class SqlDatasetDefinition:
+    statement: str
+    fields: tuple[SqlField, ...]
+    schema_version: int = 1
+    execution_statement: str = field(init=False, repr=False, compare=False)
+    source_relations: tuple[SqlSourceRelation, ...] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.schema_version != 1:
+            raise ValueError("Unsupported SQL definition schema version")
+        if not self.fields:
+            raise ValueError("At least one SQL output field is required")
+        if len(self.fields) > MAX_DATASET_FIELDS:
+            raise ValueError(f"At most {MAX_DATASET_FIELDS} fields are allowed")
+        field_ids = [item.id for item in self.fields]
+        if len(field_ids) != len(set(field_ids)):
+            raise ValueError("Field identifiers must be unique")
+        output_names = [item.name.casefold() for item in self.fields]
+        if len(output_names) != len(set(output_names)):
+            raise ValueError("Output field names must be unique")
+        execution_statement, relations = _inspect_sql(self.statement)
+        object.__setattr__(self, "statement", self.statement.strip())
+        object.__setattr__(self, "execution_statement", execution_statement)
+        object.__setattr__(self, "source_relations", relations)
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "kind": DatasetDefinitionKind.SQL.value,
+            "schema_version": self.schema_version,
+            "statement": self.statement,
+            "fields": [
+                {
+                    "id": str(item.id),
+                    "name": item.name,
+                    "display": {
+                        "label": item.display.label,
+                        "format": item.display.format.value if item.display.format else None,
+                        "visible": item.display.visible,
+                    },
+                }
+                for item in self.fields
+            ],
+        }
+
+    @classmethod
+    def from_document(cls, document: dict[str, Any]) -> "SqlDatasetDefinition":
+        try:
+            return cls(
+                schema_version=document["schema_version"],
+                statement=document["statement"],
+                fields=tuple(
+                    SqlField(
+                        id=UUID(value["id"]),
+                        name=value["name"],
+                        display=FieldDisplay(
+                            label=value["display"]["label"],
+                            format=(
+                                FieldDisplayFormat(value["display"]["format"])
+                                if value["display"]["format"] is not None
+                                else None
+                            ),
+                            visible=value["display"]["visible"],
+                        ),
+                    )
+                    for value in document["fields"]
+                ),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("Stored SQL definition is invalid") from exc
+
+
+DatasetDefinition = VisualDatasetDefinition | SqlDatasetDefinition
+DatasetField = VisualField | SqlField
+
+
+def dataset_definition_from_document(document: dict[str, Any]) -> DatasetDefinition:
+    kind = document.get("kind", DatasetDefinitionKind.VISUAL.value)
+    if kind == DatasetDefinitionKind.VISUAL.value:
+        return VisualDatasetDefinition.from_document(document)
+    if kind == DatasetDefinitionKind.SQL.value:
+        return SqlDatasetDefinition.from_document(document)
+    raise ValueError("Stored dataset definition kind is invalid")
+
+
+def definition_relations(definition: DatasetDefinition) -> tuple[tuple[str, str], ...]:
+    if isinstance(definition, VisualDatasetDefinition):
+        return tuple(
+            (relation.schema_name, relation.relation_name) for relation in definition.relations
+        )
+    return tuple(
+        (relation.schema_name, relation.relation_name) for relation in definition.source_relations
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,7 +616,7 @@ class DatasetDraft:
     id: UUID
     dataset_id: UUID
     revision: int
-    definition: VisualDatasetDefinition
+    definition: DatasetDefinition
     validation: DatasetValidation | None
     created_by: UUID
     created_at: datetime

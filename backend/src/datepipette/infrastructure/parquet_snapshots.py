@@ -25,14 +25,16 @@ from datepipette.application.connections import ConnectionSecretUnavailableError
 from datepipette.application.refresh_worker import RefreshExecutionResult
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
+    DatasetDefinition,
     DatasetValidation,
     DatasetValidationState,
-    VisualDatasetDefinition,
+    dataset_definition_from_document,
+    definition_relations,
 )
 from datepipette.domain.refresh import RefreshRun
 from datepipette.domain.snapshots import SnapshotArtifact
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
-from datepipette.infrastructure.dataset_sql import compile_visual_select
+from datepipette.infrastructure.dataset_sql import compile_dataset_select
 from datepipette.infrastructure.models import (
     DatasetModel,
     DatasetVersionModel,
@@ -58,7 +60,7 @@ class _ExecutionContext:
     connection: PostgresConnection
     password: str
     ca_certificate: str | None
-    definition: VisualDatasetDefinition
+    definition: DatasetDefinition
     validation: DatasetValidation
 
 
@@ -289,14 +291,11 @@ class LocalParquetSnapshotExecutor:
             actor_model = await session.get(UserModel, run.requested_by)
             if connection_model is None or actor_model is None:
                 return None
-            definition = VisualDatasetDefinition.from_document(version.definition)
+            definition = dataset_definition_from_document(version.definition)
             await self._authorizer.require_relations(
                 actor=to_user(actor_model),
                 connection_id=connection_model.id,
-                relations=(
-                    (relation.schema_name, relation.relation_name)
-                    for relation in definition.relations
-                ),
+                relations=definition_relations(definition),
             )
             connection = to_connection(connection_model)
             password = self._cipher.decrypt(
@@ -359,7 +358,7 @@ class LocalParquetSnapshotExecutor:
             ) as source:
                 cursor_name = f"datepipette_refresh_{run.id.hex}"
                 async with source.cursor(name=cursor_name) as cursor:
-                    await cursor.execute(compile_visual_select(context.definition))
+                    await cursor.execute(compile_dataset_select(context.definition))
                     while rows := await cursor.fetchmany(self._batch_rows):
                         if any(len(row) != len(adapters) for row in rows):
                             raise ValueError("Source refresh column count changed")

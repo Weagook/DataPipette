@@ -19,6 +19,7 @@ dependencies = [
     "pytz>=2025,<2027",
     "redis>=5.2,<8",
     "sqlalchemy[asyncio]>=2.0,<3",
+    "sqlglot>=30.22,<31",
     "uvicorn[standard]>=0.32,<1",
 ]
 

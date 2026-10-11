@@ -22,10 +22,11 @@ from datepipette.application.datasets import (
 )
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
+    DatasetDefinition,
     DatasetPreview,
     DatasetValidationState,
     PreviewTruncationReason,
-    VisualDatasetDefinition,
+    definition_relations,
 )
 from datepipette.domain.identity import User
 
@@ -54,7 +55,7 @@ class SourceDatasetPreviewer(Protocol):
         *,
         password: str,
         ca_certificate: str | None,
-        definition: VisualDatasetDefinition,
+        definition: DatasetDefinition,
         limit: int,
         maximum_bytes: int,
     ) -> SourcePreviewResult: ...
@@ -98,10 +99,7 @@ class DatasetPreviewService:
             await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=dataset.connection_id,
-                relations=(
-                    (relation.schema_name, relation.relation_name)
-                    for relation in draft.definition.relations
-                ),
+                relations=definition_relations(draft.definition),
             )
         except ConnectionAccessDeniedError as exc:
             raise DatasetNotFoundError from exc

@@ -272,7 +272,7 @@ def test_dataset_draft_round_trip_revision_and_redacted_audit() -> None:
         draft = client.get(f"/api/v1/datasets/{dataset_id}/draft")
         assert draft.status_code == 200
         assert draft.headers["etag"] == '"draft-1"'
-        assert draft.json()["definition"] == original_definition
+        assert draft.json()["definition"] == {"kind": "visual", **original_definition}
 
         changed_definition = deepcopy(original_definition)
         changed_definition["fields"][1]["display"]["label"] = "Registration date"
@@ -537,6 +537,31 @@ def test_analyst_authors_only_owned_datasets_and_revocation_blocks_source_operat
             headers=_csrf(analyst),
         )
         assert blocked_join.status_code == 404
+        blocked_sql = analyst.post(
+            "/api/v1/datasets",
+            json={
+                "name": "Unauthorized SQL dataset",
+                "connection_id": connection_id,
+                "definition": {
+                    "kind": "sql",
+                    "schema_version": 1,
+                    "statement": "SELECT id AS order_id FROM sales.orders",
+                    "fields": [
+                        {
+                            "id": str(uuid4()),
+                            "name": "order_id",
+                            "display": {
+                                "label": "Order ID",
+                                "format": None,
+                                "visible": True,
+                            },
+                        }
+                    ],
+                },
+            },
+            headers=_csrf(analyst),
+        )
+        assert blocked_sql.status_code == 404
         created, etag = _create_dataset(analyst, connection_id, name="Analyst private")
         dataset_id = cast(str, created["id"])
         listed = analyst.get("/api/v1/datasets")

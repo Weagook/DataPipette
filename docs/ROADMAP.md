@@ -37,7 +37,7 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Connection visibility scopes and owner-authorized analyst dataset authoring
 - [x] Foreign-key suggestions, table aliases, `INNER JOIN`, and `LEFT JOIN`
 - [x] Interval/daily refresh schedules, coalesced due runs, and undispatched-run recovery
-- Advanced read-only SQL datasets
+- [x] Advanced read-only SQL datasets
 - S3/MinIO result storage
 - Refresh cancellation, execution retry policies, and cleanup
 - Draft/published versions, schema comparison, and impact analysis
