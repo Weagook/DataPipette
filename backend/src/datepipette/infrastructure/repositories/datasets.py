@@ -1,5 +1,6 @@
 """Transactional persistence for dataset drafts."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -14,10 +15,12 @@ from datepipette.application.datasets import (
     DatasetRevisionConflictError,
 )
 from datepipette.domain.audit import AuditActorType, AuditOutcome
+from datepipette.domain.dataset_impact import DatasetSchemaImpact
 from datepipette.domain.datasets import (
     Dataset,
     DatasetDraft,
     DatasetValidation,
+    DatasetVersion,
     DatasetVersionState,
     dataset_definition_from_document,
 )
@@ -47,6 +50,24 @@ def _to_draft(model: DatasetVersionModel) -> DatasetDraft:
     return DatasetDraft(
         id=model.id,
         dataset_id=model.dataset_id,
+        revision=model.revision,
+        definition=dataset_definition_from_document(model.definition),
+        validation=(
+            DatasetValidation.from_document(model.validation)
+            if model.validation is not None
+            else None
+        ),
+        created_by=model.created_by,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def _to_version(model: DatasetVersionModel) -> DatasetVersion:
+    return DatasetVersion(
+        id=model.id,
+        dataset_id=model.dataset_id,
+        state=DatasetVersionState(model.state),
         revision=model.revision,
         definition=dataset_definition_from_document(model.definition),
         validation=(
@@ -198,6 +219,57 @@ class SqlAlchemyDatasetStore:
         async with self._session_factory() as session:
             model = await session.scalar(statement)
         return _to_draft(model) if model is not None else None
+
+    async def list_versions(
+        self,
+        *,
+        dataset_id: UUID,
+        before_created_at: datetime | None,
+        before_id: UUID | None,
+        limit: int,
+    ) -> Sequence[DatasetVersion]:
+        statement = (
+            select(DatasetVersionModel)
+            .where(
+                DatasetVersionModel.dataset_id == dataset_id,
+                DatasetVersionModel.state.in_(
+                    (
+                        DatasetVersionState.PUBLISHED.value,
+                        DatasetVersionState.SUPERSEDED.value,
+                    )
+                ),
+            )
+            .order_by(DatasetVersionModel.created_at.desc(), DatasetVersionModel.id.desc())
+            .limit(limit)
+        )
+        if before_created_at is not None and before_id is not None:
+            statement = statement.where(
+                or_(
+                    DatasetVersionModel.created_at < before_created_at,
+                    and_(
+                        DatasetVersionModel.created_at == before_created_at,
+                        DatasetVersionModel.id < before_id,
+                    ),
+                )
+            )
+        async with self._session_factory() as session:
+            models = list(await session.scalars(statement))
+        return [_to_version(model) for model in models]
+
+    async def get_version(
+        self,
+        *,
+        dataset_id: UUID,
+        version_id: UUID,
+    ) -> DatasetVersion | None:
+        async with self._session_factory() as session:
+            model = await session.scalar(
+                select(DatasetVersionModel).where(
+                    DatasetVersionModel.id == version_id,
+                    DatasetVersionModel.dataset_id == dataset_id,
+                )
+            )
+        return _to_version(model) if model is not None else None
 
     async def rename(
         self,
@@ -422,6 +494,50 @@ class SqlAlchemyDatasetStore:
                     outcome=AuditOutcome.FAILURE,
                 )
             )
+
+    async def record_impact_analysis(
+        self,
+        *,
+        dataset_id: UUID,
+        actor_id: UUID,
+        impact: DatasetSchemaImpact,
+        expected_validated_at: datetime,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> bool:
+        async with self._session_factory() as session, session.begin():
+            draft = await session.scalar(
+                select(DatasetVersionModel)
+                .where(
+                    DatasetVersionModel.dataset_id == dataset_id,
+                    DatasetVersionModel.state == DatasetVersionState.DRAFT.value,
+                )
+                .with_for_update()
+            )
+            if (
+                draft is None
+                or draft.revision != impact.draft_revision
+                or draft.validation is None
+                or draft.validation.get("validated_at") != expected_validated_at.isoformat()
+            ):
+                return False
+            session.add(
+                self._audit(
+                    actor_id=actor_id,
+                    action="dataset.draft_impact_analyzed",
+                    resource_id=dataset_id,
+                    occurred_at=occurred_at,
+                    request_id=request_id,
+                    details={
+                        "revision": impact.draft_revision,
+                        "validation_state": impact.draft_validation_state.value,
+                        "change_count": len(impact.changes),
+                        "breaking_change_count": impact.breaking_change_count,
+                        "change_kinds": sorted({change.kind.value for change in impact.changes}),
+                    },
+                )
+            )
+            return True
 
     @staticmethod
     def _translate_integrity_error(exc: IntegrityError) -> None:

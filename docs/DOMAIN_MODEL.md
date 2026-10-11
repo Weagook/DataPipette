@@ -75,6 +75,8 @@ The published definition and snapshot serve readers. Editing creates or updates 
 
 Drafts are mutable through optimistic revision checks. A future published version is immutable; editing it creates or resumes a separate draft instead of modifying the definition used by readers.
 
+Published and superseded versions form immutable, owner-visible history. The current draft is compared with the active published version only after validation of the exact revision. Schema impact uses stable field UUIDs to distinguish additions, removals, renames, PostgreSQL type/nullability drift, unavailable result fields, and compatible display/source changes. Reports are derived rather than persisted; chart dependency collections remain empty until real chart resources exist.
+
 ### Draft validation
 
 An explicit, derived artifact bound to one draft revision. It records structural validity, PostgreSQL-formatted output types and nullability, safely compiled SQL, a compact planner estimate, stable findings, and validation time. SQL validation also requires declared output-field names to exactly match PostgreSQL result columns. It contains neither source rows nor a raw execution plan. Editing the definition invalidates the artifact. A missing relation or field is an ordinary invalid result; source connectivity failure is operational failure and does not overwrite the previous artifact.

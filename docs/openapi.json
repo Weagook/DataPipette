@@ -815,6 +815,24 @@
         "title": "DatasetDataState",
         "type": "string"
       },
+      "DatasetDependencyResponse": {
+        "properties": {
+          "resource_id": {
+            "format": "uuid",
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_type": {
+            "$ref": "#/components/schemas/DependencyResourceType"
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id"
+        ],
+        "title": "DatasetDependencyResponse",
+        "type": "object"
+      },
       "DatasetDraftResponse": {
         "properties": {
           "created_at": {
@@ -1095,6 +1113,82 @@
         "title": "DatasetGrantResponse",
         "type": "object"
       },
+      "DatasetImpactResponse": {
+        "properties": {
+          "affected_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetDependencyResponse"
+            },
+            "title": "Affected Dependencies",
+            "type": "array"
+          },
+          "baseline_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Version Id"
+          },
+          "blocking_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetDependencyResponse"
+            },
+            "title": "Blocking Dependencies",
+            "type": "array"
+          },
+          "breaking_change_count": {
+            "title": "Breaking Change Count",
+            "type": "integer"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetSchemaChangeResponse"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "dataset_id": {
+            "format": "uuid",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "draft_revision": {
+            "title": "Draft Revision",
+            "type": "integer"
+          },
+          "draft_validation_state": {
+            "$ref": "#/components/schemas/DatasetValidationState"
+          },
+          "draft_version_id": {
+            "format": "uuid",
+            "title": "Draft Version Id",
+            "type": "string"
+          },
+          "ready_for_publication": {
+            "title": "Ready For Publication",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "baseline_version_id",
+          "draft_version_id",
+          "draft_revision",
+          "draft_validation_state",
+          "ready_for_publication",
+          "breaking_change_count",
+          "changes",
+          "affected_dependencies",
+          "blocking_dependencies"
+        ],
+        "title": "DatasetImpactResponse",
+        "type": "object"
+      },
       "DatasetPermission": {
         "enum": [
           "view_rows",
@@ -1234,6 +1328,50 @@
         "title": "DatasetResponse",
         "type": "object"
       },
+      "DatasetSchemaChangeResponse": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactFieldResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactFieldResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/SchemaChangeCompatibility"
+          },
+          "field_id": {
+            "format": "uuid",
+            "title": "Field Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SchemaChangeKind"
+          }
+        },
+        "required": [
+          "kind",
+          "compatibility",
+          "field_id",
+          "before",
+          "after"
+        ],
+        "title": "DatasetSchemaChangeResponse",
+        "type": "object"
+      },
       "DatasetValidationResponse": {
         "properties": {
           "compiled_sql": {
@@ -1303,6 +1441,112 @@
           "invalid"
         ],
         "title": "DatasetValidationState",
+        "type": "string"
+      },
+      "DatasetVersionCollectionResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetVersionResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "DatasetVersionCollectionResponse",
+        "type": "object"
+      },
+      "DatasetVersionResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "format": "uuid",
+            "title": "Created By",
+            "type": "string"
+          },
+          "dataset_id": {
+            "format": "uuid",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "definition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualDefinitionPayload"
+              },
+              {
+                "$ref": "#/components/schemas/SqlDefinitionPayload"
+              }
+            ],
+            "title": "Definition"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DatasetVersionState"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatasetValidationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "dataset_id",
+          "state",
+          "revision",
+          "definition",
+          "validation",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DatasetVersionResponse",
+        "type": "object"
+      },
+      "DatasetVersionState": {
+        "enum": [
+          "draft",
+          "published",
+          "superseded"
+        ],
+        "title": "DatasetVersionState",
+        "type": "string"
+      },
+      "DependencyResourceType": {
+        "enum": [
+          "chart"
+        ],
+        "title": "DependencyResourceType",
         "type": "string"
       },
       "DependencyResponse": {
@@ -1771,6 +2015,49 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImpactFieldResponse": {
+        "properties": {
+          "data_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Type"
+          },
+          "field_id": {
+            "format": "uuid",
+            "title": "Field Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nullable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nullable"
+          }
+        },
+        "required": [
+          "field_id",
+          "name",
+          "data_type",
+          "nullable"
+        ],
+        "title": "ImpactFieldResponse",
         "type": "object"
       },
       "LivenessResponse": {
@@ -2410,6 +2697,29 @@
         ],
         "title": "ReplaceRefreshScheduleRequest",
         "type": "object"
+      },
+      "SchemaChangeCompatibility": {
+        "enum": [
+          "compatible",
+          "breaking"
+        ],
+        "title": "SchemaChangeCompatibility",
+        "type": "string"
+      },
+      "SchemaChangeKind": {
+        "enum": [
+          "field_added",
+          "field_removed",
+          "field_renamed",
+          "field_type_changed",
+          "field_became_nullable",
+          "field_became_required",
+          "field_unavailable",
+          "field_display_changed",
+          "field_source_changed"
+        ],
+        "title": "SchemaChangeKind",
+        "type": "string"
       },
       "SessionRevocationResponse": {
         "properties": {
@@ -5530,6 +5840,156 @@
         ]
       }
     },
+    "/api/v1/datasets/{dataset_id}/draft/impact-analyses": {
+      "post": {
+        "operationId": "analyze_dataset_draft_impact_api_v1_datasets__dataset_id__draft_impact_analyses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImpactResponse"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque revision of the current dataset draft.",
+                "schema": {
+                  "example": "\"draft-3\"",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Analyze Dataset Draft Impact",
+        "tags": [
+          "datasets"
+        ]
+      }
+    },
     "/api/v1/datasets/{dataset_id}/draft/previews": {
       "post": {
         "operationId": "preview_dataset_draft_api_v1_datasets__dataset_id__draft_previews_post",
@@ -7689,6 +8149,211 @@
         "summary": "Query Dataset Rows",
         "tags": [
           "dataset rows"
+        ]
+      }
+    },
+    "/api/v1/datasets/{dataset_id}/versions": {
+      "get": {
+        "operationId": "list_dataset_versions_api_v1_datasets__dataset_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetVersionCollectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "List Dataset Versions",
+        "tags": [
+          "datasets"
+        ]
+      }
+    },
+    "/api/v1/datasets/{dataset_id}/versions/{version_id}": {
+      "get": {
+        "operationId": "read_dataset_version_api_v1_datasets__dataset_id__versions__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetVersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Read Dataset Version",
+        "tags": [
+          "datasets"
         ]
       }
     },

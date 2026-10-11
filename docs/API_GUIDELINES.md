@@ -32,8 +32,11 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/connections/{connection_id}/catalog/join-suggestions
 /api/v1/datasets
 /api/v1/datasets/{dataset_id}/draft
+/api/v1/datasets/{dataset_id}/draft/impact-analyses
 /api/v1/datasets/{dataset_id}/draft/validations
 /api/v1/datasets/{dataset_id}/draft/previews
+/api/v1/datasets/{dataset_id}/versions
+/api/v1/datasets/{dataset_id}/versions/{version_id}
 /api/v1/datasets/{dataset_id}/refresh-runs
 /api/v1/datasets/{dataset_id}/rows:query
 /api/v1/datasets/{dataset_id}/grants
@@ -119,6 +122,9 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 - `POST /api/v1/datasets` creates a private dataset and its first draft on relations currently allowed by the actor's connection scope. It stores the structured definition without contacting the source database.
 - `GET /api/v1/datasets` uses bounded cursor pagination; administrators see every dataset and analysts see only their own. `GET /api/v1/datasets/{dataset_id}` returns stable resource metadata, including nullable `active_version_id` and `active_snapshot_id`.
 - `GET /api/v1/datasets/{dataset_id}/draft` returns the complete schema-versioned visual or SQL definition, its latest revision-bound validation artifact when one exists, and an ETag such as `"draft-3"`.
+- `GET /api/v1/datasets/{dataset_id}/versions` returns bounded newest-first cursor pages of immutable published/superseded versions. `GET .../versions/{version_id}` returns one complete historical definition and validation artifact; mutable draft identifiers return the same `404 dataset_not_found` boundary as absent versions.
+- `POST /api/v1/datasets/{dataset_id}/draft/impact-analyses` requires CSRF and the current draft ETag. It performs no source query: it compares the current revision-bound validation schema with the active published version by stable field UUID and returns compatible/breaking field changes plus currently empty dependency-impact collections.
+- Impact reports classify removal, rename, type change, newly nullable output, and an unavailable defined field as breaking. Addition, newly required output, display changes, and source remapping with a stable output contract are compatible. An invalid validation can be explained but returns `ready_for_publication: false`; a missing/stale validation returns `409 dataset_draft_not_validated`.
 - `PUT /api/v1/datasets/{dataset_id}/draft` atomically replaces the complete definition and requires its current ETag in `If-Match`. A stale revision returns `409 dataset_revision_conflict`; a missing precondition returns `428 draft_revision_required`.
 - `POST /api/v1/datasets/{dataset_id}/draft/validations` requires the current draft ETag and explicitly re-checks every live relation. Visual definitions also check selected and join columns; SQL definitions execute a zero-row wrapper and require their declared field names to match result-column names and order. The endpoint returns `valid`, `valid_with_warnings`, or `invalid`, the PostgreSQL-formatted result schema, safely compiled SQL, a compact planner summary, and stable findings.
 - Missing source objects are `200` validation results with error findings. A network, TLS, credential, timeout, or unexpected source response returns the redacted `502 source_validation_unavailable` problem and does not erase the previous artifact.
@@ -135,7 +141,7 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 - SQL validation reports inaccessible/missing relations as `sql_source_relation_not_found`, PostgreSQL semantic errors as `sql_query_invalid`, and output-column drift as `sql_result_schema_mismatch`. SQL field nullability is conservatively reported as nullable in this version.
 - Create and draft replacement re-check source authorization for every referenced relation but otherwise remain offline and are not evidence that source objects exist. Validation is explicit and does not imply that preview, refresh, or publication has succeeded. Validation and preview re-check both ownership and the complete current relation scope before touching the source.
 
-Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md); analyst ownership is recorded in [ADR-0017](adr/0017-scoped-connection-access.md); the version-2 join model is recorded in [ADR-0018](adr/0018-versioned-visual-join-trees.md); advanced SQL is recorded in [ADR-0021](adr/0021-advanced-read-only-sql-datasets.md).
+Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-versioned-visual-dataset-definitions.md); the live-validation boundary is recorded in [ADR-0010](adr/0010-revision-bound-dataset-validation.md); bounded preview execution is recorded in [ADR-0011](adr/0011-bounded-dataset-draft-preview.md); analyst ownership is recorded in [ADR-0017](adr/0017-scoped-connection-access.md); the version-2 join model is recorded in [ADR-0018](adr/0018-versioned-visual-join-trees.md); advanced SQL is recorded in [ADR-0021](adr/0021-advanced-read-only-sql-datasets.md); version history and schema impact are recorded in [ADR-0025](adr/0025-dataset-version-history-and-schema-impact.md).
 
 ## Refresh runs
 

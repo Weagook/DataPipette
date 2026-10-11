@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Generator
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -22,6 +22,7 @@ from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
 from datepipette.infrastructure.models import (
     AuditEventModel,
+    DatasetModel,
     DatasetRefreshRunModel,
     DatasetVersionModel,
 )
@@ -219,6 +220,96 @@ async def _mark_valid(dataset_id: str) -> None:
                 "plan": None,
                 "findings": [],
             }
+    finally:
+        await engine.dispose()
+
+
+async def _seed_version_history(dataset_id: str) -> tuple[UUID, UUID, UUID, int]:
+    engine = create_database_engine(TEST_SETTINGS)
+    try:
+        async with create_session_factory(engine)() as session, session.begin():
+            dataset_uuid = UUID(dataset_id)
+            dataset = await session.get(DatasetModel, dataset_uuid)
+            draft = await session.scalar(
+                select(DatasetVersionModel).where(
+                    DatasetVersionModel.dataset_id == dataset_uuid,
+                    DatasetVersionModel.state == "draft",
+                )
+            )
+            assert dataset is not None and draft is not None
+            base_time = datetime(2026, 10, 11, 8, 0, tzinfo=UTC)
+            fields = cast(list[dict[str, Any]], draft.definition["fields"])
+
+            def validation(
+                revision: int,
+                *,
+                state: str = "valid",
+                include_second: bool = True,
+            ) -> dict[str, Any]:
+                result_fields = fields if include_second else fields[:1]
+                return {
+                    "state": state,
+                    "validated_revision": revision,
+                    "validated_at": base_time.isoformat(),
+                    "compiled_sql": "SELECT 1" if state != "invalid" else None,
+                    "result_schema": [
+                        {
+                            "field_id": field["id"],
+                            "name": field["name"],
+                            "data_type": "bigint",
+                            "nullable": True,
+                        }
+                        for field in result_fields
+                    ],
+                    "plan": None,
+                    "findings": [],
+                }
+
+            draft.state = "superseded"
+            draft.validation = validation(1)
+            draft.created_at = base_time
+            draft.updated_at = base_time
+            superseded_id = draft.id
+
+            published_id = uuid4()
+            published = DatasetVersionModel(
+                id=published_id,
+                dataset_id=dataset_uuid,
+                state="published",
+                revision=2,
+                definition=deepcopy(draft.definition),
+                validation=validation(2),
+                created_by=draft.created_by,
+                created_at=base_time + timedelta(minutes=1),
+                updated_at=base_time + timedelta(minutes=1),
+            )
+            current_definition = deepcopy(draft.definition)
+            current_fields = cast(list[dict[str, Any]], current_definition["fields"])
+            current_fields[0]["name"] = "customer_key"
+            current_fields[0]["display"]["label"] = "Customer key"
+            current_revision = 3
+            current_validation = validation(
+                current_revision,
+                state="invalid",
+                include_second=False,
+            )
+            current_validation["result_schema"][0]["name"] = "customer_key"
+            current_id = uuid4()
+            current = DatasetVersionModel(
+                id=current_id,
+                dataset_id=dataset_uuid,
+                state="draft",
+                revision=current_revision,
+                definition=current_definition,
+                validation=current_validation,
+                created_by=draft.created_by,
+                created_at=base_time + timedelta(minutes=2),
+                updated_at=base_time + timedelta(minutes=2),
+            )
+            session.add_all((published, current))
+            await session.flush()
+            dataset.active_version_id = published_id
+            return superseded_id, published_id, current_id, current_revision
     finally:
         await engine.dispose()
 
@@ -467,6 +558,103 @@ def test_dataset_collection_conflicts_validation_and_admin_boundary() -> None:
         assert visible.json()["data"] == []
 
 
+def test_version_history_detail_and_revision_bound_schema_impact() -> None:
+    asyncio.run(_bootstrap())
+    with TestClient(create_app(settings=TEST_SETTINGS)) as client:
+        _login(client)
+        connection_id = _create_connection(client)
+        created, initial_etag = _create_dataset(client, connection_id)
+        dataset_id = cast(str, created["id"])
+        versions_url = f"/api/v1/datasets/{dataset_id}/versions"
+        impact_url = f"/api/v1/datasets/{dataset_id}/draft/impact-analyses"
+
+        assert client.get(versions_url).json() == {
+            "data": [],
+            "meta": {"next_cursor": None},
+        }
+        unvalidated = client.post(
+            impact_url,
+            headers={**_csrf(client), "If-Match": initial_etag},
+        )
+        assert unvalidated.status_code == 409
+        assert unvalidated.json()["code"] == "dataset_draft_not_validated"
+        assert client.post(impact_url, headers=_csrf(client)).status_code == 428
+
+        superseded_id, published_id, draft_id, revision = asyncio.run(
+            _seed_version_history(dataset_id)
+        )
+        first_page = client.get(versions_url, params={"limit": 1})
+        assert first_page.status_code == 200, first_page.text
+        assert [item["id"] for item in first_page.json()["data"]] == [str(published_id)]
+        cursor = first_page.json()["meta"]["next_cursor"]
+        assert cursor is not None
+        second_page = client.get(versions_url, params={"limit": 1, "cursor": cursor})
+        assert [item["id"] for item in second_page.json()["data"]] == [str(superseded_id)]
+        assert second_page.json()["meta"]["next_cursor"] is None
+        assert client.get(versions_url, params={"cursor": "invalid"}).status_code == 400
+
+        detail = client.get(f"{versions_url}/{published_id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["state"] == "published"
+        assert detail.json()["revision"] == 2
+        assert detail.json()["validation"]["state"] == "valid"
+        assert client.get(f"{versions_url}/{draft_id}").status_code == 404
+
+        stale = client.post(
+            impact_url,
+            headers={**_csrf(client), "If-Match": initial_etag},
+        )
+        assert stale.status_code == 409
+        assert stale.json()["code"] == "dataset_revision_conflict"
+        impact = client.post(
+            impact_url,
+            headers={**_csrf(client), "If-Match": f'"draft-{revision}"'},
+        )
+        assert impact.status_code == 200, impact.text
+        assert impact.headers["etag"] == f'"draft-{revision}"'
+        body = impact.json()
+        assert body["baseline_version_id"] == str(published_id)
+        assert body["draft_version_id"] == str(draft_id)
+        assert body["draft_validation_state"] == "invalid"
+        assert body["ready_for_publication"] is False
+        assert body["affected_dependencies"] == []
+        assert body["blocking_dependencies"] == []
+        assert body["breaking_change_count"] == 2
+        assert {item["kind"] for item in body["changes"]} == {
+            "field_renamed",
+            "field_display_changed",
+            "field_unavailable",
+        }
+
+    async def impact_audit() -> tuple[str, dict[str, Any]]:
+        engine = create_database_engine(TEST_SETTINGS)
+        try:
+            async with create_session_factory(engine)() as session:
+                event = await session.scalar(
+                    select(AuditEventModel).where(
+                        AuditEventModel.action == "dataset.draft_impact_analyzed"
+                    )
+                )
+                assert event is not None
+                return event.action, event.details
+        finally:
+            await engine.dispose()
+
+    action, details = asyncio.run(impact_audit())
+    assert action == "dataset.draft_impact_analyzed"
+    assert details == {
+        "revision": 3,
+        "validation_state": "invalid",
+        "change_count": 3,
+        "breaking_change_count": 2,
+        "change_kinds": [
+            "field_display_changed",
+            "field_renamed",
+            "field_unavailable",
+        ],
+    }
+
+
 def test_analyst_authors_only_owned_datasets_and_revocation_blocks_source_operations(
     tmp_path: Path,
 ) -> None:
@@ -586,6 +774,14 @@ def test_analyst_authors_only_owned_datasets_and_revocation_blocks_source_operat
         )
         assert validation.status_code == 502
         asyncio.run(_mark_valid(dataset_id))
+        initial_impact = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/draft/impact-analyses",
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert initial_impact.status_code == 200, initial_impact.text
+        assert initial_impact.json()["baseline_version_id"] is None
+        assert initial_impact.json()["ready_for_publication"] is True
+        assert {item["kind"] for item in initial_impact.json()["changes"]} == {"field_added"}
         preview = analyst.post(
             f"/api/v1/datasets/{dataset_id}/draft/previews",
             json={"limit": 10},
@@ -607,6 +803,14 @@ def test_analyst_authors_only_owned_datasets_and_revocation_blocks_source_operat
         _login(other, email="other-analyst@example.com", password=user_password)
         assert other.get(f"/api/v1/datasets/{dataset_id}").status_code == 404
         assert other.get(f"/api/v1/datasets/{dataset_id}/draft").status_code == 404
+        assert other.get(f"/api/v1/datasets/{dataset_id}/versions").status_code == 404
+        assert (
+            other.post(
+                f"/api/v1/datasets/{dataset_id}/draft/impact-analyses",
+                headers={**_csrf(other), "If-Match": etag},
+            ).status_code
+            == 404
+        )
 
     with TestClient(create_app(settings=TEST_SETTINGS)) as viewer:
         _login(viewer, email="dataset-viewer@example.com", password=user_password)
@@ -653,6 +857,11 @@ def test_analyst_authors_only_owned_datasets_and_revocation_blocks_source_operat
             headers={**_csrf(analyst), "If-Match": etag},
         )
         assert blocked_preview.status_code == 404
+        blocked_impact = analyst.post(
+            f"/api/v1/datasets/{dataset_id}/draft/impact-analyses",
+            headers={**_csrf(analyst), "If-Match": etag},
+        )
+        assert blocked_impact.status_code == 404
         blocked_refresh = analyst.post(
             f"/api/v1/datasets/{dataset_id}/refresh-runs",
             headers={

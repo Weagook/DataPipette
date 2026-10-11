@@ -624,6 +624,19 @@ class DatasetDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class DatasetVersion:
+    id: UUID
+    dataset_id: UUID
+    state: DatasetVersionState
+    revision: int
+    definition: DatasetDefinition
+    validation: DatasetValidation | None
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetPreview:
     revision: int
     columns: tuple[ValidatedDatasetField, ...]
