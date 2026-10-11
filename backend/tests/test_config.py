@@ -100,3 +100,23 @@ def test_refresh_retry_and_cancellation_defaults_are_bounded() -> None:
         Settings(refresh_run_lease_seconds=9)
     with pytest.raises(ValidationError, match="must exceed"):
         Settings(refresh_cancel_poll_seconds=10, refresh_run_lease_seconds=10)
+
+
+def test_query_safety_thresholds_are_bounded_and_ordered() -> None:
+    settings = Settings(environment="test")
+    assert settings.query_safety_estimated_rows_warning == 1_000_000
+    assert settings.query_safety_estimated_rows_block == 10_000_000
+    assert settings.query_safety_total_cost_warning == 100_000
+    assert settings.query_safety_join_count_block == 9
+    with pytest.raises(ValidationError, match="row warning"):
+        Settings(
+            query_safety_estimated_rows_warning=100,
+            query_safety_estimated_rows_block=100,
+        )
+    with pytest.raises(ValidationError, match="cost warning"):
+        Settings(
+            query_safety_total_cost_warning=100,
+            query_safety_total_cost_block=50,
+        )
+    with pytest.raises(ValidationError, match="join warning"):
+        Settings(query_safety_join_count_warning=5, query_safety_join_count_block=5)

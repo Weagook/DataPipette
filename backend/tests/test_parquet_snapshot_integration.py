@@ -886,6 +886,8 @@ def test_joined_definition_validates_previews_and_publishes_left_join_snapshot(
                     "field_id": None,
                     "relation_id": invalid_definition["source"]["relations"][1]["id"],
                     "join_id": invalid_definition["joins"][0]["id"],
+                    "observed_value": None,
+                    "threshold_value": None,
                 }
             ]
     finally:

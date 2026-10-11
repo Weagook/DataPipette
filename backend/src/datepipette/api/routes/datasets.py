@@ -193,6 +193,8 @@ class ValidationFindingResponse(BaseModel):
     field_id: UUID | None
     relation_id: UUID | None
     join_id: UUID | None
+    observed_value: float | None
+    threshold_value: float | None
 
 
 class ValidatedFieldResponse(BaseModel):
@@ -207,6 +209,23 @@ class PlanSummaryResponse(BaseModel):
     estimated_rows: int
     startup_cost: float
     total_cost: float
+    node_count: int
+    join_count: int
+    sort_count: int
+    max_plan_rows: int
+    max_sequential_scan_rows: int
+    max_sort_rows: int
+
+
+class RelationStatisticsResponse(BaseModel):
+    relation_id: UUID | None
+    schema_name: str
+    relation_name: str
+    approximate_rows: int
+    relation_bytes: int
+    index_bytes: int
+    visible_index_count: int
+    statistics_updated_at: datetime | None
 
 
 class DatasetValidationResponse(BaseModel):
@@ -217,6 +236,7 @@ class DatasetValidationResponse(BaseModel):
     result_schema: list[ValidatedFieldResponse]
     plan: PlanSummaryResponse | None
     findings: list[ValidationFindingResponse]
+    relation_statistics: list[RelationStatisticsResponse]
 
 
 class DatasetDraftResponse(BaseModel):
@@ -491,6 +511,12 @@ def _validation_response(value: DatasetValidation) -> DatasetValidationResponse:
                 estimated_rows=value.plan.estimated_rows,
                 startup_cost=value.plan.startup_cost,
                 total_cost=value.plan.total_cost,
+                node_count=value.plan.node_count,
+                join_count=value.plan.join_count,
+                sort_count=value.plan.sort_count,
+                max_plan_rows=value.plan.max_plan_rows,
+                max_sequential_scan_rows=value.plan.max_sequential_scan_rows,
+                max_sort_rows=value.plan.max_sort_rows,
             )
             if value.plan
             else None
@@ -502,8 +528,23 @@ def _validation_response(value: DatasetValidation) -> DatasetValidationResponse:
                 field_id=finding.field_id,
                 relation_id=finding.relation_id,
                 join_id=finding.join_id,
+                observed_value=finding.observed_value,
+                threshold_value=finding.threshold_value,
             )
             for finding in value.findings
+        ],
+        relation_statistics=[
+            RelationStatisticsResponse(
+                relation_id=item.relation_id,
+                schema_name=item.schema_name,
+                relation_name=item.relation_name,
+                approximate_rows=item.approximate_rows,
+                relation_bytes=item.relation_bytes,
+                index_bytes=item.index_bytes,
+                visible_index_count=item.visible_index_count,
+                statistics_updated_at=item.statistics_updated_at,
+            )
+            for item in value.relation_statistics
         ],
     )
 

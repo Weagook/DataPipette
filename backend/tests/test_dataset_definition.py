@@ -7,6 +7,7 @@ import pytest
 
 from datepipette.domain.datasets import (
     DatasetPlanSummary,
+    DatasetRelationStatistics,
     DatasetValidation,
     DatasetValidationFinding,
     DatasetValidationState,
@@ -325,6 +326,20 @@ def test_dataset_validation_round_trips_as_revision_bound_json() -> None:
             DatasetValidationFinding(
                 code=ValidationFindingCode.LARGE_ESTIMATED_RESULT,
                 severity=ValidationSeverity.WARNING,
+                observed_value=1_000_000,
+                threshold_value=1_000_000,
+            ),
+        ),
+        relation_statistics=(
+            DatasetRelationStatistics(
+                relation_id=None,
+                schema_name="crm",
+                relation_name="customers",
+                approximate_rows=1_000_000,
+                relation_bytes=8_000_000,
+                index_bytes=1_000_000,
+                visible_index_count=1,
+                statistics_updated_at=datetime(2026, 10, 8, 8, 0, tzinfo=UTC),
             ),
         ),
     )
@@ -334,6 +349,26 @@ def test_dataset_validation_round_trips_as_revision_bound_json() -> None:
     assert document["validated_revision"] == 3
     assert document["findings"][0]["code"] == "large_estimated_result"
     assert DatasetValidation.from_document(document) == validation
+
+    legacy_document = validation.to_document()
+    legacy_document.pop("relation_statistics")
+    assert legacy_document["plan"] is not None
+    for key in (
+        "node_count",
+        "join_count",
+        "sort_count",
+        "max_plan_rows",
+        "max_sequential_scan_rows",
+        "max_sort_rows",
+    ):
+        legacy_document["plan"].pop(key)
+    legacy_document["findings"][0].pop("observed_value")
+    legacy_document["findings"][0].pop("threshold_value")
+    restored_legacy = DatasetValidation.from_document(legacy_document)
+    assert restored_legacy.relation_statistics == ()
+    assert restored_legacy.plan is not None
+    assert restored_legacy.plan.max_plan_rows == 1_000_000
+    assert restored_legacy.findings[0].observed_value is None
 
     document["state"] = "unknown"
     with pytest.raises(ValueError, match="Stored dataset validation"):
