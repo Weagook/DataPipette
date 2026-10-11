@@ -14,6 +14,7 @@ from datepipette.application.datasets import (
     DatasetStore,
     require_dataset_owner,
 )
+from datepipette.domain.datasets import definition_relations
 from datepipette.domain.identity import User
 from datepipette.domain.refresh import RefreshRequestOutcome, RefreshRun
 
@@ -91,10 +92,7 @@ class RefreshRunService:
             await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=dataset.connection_id,
-                relations=(
-                    (relation.schema_name, relation.relation_name)
-                    for relation in draft.definition.relations
-                ),
+                relations=definition_relations(draft.definition),
             )
         except (ConnectionAccessDeniedError, DatasetNotFoundError) as exc:
             raise RefreshRunNotFoundError from exc

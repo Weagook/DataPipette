@@ -1,4 +1,4 @@
-"""Owner-authorized visual dataset drafts."""
+"""Owner-authorized dataset drafts."""
 
 import base64
 import json
@@ -13,9 +13,10 @@ from datepipette.application.connection_access import (
 )
 from datepipette.domain.datasets import (
     Dataset,
+    DatasetDefinition,
     DatasetDraft,
     DatasetValidation,
-    VisualDatasetDefinition,
+    definition_relations,
 )
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 
@@ -46,7 +47,7 @@ class InvalidDatasetCursorError(Exception):
 class DatasetCreate:
     name: str
     connection_id: UUID
-    definition: VisualDatasetDefinition
+    definition: DatasetDefinition
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,7 +168,7 @@ def _name(value: str) -> str:
     return normalized
 
 
-def _definition_document(definition: VisualDatasetDefinition) -> dict[str, object]:
+def _definition_document(definition: DatasetDefinition) -> dict[str, object]:
     document = definition.to_document()
     encoded = json.dumps(
         document,
@@ -175,7 +176,7 @@ def _definition_document(definition: VisualDatasetDefinition) -> dict[str, objec
         separators=(",", ":"),
     ).encode()
     if len(encoded) > MAX_DEFINITION_BYTES:
-        raise ValueError("Visual definition exceeds the maximum serialized size")
+        raise ValueError("Dataset definition exceeds the maximum serialized size")
     return document
 
 
@@ -226,10 +227,7 @@ class DatasetService:
             await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=value.connection_id,
-                relations=(
-                    (relation.schema_name, relation.relation_name)
-                    for relation in value.definition.relations
-                ),
+                relations=definition_relations(value.definition),
             )
         except ConnectionAccessDeniedError as exc:
             raise DatasetConnectionNotFoundError from exc
@@ -307,7 +305,7 @@ class DatasetService:
         actor: User,
         dataset_id: UUID,
         expected_revision: int,
-        definition: VisualDatasetDefinition,
+        definition: DatasetDefinition,
         request_id: str,
     ) -> DatasetDraft:
         dataset = await self._store.get(dataset_id)
@@ -320,10 +318,7 @@ class DatasetService:
             await self._authorizer.require_relations(
                 actor=actor,
                 connection_id=dataset.connection_id,
-                relations=(
-                    (relation.schema_name, relation.relation_name)
-                    for relation in definition.relations
-                ),
+                relations=definition_relations(definition),
             )
         except ConnectionAccessDeniedError as exc:
             raise DatasetNotFoundError from exc

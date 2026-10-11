@@ -10,15 +10,14 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import psycopg
-from psycopg import sql
 
 from datepipette.application.dataset_preview import (
     SourceDatasetPreviewUnavailableError,
     SourcePreviewResult,
 )
 from datepipette.domain.connections import PostgresConnection
-from datepipette.domain.datasets import PreviewTruncationReason, VisualDatasetDefinition
-from datepipette.infrastructure.dataset_sql import compile_visual_select
+from datepipette.domain.datasets import DatasetDefinition, PreviewTruncationReason
+from datepipette.infrastructure.dataset_sql import compile_bounded_select
 from datepipette.infrastructure.source_postgres import open_read_only_source
 
 _CURSOR_BATCH_ROWS = 25
@@ -59,7 +58,7 @@ class PsycopgSourceDatasetPreviewer:
         *,
         password: str,
         ca_certificate: str | None,
-        definition: VisualDatasetDefinition,
+        definition: DatasetDefinition,
         limit: int,
         maximum_bytes: int,
     ) -> SourcePreviewResult:
@@ -71,7 +70,7 @@ class PsycopgSourceDatasetPreviewer:
                 connect_timeout_seconds=self._connect_timeout,
                 statement_timeout_seconds=self._statement_timeout,
             ) as source:
-                query = sql.SQL("{} LIMIT %s").format(compile_visual_select(definition))
+                query = compile_bounded_select(definition)
                 cursor_name = f"datepipette_preview_{uuid4().hex}"
                 async with source.cursor(name=cursor_name) as cursor:
                     await cursor.execute(query, (limit + 1,))

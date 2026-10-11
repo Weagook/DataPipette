@@ -1,4 +1,4 @@
-"""Transactional persistence for visual dataset drafts."""
+"""Transactional persistence for dataset drafts."""
 
 from datetime import datetime
 from typing import Any
@@ -19,7 +19,7 @@ from datepipette.domain.datasets import (
     DatasetDraft,
     DatasetValidation,
     DatasetVersionState,
-    VisualDatasetDefinition,
+    dataset_definition_from_document,
 )
 from datepipette.infrastructure.models import (
     AuditEventModel,
@@ -48,7 +48,7 @@ def _to_draft(model: DatasetVersionModel) -> DatasetDraft:
         id=model.id,
         dataset_id=model.dataset_id,
         revision=model.revision,
-        definition=VisualDatasetDefinition.from_document(model.definition),
+        definition=dataset_definition_from_document(model.definition),
         validation=(
             DatasetValidation.from_document(model.validation)
             if model.validation is not None
@@ -66,6 +66,7 @@ def _summary(definition: dict[str, object]) -> dict[str, object]:
     relations = source.get("relations") if isinstance(source, dict) else None
     joins = definition.get("joins")
     return {
+        "kind": definition.get("kind", "visual"),
         "schema_version": definition.get("schema_version"),
         "relation_count": len(relations) if isinstance(relations, list) else 0,
         "field_count": len(fields) if isinstance(fields, list) else 0,

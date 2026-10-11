@@ -48,3 +48,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0018](0018-versioned-visual-join-trees.md): Versioned visual join trees and advisory foreign-key suggestions
 - [ADR-0019](0019-dataset-freshness-projection.md): Dataset freshness and refresh failure projection
 - [ADR-0020](0020-durable-refresh-scheduling.md): Durable database-polled refresh scheduling
+- [ADR-0021](0021-advanced-read-only-sql-datasets.md): Advanced read-only SQL dataset definitions

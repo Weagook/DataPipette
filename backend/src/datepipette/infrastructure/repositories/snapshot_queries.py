@@ -11,7 +11,7 @@ from datepipette.application.snapshot_queries import (
     DatasetSnapshotUnavailableError,
 )
 from datepipette.domain.audit import AuditActorType, AuditOutcome
-from datepipette.domain.datasets import DatasetValidation, VisualDatasetDefinition
+from datepipette.domain.datasets import DatasetValidation, dataset_definition_from_document
 from datepipette.domain.refresh import RefreshRunState
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
@@ -37,7 +37,7 @@ def query_fields_from_models(
     try:
         if version.validation is None:
             raise ValueError
-        definition = VisualDatasetDefinition.from_document(version.definition)
+        definition = dataset_definition_from_document(version.definition)
         validation = DatasetValidation.from_document(version.validation)
         display_by_id = {field.id: field.display for field in definition.fields}
         snapshot_fields = snapshot.schema_document.get("fields")

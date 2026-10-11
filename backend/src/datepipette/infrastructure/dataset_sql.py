@@ -1,8 +1,13 @@
-"""Identifier-safe SQL compilation for visual dataset definitions."""
+"""Validated source SQL compilation for dataset definitions."""
 
 from psycopg import sql
 
-from datepipette.domain.datasets import VisualDatasetDefinition, VisualJoinType
+from datepipette.domain.datasets import (
+    DatasetDefinition,
+    SqlDatasetDefinition,
+    VisualDatasetDefinition,
+    VisualJoinType,
+)
 
 _JOIN_SQL = {
     VisualJoinType.INNER: sql.SQL("INNER JOIN"),
@@ -47,3 +52,19 @@ def compile_visual_select(definition: VisualDatasetDefinition) -> sql.Composed:
             conditions=conditions,
         )
     return query
+
+
+def compile_dataset_select(definition: DatasetDefinition) -> sql.SQL | sql.Composed:
+    """Compile visual identifiers or emit a previously parsed SQL statement."""
+
+    if isinstance(definition, SqlDatasetDefinition):
+        return sql.SQL(definition.execution_statement)
+    return compile_visual_select(definition)
+
+
+def compile_bounded_select(definition: DatasetDefinition) -> sql.Composed:
+    """Wrap a definition so a caller-controlled limit applies to the final result."""
+
+    return sql.SQL('SELECT * FROM ({}) AS "_datepipette_source" LIMIT %s').format(
+        compile_dataset_select(definition)
+    )

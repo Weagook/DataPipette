@@ -81,17 +81,17 @@ Catalog discovery is a live adapter query rather than a metadata replica. The AP
 
 Visual and SQL definitions, validation, compilation, draft/publish lifecycle, result schema, display settings, dependency analysis, and schedules.
 
-Validation is synchronous and supports version-1 single-relation and version-2 multi-relation visual definitions. It re-checks live visibility and columns for every relation, safely compiles an ordered acyclic `INNER JOIN`/`LEFT JOIN` tree, obtains a non-executing PostgreSQL JSON plan, and stores a compact artifact tied to the draft revision.
+Validation is synchronous and supports version-1 single-relation and version-2 multi-relation visual definitions plus advanced SQL definitions. Visual drafts compile an ordered acyclic `INNER JOIN`/`LEFT JOIN` tree. SQL drafts preserve editor text while deriving a canonical statement and schema-qualified base-relation set from a PostgreSQL-dialect AST. Both paths re-check live relation visibility, obtain a non-executing PostgreSQL JSON plan, verify result metadata, and store a compact artifact tied to the draft revision.
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
 
-Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, reloads the requesting user's effective relation scope, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The local executor recompiles the structured definition, streams named-cursor batches into typed Parquet, validates the completed object, and only then atomically activates snapshot metadata.
+Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, reloads the requesting user's effective relation scope, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The local executor recompiles either definition kind from its authoritative JSON document, streams named-cursor batches into typed Parquet, validates the completed object, and only then atomically activates snapshot metadata.
 
 Scheduled refresh uses an independent database-polling process. Bounded `SKIP LOCKED` claims advance due interval/daily schedules, target only the active published version, and create or coalesce the same durable refresh-run resources used by manual requests. Every poll also republishes queued UUIDs whose prior Redis dispatch did not complete, so scheduler restart heals durable broker-publication gaps without replaying every missed cadence.
 
 ### Execution
 
-Source query execution, bounded streaming, local Parquet writing, basic result statistics, and snapshot publication are implemented for version-1 single-relation and version-2 joined visual definitions. S3 storage, cancellation, progress, cleanup, and broader resource policies remain later execution capabilities.
+Source query execution, bounded streaming, local Parquet writing, basic result statistics, and snapshot publication are implemented for version-1 single-relation visual definitions, version-2 joined visual definitions, and advanced read-only SQL definitions. S3 storage, cancellation, progress, cleanup, and broader resource policies remain later execution capabilities.
 
 ### Query
 

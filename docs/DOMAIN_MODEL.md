@@ -65,6 +65,8 @@ Visual definitions are schema-versioned JSON documents. Source relations, joins,
 
 Foreign-key relationships discovered from PostgreSQL are advisory join suggestions. They are not persisted separately and never mutate a definition until the client explicitly saves a corresponding join node. Manual conditions use the same bounded typed structure.
 
+SQL definitions are schema-versioned JSON documents with `kind: sql`, the original trimmed statement, and stable output-field UUIDs plus names and display settings. The statement is one bounded PostgreSQL-dialect `SELECT`/query expression, may use read-only CTEs, and must schema-qualify every base relation. Structural parsing rejects multiple statements, DDL/DML, data-modifying CTEs, `SELECT INTO`, row locking, external parameters, and cross-database names. The original text is preserved for editing; a canonical execution form and source-relation set are derived whenever the document is loaded.
+
 An analyst-created dataset is private to its owner and administrators. The owner can edit and execute it only while every referenced relation remains in their effective connection scope. Scope revocation blocks later source access but does not delete the definition or an existing published snapshot.
 
 ### Draft and published versions
@@ -75,7 +77,7 @@ Drafts are mutable through optimistic revision checks. A future published versio
 
 ### Draft validation
 
-An explicit, derived artifact bound to one draft revision. It records structural validity, PostgreSQL-formatted output types and nullability, safely compiled SQL, a compact planner estimate, stable findings, and validation time. It contains neither source rows nor a raw execution plan. Editing the definition invalidates the artifact. A missing relation or field is an ordinary invalid result; source connectivity failure is operational failure and does not overwrite the previous artifact.
+An explicit, derived artifact bound to one draft revision. It records structural validity, PostgreSQL-formatted output types and nullability, safely compiled SQL, a compact planner estimate, stable findings, and validation time. SQL validation also requires declared output-field names to exactly match PostgreSQL result columns. It contains neither source rows nor a raw execution plan. Editing the definition invalidates the artifact. A missing relation or field is an ordinary invalid result; source connectivity failure is operational failure and does not overwrite the previous artifact.
 
 ### Draft preview
 
