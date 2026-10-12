@@ -32,6 +32,7 @@ from datepipette.domain.charts import (
     ChartMeasure,
     ChartSort,
     ChartSortTargetType,
+    ChartTimeBucket,
     ChartType,
 )
 from datepipette.domain.identity import AccountStatus, SystemRole, User
@@ -51,12 +52,23 @@ SNAPSHOT_ID = uuid4()
 REGION_ID = uuid4()
 AMOUNT_ID = uuid4()
 ORDER_ID = uuid4()
+OCCURRED_AT_ID = uuid4()
 MEASURE_ID = uuid4()
 
 FIELDS = (
     SnapshotQueryField(REGION_ID, "region", "region", "text", False, True, "Region", None),
     SnapshotQueryField(AMOUNT_ID, "amount", "amount", "numeric(12,2)", True, True, "Amount", None),
     SnapshotQueryField(ORDER_ID, "order_id", "order_id", "bigint", False, True, "Order", None),
+    SnapshotQueryField(
+        OCCURRED_AT_ID,
+        "occurred_at",
+        "occurred_at",
+        "timestamp with time zone",
+        False,
+        True,
+        "Occurred at",
+        None,
+    ),
 )
 
 
@@ -192,6 +204,14 @@ class RecordingExecutor:
 def test_chart_definition_round_trips_and_enforces_chart_shape() -> None:
     value = _definition()
     assert ChartDefinition.from_document(value.to_document()) == value
+    legacy = replace(value, schema_version=1)
+    assert ChartDefinition.from_document(legacy.to_document()) == legacy
+
+    with pytest.raises(ValueError, match="version 1 does not support"):
+        replace(
+            legacy,
+            dimensions=(ChartDimension(REGION_ID, ChartTimeBucket.DAY),),
+        )
 
     with pytest.raises(ValueError, match="require no dimensions"):
         ChartDefinition(
@@ -252,6 +272,27 @@ def test_chart_preparation_rejects_invalid_aggregate_and_sort_target() -> None:
         prepare_chart_query(
             replace(_context(), fields=(*FIELDS, json_field)),
             replace(_definition(), dimensions=(ChartDimension(json_field.field_id),)),
+        )
+
+    with pytest.raises(InvalidChartDefinitionError, match="require a date or timestamp"):
+        prepare_chart_query(
+            _context(),
+            replace(
+                _definition(),
+                dimensions=(ChartDimension(REGION_ID, ChartTimeBucket.DAY),),
+            ),
+        )
+
+    date_field = SnapshotQueryField(
+        uuid4(), "business_date", "business_date", "date", False, True, "Date", None
+    )
+    with pytest.raises(InvalidChartDefinitionError, match="Hourly"):
+        prepare_chart_query(
+            replace(_context(), fields=(*FIELDS, date_field)),
+            replace(
+                _definition(),
+                dimensions=(ChartDimension(date_field.field_id, ChartTimeBucket.HOUR),),
+            ),
         )
 
 
@@ -354,6 +395,121 @@ def test_duckdb_chart_query_supports_all_measure_functions(tmp_path: Path) -> No
     assert north[result.columns[3].key] == 15.0
     assert north[result.columns[4].key] == "10.00"
     assert north[result.columns[5].key] == "20.00"
+
+
+@pytest.mark.parametrize(
+    ("bucket", "expected_first_bucket"),
+    [
+        (ChartTimeBucket.HOUR, "2026-02-01T01:00:00"),
+        (ChartTimeBucket.DAY, "2026-02-01T00:00:00"),
+        (ChartTimeBucket.WEEK, "2026-01-26T00:00:00"),
+        (ChartTimeBucket.MONTH, "2026-02-01T00:00:00"),
+        (ChartTimeBucket.QUARTER, "2026-01-01T00:00:00"),
+        (ChartTimeBucket.YEAR, "2026-01-01T00:00:00"),
+    ],
+)
+def test_duckdb_chart_query_uses_installation_timezone_for_time_buckets(
+    tmp_path: Path,
+    bucket: ChartTimeBucket,
+    expected_first_bucket: str,
+) -> None:
+    pq.write_table(
+        pa.table(
+            {
+                "occurred_at": [
+                    datetime(2026, 1, 31, 20, 30, tzinfo=UTC),
+                    datetime(2026, 2, 1, 0, 30, tzinfo=UTC),
+                    datetime(2026, 4, 1, 0, 30, tzinfo=UTC),
+                ],
+                "amount": [Decimal("10.00"), Decimal("15.00"), Decimal("20.00")],
+            },
+            schema=pa.schema(
+                [
+                    pa.field("occurred_at", pa.timestamp("us", tz="UTC"), nullable=False),
+                    pa.field("amount", pa.decimal128(12, 2), nullable=False),
+                ]
+            ),
+        ),
+        tmp_path / "snapshot.parquet",
+    )
+    definition = ChartDefinition(
+        chart_type=ChartType.LINE,
+        dimensions=(ChartDimension(OCCURRED_AT_ID, bucket),),
+        measures=(ChartMeasure(MEASURE_ID, AMOUNT_ID, ChartAggregation.SUM, "Revenue"),),
+        limit=100,
+    )
+    executor = DuckDbLocalChartQueryExecutor(
+        tmp_path,
+        timeout_seconds=2,
+        memory_limit_mb=64,
+        threads=1,
+        temporary_directory_limit_mb=64,
+        maximum_concurrent_queries=1,
+        installation_timezone="Asia/Almaty",
+    )
+
+    result = asyncio.run(
+        executor.query(
+            context=_context(),
+            prepared=prepare_chart_query(_context(), definition),
+            maximum_bytes=100_000,
+        )
+    )
+
+    dimension = result.columns[0]
+    assert dimension.time_bucket is bucket
+    assert dimension.timezone == "Asia/Almaty"
+    assert dimension.data_type == "timestamp without time zone"
+    assert result.rows[0][dimension.key] == expected_first_bucket
+
+
+def test_duckdb_chart_hour_buckets_follow_daylight_saving_transition(tmp_path: Path) -> None:
+    pq.write_table(
+        pa.table(
+            {
+                "occurred_at": [
+                    datetime(2026, 3, 8, 6, 30, tzinfo=UTC),
+                    datetime(2026, 3, 8, 7, 30, tzinfo=UTC),
+                ],
+                "amount": [Decimal("10.00"), Decimal("20.00")],
+            },
+            schema=pa.schema(
+                [
+                    pa.field("occurred_at", pa.timestamp("us", tz="UTC"), nullable=False),
+                    pa.field("amount", pa.decimal128(12, 2), nullable=False),
+                ]
+            ),
+        ),
+        tmp_path / "snapshot.parquet",
+    )
+    definition = ChartDefinition(
+        chart_type=ChartType.LINE,
+        dimensions=(ChartDimension(OCCURRED_AT_ID, ChartTimeBucket.HOUR),),
+        measures=(ChartMeasure(MEASURE_ID, AMOUNT_ID, ChartAggregation.SUM, "Revenue"),),
+    )
+    executor = DuckDbLocalChartQueryExecutor(
+        tmp_path,
+        timeout_seconds=2,
+        memory_limit_mb=64,
+        threads=1,
+        temporary_directory_limit_mb=64,
+        maximum_concurrent_queries=1,
+        installation_timezone="America/New_York",
+    )
+
+    result = asyncio.run(
+        executor.query(
+            context=_context(),
+            prepared=prepare_chart_query(_context(), definition),
+            maximum_bytes=100_000,
+        )
+    )
+
+    dimension_key = result.columns[0].key
+    assert [row[dimension_key] for row in result.rows] == [
+        "2026-03-08T01:00:00",
+        "2026-03-08T03:00:00",
+    ]
 
 
 def test_chart_service_create_update_query_and_rechecks_dataset_access() -> None:

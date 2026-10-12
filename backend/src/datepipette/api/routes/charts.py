@@ -36,6 +36,7 @@ from datepipette.domain.charts import (
     ChartResultColumnRole,
     ChartSort,
     ChartSortTargetType,
+    ChartTimeBucket,
     ChartType,
 )
 from datepipette.domain.snapshot_queries import (
@@ -55,6 +56,7 @@ class StrictModel(BaseModel):
 
 class ChartDimensionPayload(StrictModel):
     field_id: UUID
+    time_bucket: ChartTimeBucket | None = None
 
 
 class ChartMeasurePayload(StrictModel):
@@ -86,7 +88,7 @@ class ChartSortPayload(StrictModel):
 
 
 class ChartDefinitionPayload(StrictModel):
-    schema_version: int = 1
+    schema_version: int = 2
     chart_type: ChartType
     dimensions: list[ChartDimensionPayload] = Field(default_factory=list, max_length=1)
     measures: list[ChartMeasurePayload] = Field(
@@ -142,6 +144,8 @@ class ChartResultColumnResponse(BaseModel):
     measure_id: UUID | None
     label: str
     data_type: str
+    time_bucket: ChartTimeBucket | None
+    timezone: str | None
 
 
 class ChartQueryDataResponse(BaseModel):
@@ -176,7 +180,9 @@ def _definition(payload: ChartDefinitionPayload) -> ChartDefinition:
         return ChartDefinition(
             schema_version=payload.schema_version,
             chart_type=payload.chart_type,
-            dimensions=tuple(ChartDimension(item.field_id) for item in payload.dimensions),
+            dimensions=tuple(
+                ChartDimension(item.field_id, item.time_bucket) for item in payload.dimensions
+            ),
             measures=tuple(
                 ChartMeasure(item.id, item.field_id, item.aggregation, item.label)
                 for item in payload.measures
@@ -447,6 +453,8 @@ async def query_chart_data(
                     measure_id=item.measure_id,
                     label=item.label,
                     data_type=item.data_type,
+                    time_bucket=item.time_bucket,
+                    timezone=item.timezone,
                 )
                 for item in result.columns
             ],

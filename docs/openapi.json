@@ -384,7 +384,7 @@
             "type": "array"
           },
           "schema_version": {
-            "default": 1,
+            "default": 2,
             "title": "Schema Version",
             "type": "integer"
           },
@@ -411,6 +411,16 @@
             "format": "uuid",
             "title": "Field Id",
             "type": "string"
+          },
+          "time_bucket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChartTimeBucket"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -681,6 +691,27 @@
           },
           "role": {
             "$ref": "#/components/schemas/ChartResultColumnRole"
+          },
+          "time_bucket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChartTimeBucket"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
           }
         },
         "required": [
@@ -689,7 +720,9 @@
           "field_id",
           "measure_id",
           "label",
-          "data_type"
+          "data_type",
+          "time_bucket",
+          "timezone"
         ],
         "title": "ChartResultColumnResponse",
         "type": "object"
@@ -731,6 +764,18 @@
           "measure"
         ],
         "title": "ChartSortTargetType",
+        "type": "string"
+      },
+      "ChartTimeBucket": {
+        "enum": [
+          "hour",
+          "day",
+          "week",
+          "month",
+          "quarter",
+          "year"
+        ],
+        "title": "ChartTimeBucket",
         "type": "string"
       },
       "ChartType": {
