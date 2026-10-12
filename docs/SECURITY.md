@@ -76,6 +76,8 @@ Local Parquet files contain business data and therefore belong under a private r
 
 A viewer with dashboard access may receive chart results but must not use that route to browse dataset rows, create exports, infer unrestricted schema metadata, or execute arbitrary chart definitions.
 
+Direct chart resources are private to their creator and administrators. Active analysts must have effective dataset `view_rows` both when creating or replacing a definition and whenever querying it; revocation therefore blocks the next query. Saved field UUIDs are resolved only against the active published contract, filter values remain bound parameters, and execution uses bounded DuckDB reads over the active Parquet snapshot. Direct chart routes do not give viewers a path to aggregate arbitrary fields; future dashboard-context access will execute only an already-authorized saved chart.
+
 ## PostgreSQL source safety
 
 - Administrators should configure a dedicated read-only PostgreSQL role.

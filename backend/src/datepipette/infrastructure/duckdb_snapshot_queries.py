@@ -34,15 +34,15 @@ from datepipette.infrastructure.object_storage import (
 )
 
 
-def _quote_identifier(value: str) -> str:
+def quote_identifier(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
 def _column(field: SnapshotQueryField) -> str:
-    return f"source.{_quote_identifier(field.storage_name)}"
+    return f"source.{quote_identifier(field.storage_name)}"
 
 
-def _response_value(field: SnapshotQueryField, value: Any) -> Any:
+def snapshot_response_value(field: SnapshotQueryField, value: Any) -> Any:
     if isinstance(value, str) and field.data_type.lower() in {"json", "jsonb"}:
         try:
             return json.loads(value)
@@ -63,7 +63,7 @@ def _response_value(field: SnapshotQueryField, value: Any) -> Any:
     return str(value)
 
 
-def _compile_filters(
+def compile_snapshot_filters(
     filters: tuple[SnapshotQueryFilter, ...],
     fields: dict[Any, SnapshotQueryField],
 ) -> tuple[list[str], list[Any]]:
@@ -169,14 +169,14 @@ def _compile_query(
 ) -> tuple[str, list[Any]]:
     fields = {field.field_id: field for field in all_fields}
     projections = [
-        f"{_column(field)} AS {_quote_identifier(field.name)}" for field in selected_fields
+        f"{_column(field)} AS {quote_identifier(field.name)}" for field in selected_fields
     ]
     projections.extend(
-        f"{_column(fields[item.field_id])} AS {_quote_identifier(f'__dp_sort_{index}')}"
+        f"{_column(fields[item.field_id])} AS {quote_identifier(f'__dp_sort_{index}')}"
         for index, item in enumerate(sorts)
     )
     projections.append('source.file_row_number AS "__dp_file_row_number"')
-    clauses, parameters = _compile_filters(filters, fields)
+    clauses, parameters = compile_snapshot_filters(filters, fields)
     if position is not None:
         position_clause, position_parameters = _compile_position(sorts, fields, position)
         clauses.append(position_clause)
@@ -341,7 +341,7 @@ class DuckDbSnapshotQueryExecutor:
         truncated_by_bytes = False
         for record in records[:page_size]:
             row = {
-                field.name: _response_value(field, record[index])
+                field.name: snapshot_response_value(field, record[index])
                 for index, field in enumerate(selected_fields)
             }
             row_bytes = len(

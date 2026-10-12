@@ -269,6 +269,17 @@ Do not expose stack traces, SQL credentials, API token material, internal storag
 
 Complex table and chart queries use typed request bodies rather than user-written filter strings. A filter references a known column identifier, operator, and typed value. Backend compilation resolves identifiers against published schema and binds values as parameters.
 
+## Charts
+
+- `POST /api/v1/charts` creates a private chart for an active published dataset; `GET /api/v1/charts` uses bounded cursor pagination and returns owned charts to analysts or all charts to administrators.
+- `GET /api/v1/charts/{chart_id}` returns the saved schema-versioned definition. `PUT` replaces the complete definition and requires the current `"chart-N"` ETag in `If-Match`.
+- Creation and replacement require CSRF, chart ownership (or administrator role), current effective dataset `view_rows`, and validation against the active published field contract. A chart never grants dataset access.
+- `POST /api/v1/charts/{chart_id}/data:query` executes only the saved definition against the current active Parquet snapshot. It returns stable result keys, column roles and identifiers, chart revision, snapshot identity, freshness, stale error metadata, and response truncation state.
+- Direct chart querying is owner/administrator-only in this slice. Dashboard-context viewer access is a separate future authorization path and will never accept arbitrary chart definitions.
+- Deletion is intentionally absent until chart archival and dashboard dependency semantics are accepted.
+
+The rationale and bounds are recorded in [ADR-0028](adr/0028-private-chart-query-foundation.md).
+
 ## Asynchronous operations
 
 Refresh and export creation return a job resource immediately. Job representations expose state, progress when reliable, timestamps, safe failure information, and links to related resources.

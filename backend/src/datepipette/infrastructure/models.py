@@ -485,6 +485,52 @@ class DatasetExportRequestModel(Base):
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class ChartModel(Base):
+    __tablename__ = "charts"
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="revision_positive"),
+        CheckConstraint("jsonb_typeof(definition) = 'object'", name="definition_object"),
+        Index(
+            "uq_charts_owner_name_normalized",
+            "owner_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+        Index("ix_charts_dataset_created", "dataset_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="RESTRICT"), index=True
+    )
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    revision: Mapped[int] = mapped_column(Integer)
+    definition: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ChartFieldDependencyModel(Base):
+    __tablename__ = "chart_field_dependencies"
+    __table_args__ = (
+        Index(
+            "uq_chart_field_dependencies_chart_field",
+            "chart_id",
+            "field_id",
+            unique=True,
+        ),
+        Index("ix_chart_field_dependencies_dataset_field", "dataset_id", "field_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    chart_id: Mapped[UUID] = mapped_column(ForeignKey("charts.id", ondelete="CASCADE"), index=True)
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("datasets.id", ondelete="RESTRICT"), index=True
+    )
+    field_id: Mapped[UUID]
+
+
 class GroupModel(Base):
     __tablename__ = "identity_groups"
     __table_args__ = (

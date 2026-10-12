@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from datepipette.domain.dataset_impact import (
+    DatasetDependencyReference,
+    DependencyResourceType,
     SchemaChangeCompatibility,
     SchemaChangeKind,
     compare_dataset_schema,
@@ -210,3 +212,60 @@ def test_current_revision_validation_is_required() -> None:
         assert "current draft revision" in str(exc)
     else:  # pragma: no cover - assertion guard
         raise AssertionError("Expected stale validation to be rejected")
+
+
+def test_breaking_field_change_reports_real_chart_dependency() -> None:
+    dataset_id = uuid4()
+    relation_id = uuid4()
+    field_id = uuid4()
+    chart_id = uuid4()
+    baseline_definition = _definition(
+        relation_id,
+        "orders",
+        (_field(field_id, relation_id, "amount"),),
+    )
+    baseline = DatasetVersion(
+        id=uuid4(),
+        dataset_id=dataset_id,
+        state=DatasetVersionState.PUBLISHED,
+        revision=1,
+        definition=baseline_definition,
+        validation=_validation(
+            1,
+            DatasetValidationState.VALID,
+            ((field_id, "amount", "numeric(12,2)", False),),
+        ),
+        created_by=uuid4(),
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    draft = DatasetDraft(
+        id=uuid4(),
+        dataset_id=dataset_id,
+        revision=2,
+        definition=_definition(
+            relation_id,
+            "orders",
+            (_field(field_id, relation_id, "amount"),),
+        ),
+        validation=_validation(
+            2,
+            DatasetValidationState.VALID,
+            ((field_id, "amount", "bigint", False),),
+        ),
+        created_by=uuid4(),
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    dependency = DatasetDependencyReference(DependencyResourceType.CHART, chart_id)
+
+    impact = compare_dataset_schema(
+        dataset_id=dataset_id,
+        baseline=baseline,
+        draft=draft,
+        dependencies={field_id: (dependency,)},
+    )
+
+    assert impact.affected_dependencies == (dependency,)
+    assert impact.blocking_dependencies == (dependency,)
+    assert impact.ready_for_publication is False
