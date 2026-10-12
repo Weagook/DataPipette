@@ -1,0 +1,215 @@
+"""Application services for private dashboard layouts."""
+
+import base64
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Protocol
+from uuid import UUID, uuid4
+
+from datepipette.domain.dashboards import Dashboard, DashboardDefinition
+from datepipette.domain.identity import AccountStatus, SystemRole, User
+
+
+class DashboardNotFoundError(Exception):
+    pass
+
+
+class DashboardAlreadyExistsError(Exception):
+    pass
+
+
+class DashboardRevisionConflictError(Exception):
+    pass
+
+
+class InvalidDashboardCursorError(ValueError):
+    pass
+
+
+class InvalidDashboardDefinitionError(ValueError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardCreate:
+    name: str
+    definition: DashboardDefinition
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardPage:
+    dashboards: tuple[Dashboard, ...]
+    next_cursor: str | None
+
+
+class DashboardStore(Protocol):
+    async def create(
+        self,
+        *,
+        dashboard_id: UUID,
+        actor_id: UUID,
+        value: DashboardCreate,
+        definition: dict[str, object],
+        occurred_at: datetime,
+        request_id: str,
+    ) -> Dashboard: ...
+
+    async def list(
+        self,
+        *,
+        owner_id: UUID | None,
+        after_created_at: datetime | None,
+        after_id: UUID | None,
+        limit: int,
+    ) -> tuple[Dashboard, ...]: ...
+
+    async def get(self, dashboard_id: UUID) -> Dashboard | None: ...
+
+    async def resolve_chart_owners(self, chart_ids: frozenset[UUID]) -> dict[UUID, UUID]: ...
+
+    async def update(
+        self,
+        *,
+        dashboard_id: UUID,
+        actor_id: UUID,
+        expected_revision: int,
+        name: str,
+        definition: dict[str, object],
+        occurred_at: datetime,
+        request_id: str,
+    ) -> Dashboard | None: ...
+
+
+def _name(value: str) -> str:
+    normalized = " ".join(value.split())
+    if not normalized:
+        raise InvalidDashboardDefinitionError("Dashboard name must not be empty")
+    if len(normalized) > 100:
+        raise InvalidDashboardDefinitionError("Dashboard name must contain at most 100 characters")
+    return normalized
+
+
+def _encode_cursor(dashboard: Dashboard) -> str:
+    value = f"{dashboard.created_at.isoformat()}|{dashboard.id}".encode()
+    return base64.urlsafe_b64encode(value).decode().rstrip("=")
+
+
+def _decode_cursor(value: str | None) -> tuple[datetime | None, UUID | None]:
+    if value is None:
+        return None, None
+    try:
+        padding = "=" * (-len(value) % 4)
+        decoded = base64.b64decode(value + padding, altchars=b"-_", validate=True).decode()
+        timestamp, identifier = decoded.split("|", maxsplit=1)
+        created_at = datetime.fromisoformat(timestamp)
+        if created_at.tzinfo is None:
+            raise ValueError
+        return created_at, UUID(identifier)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise InvalidDashboardCursorError from exc
+
+
+def _require_owner(actor: User, dashboard: Dashboard) -> None:
+    if actor.status is not AccountStatus.ACTIVE:
+        raise DashboardNotFoundError
+    if actor.role is SystemRole.ADMIN:
+        return
+    if actor.role is SystemRole.ANALYST and dashboard.owner_id == actor.id:
+        return
+    raise DashboardNotFoundError
+
+
+class DashboardService:
+    def __init__(self, store: DashboardStore) -> None:
+        self._store = store
+
+    async def create(
+        self,
+        *,
+        actor: User,
+        value: DashboardCreate,
+        request_id: str,
+    ) -> Dashboard:
+        if actor.status is not AccountStatus.ACTIVE or actor.role not in {
+            SystemRole.ADMIN,
+            SystemRole.ANALYST,
+        }:
+            raise DashboardNotFoundError
+        await self._validate_references(owner_id=actor.id, definition=value.definition)
+        normalized = DashboardCreate(_name(value.name), value.definition)
+        return await self._store.create(
+            dashboard_id=uuid4(),
+            actor_id=actor.id,
+            value=normalized,
+            definition=value.definition.to_document(),
+            occurred_at=datetime.now(UTC),
+            request_id=request_id,
+        )
+
+    async def list(
+        self,
+        *,
+        actor: User,
+        cursor: str | None,
+        limit: int,
+    ) -> DashboardPage:
+        if actor.status is not AccountStatus.ACTIVE or actor.role is SystemRole.VIEWER:
+            return DashboardPage((), None)
+        after_created_at, after_id = _decode_cursor(cursor)
+        items = await self._store.list(
+            owner_id=None if actor.role is SystemRole.ADMIN else actor.id,
+            after_created_at=after_created_at,
+            after_id=after_id,
+            limit=limit + 1,
+        )
+        visible = items[:limit]
+        return DashboardPage(
+            dashboards=visible,
+            next_cursor=_encode_cursor(visible[-1]) if len(items) > limit else None,
+        )
+
+    async def get(self, *, actor: User, dashboard_id: UUID) -> Dashboard:
+        dashboard = await self._store.get(dashboard_id)
+        if dashboard is None:
+            raise DashboardNotFoundError
+        _require_owner(actor, dashboard)
+        return dashboard
+
+    async def update(
+        self,
+        *,
+        actor: User,
+        dashboard_id: UUID,
+        expected_revision: int,
+        name: str,
+        definition: DashboardDefinition,
+        request_id: str,
+    ) -> Dashboard:
+        current = await self.get(actor=actor, dashboard_id=dashboard_id)
+        await self._validate_references(owner_id=current.owner_id, definition=definition)
+        updated = await self._store.update(
+            dashboard_id=dashboard_id,
+            actor_id=actor.id,
+            expected_revision=expected_revision,
+            name=_name(name),
+            definition=definition.to_document(),
+            occurred_at=datetime.now(UTC),
+            request_id=request_id,
+        )
+        if updated is None:
+            raise DashboardNotFoundError
+        return updated
+
+    async def _validate_references(
+        self,
+        *,
+        owner_id: UUID,
+        definition: DashboardDefinition,
+    ) -> None:
+        owners = await self._store.resolve_chart_owners(definition.chart_ids)
+        if set(owners) != set(definition.chart_ids) or any(
+            chart_owner_id != owner_id for chart_owner_id in owners.values()
+        ):
+            raise InvalidDashboardDefinitionError(
+                "One or more dashboard chart references are unavailable"
+            )

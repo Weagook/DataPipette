@@ -531,6 +531,53 @@ class ChartFieldDependencyModel(Base):
     field_id: Mapped[UUID]
 
 
+class DashboardModel(Base):
+    __tablename__ = "dashboards"
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="revision_positive"),
+        CheckConstraint("jsonb_typeof(definition) = 'object'", name="definition_object"),
+        Index(
+            "uq_dashboards_owner_name_normalized",
+            "owner_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    revision: Mapped[int] = mapped_column(Integer)
+    definition: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DashboardChartDependencyModel(Base):
+    __tablename__ = "dashboard_chart_dependencies"
+    __table_args__ = (
+        Index(
+            "uq_dashboard_chart_dependencies_dashboard_item",
+            "dashboard_id",
+            "item_id",
+            unique=True,
+        ),
+        Index(
+            "uq_dashboard_chart_dependencies_dashboard_chart",
+            "dashboard_id",
+            "chart_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dashboard_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dashboards.id", ondelete="CASCADE"), index=True
+    )
+    chart_id: Mapped[UUID] = mapped_column(ForeignKey("charts.id", ondelete="RESTRICT"), index=True)
+    item_id: Mapped[UUID]
+
+
 class GroupModel(Base):
     __tablename__ = "identity_groups"
     __table_args__ = (

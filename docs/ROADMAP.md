@@ -66,7 +66,7 @@ Outcome: analysts create and share the first useful dashboard.
 - [x] Chart query specification, aggregate/type validation, private persistence, and bounded snapshot execution
 - [x] Bar, line, pie/donut, and KPI chart query contracts
 - [x] Aggregates and timezone-aware time buckets
-- Drag-and-resize dashboard layout
+- [x] Private versioned drag-and-resize dashboard layout contract
 - Multi-dataset dashboards with independent failure states
 - Dashboard viewer access without detailed dataset access
 

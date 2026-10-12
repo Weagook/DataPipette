@@ -29,6 +29,7 @@ from datepipette.application.connection_access import (
     ConnectionGrantService,
 )
 from datepipette.application.connections import ConnectionService
+from datepipette.application.dashboards import DashboardService
 from datepipette.application.dataset_preview import DatasetPreviewService
 from datepipette.application.dataset_validation import DatasetValidationService
 from datepipette.application.datasets import DatasetService
@@ -63,6 +64,7 @@ from datepipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
 from datepipette.infrastructure.repositories.connections import SqlAlchemyConnectionStore
+from datepipette.infrastructure.repositories.dashboards import SqlAlchemyDashboardStore
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
@@ -98,6 +100,7 @@ def create_app(
     dataset_grant_service: DatasetGrantService | None = None,
     connection_grant_service: ConnectionGrantService | None = None,
     chart_service: ChartService | None = None,
+    dashboard_service: DashboardService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -141,6 +144,8 @@ def create_app(
                 app.state.connection_grant_service = connection_grant_service
             if chart_service is not None:
                 app.state.chart_service = chart_service
+            if dashboard_service is not None:
+                app.state.dashboard_service = dashboard_service
             yield
             return
 
@@ -293,6 +298,9 @@ def create_app(
             ),
             access_authorizer,
             resolved_settings.snapshot_query_max_response_bytes,
+        )
+        app.state.dashboard_service = dashboard_service or DashboardService(
+            SqlAlchemyDashboardStore(resources.session_factory)
         )
         export_store = SqlAlchemyExportStore(resources.session_factory)
         app.state.export_service = export_service or DatasetExportService(

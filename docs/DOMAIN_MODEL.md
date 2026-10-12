@@ -141,6 +141,10 @@ A chart becomes `invalid` rather than being deleted when a forced dataset change
 
 A named layout of chart references. Charts may use different datasets and load independently. A dashboard does not join or calculate across datasets.
 
+The implemented dashboard is a private owner-bound, schema-versioned document with a fixed 12-column grid. Each item has a stable UUID, one owned chart reference, and bounded integer geometry. A definition may contain up to 50 unique non-overlapping items; an empty layout is valid. Complete replacement uses an opaque revision ETag, and no-op replacement preserves the current revision.
+
+The JSONB definition is the authoritative editable document. Normalized chart dependency rows enforce referential integrity and make future chart lifecycle analysis possible without parsing every layout. Administrators may manage another owner's dashboard, but its items must still reference that owner's charts. Sharing, viewer execution, responsive layouts, dashboard filters, and delete/archive behavior remain separate capabilities.
+
 ### Export job
 
 An asynchronous request to write a filtered dataset table view to CSV or XLSX. The resulting private file expires after 24 hours. Download URLs expire after five minutes and may be reissued while the file exists.

@@ -103,7 +103,7 @@ Typed snapshot table filters, projection, deterministic cursor pagination, bound
 
 ### Visualization
 
-Private versioned chart specifications, aggregate/type validation, timezone-aware time buckets, bounded snapshot execution, and normalized dataset-field dependency tracking are implemented. Dashboard layouts, shared chart ACLs, and durable invalid-state reporting remain future work.
+Private versioned chart specifications, aggregate/type validation, timezone-aware time buckets, bounded snapshot execution, and normalized dataset-field dependency tracking are implemented. Private versioned dashboard definitions now arrange up to 50 owned chart references on a validated 12-column non-overlapping grid, persist complete editable JSONB plus normalized chart dependencies, and use optimistic replacement. Shared dashboard ACLs, dashboard-context query execution, responsive layouts, dashboard filters, and durable invalid-state reporting remain future work.
 
 ### Export
 

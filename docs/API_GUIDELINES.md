@@ -281,6 +281,17 @@ Complex table and chart queries use typed request bodies rather than user-writte
 
 The rationale and bounds are recorded in [ADR-0028](adr/0028-private-chart-query-foundation.md) and [ADR-0029](adr/0029-timezone-aware-chart-time-buckets.md).
 
+## Dashboards
+
+- `POST /api/v1/dashboards` creates a private dashboard; `GET /api/v1/dashboards` uses bounded cursor pagination and returns owned dashboards to analysts or all dashboards to administrators.
+- `GET /api/v1/dashboards/{dashboard_id}` returns the complete editable definition. `PUT` replaces the normalized name and complete definition and requires the current `"dashboard-N"` ETag in `If-Match`; a no-op replacement does not advance the revision.
+- Definition version 1 uses a fixed 12-column grid with stable item and chart UUIDs plus integer `x`, `y`, `width`, and `height`. Up to 50 items are allowed; identifiers and chart references must be unique, geometry must remain in bounds, and rectangles must not overlap.
+- A dashboard may reference owned charts from different datasets, but it does not query, join, or calculate across those datasets. Every reference is validated and persisted as a normalized dependency in the same transaction as the JSONB definition.
+- Creation and replacement require CSRF. Dashboards are owner/administrator-only in this slice; unauthorized reads are concealed, viewers receive an empty collection, and dashboard-context chart execution is not yet exposed.
+- Deletion and archival are intentionally absent until lifecycle behavior for referenced charts is accepted.
+
+The persistence and authorization rationale is recorded in [ADR-0030](adr/0030-private-dashboard-layouts.md).
+
 ## Asynchronous operations
 
 Refresh and export creation return a job resource immediately. Job representations expose state, progress when reliable, timestamps, safe failure information, and links to related resources.
