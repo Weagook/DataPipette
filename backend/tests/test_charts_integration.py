@@ -64,8 +64,7 @@ async def _reset(settings: Settings) -> None:
 def chart_settings(tmp_path: Path) -> Settings:
     database_url = os.environ.get(
         "DATEPIPETTE_TEST_DATABASE_URL",
-        "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/"
-        "datepipette_chart_test",
+        "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette",
     )
     return Settings(
         environment="test",
