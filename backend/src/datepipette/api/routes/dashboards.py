@@ -1,0 +1,283 @@
+"""Private dashboard layout resources."""
+
+import re
+from datetime import datetime
+from typing import Annotated, Any, Literal, cast
+from uuid import UUID
+
+from fastapi import APIRouter, Header, Query, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
+
+from datepipette.api.dependencies.authentication import CsrfSession, CurrentSession, request_id
+from datepipette.api.problems import ApiProblem, ProblemDetails
+from datepipette.application.dashboards import (
+    DashboardAlreadyExistsError,
+    DashboardCreate,
+    DashboardNotFoundError,
+    DashboardRevisionConflictError,
+    DashboardService,
+    InvalidDashboardCursorError,
+    InvalidDashboardDefinitionError,
+)
+from datepipette.domain.dashboards import (
+    DASHBOARD_GRID_COLUMNS,
+    MAX_DASHBOARD_ITEM_HEIGHT,
+    MAX_DASHBOARD_ITEMS,
+    MAX_DASHBOARD_ROW,
+    Dashboard,
+    DashboardDefinition,
+    DashboardItem,
+)
+
+router = APIRouter(prefix="/dashboards", tags=["dashboards"])
+_DASHBOARD_ETAG = re.compile(r'^"dashboard-([1-9][0-9]*)"$')
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class DashboardItemPayload(StrictModel):
+    id: UUID
+    chart_id: UUID
+    x: Annotated[StrictInt, Field(ge=0, lt=DASHBOARD_GRID_COLUMNS)]
+    y: Annotated[StrictInt, Field(ge=0, lt=MAX_DASHBOARD_ROW)]
+    width: Annotated[StrictInt, Field(ge=1, le=DASHBOARD_GRID_COLUMNS)]
+    height: Annotated[StrictInt, Field(ge=1, le=MAX_DASHBOARD_ITEM_HEIGHT)]
+
+
+class DashboardDefinitionPayload(StrictModel):
+    schema_version: Literal[1] = 1
+    items: list[DashboardItemPayload] = Field(
+        default_factory=list,
+        max_length=MAX_DASHBOARD_ITEMS,
+    )
+
+
+class CreateDashboardRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=100)
+    definition: DashboardDefinitionPayload = Field(default_factory=DashboardDefinitionPayload)
+
+
+class UpdateDashboardRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=100)
+    definition: DashboardDefinitionPayload
+
+
+class DashboardResponse(BaseModel):
+    id: UUID
+    owner_id: UUID
+    name: str
+    revision: int
+    definition: DashboardDefinitionPayload
+    created_at: datetime
+    updated_at: datetime
+
+
+class CursorMeta(BaseModel):
+    next_cursor: str | None
+
+
+class DashboardCollectionResponse(BaseModel):
+    data: list[DashboardResponse]
+    meta: CursorMeta
+
+
+def _service(request: Request) -> DashboardService:
+    return cast(DashboardService, request.app.state.dashboard_service)
+
+
+def _definition(payload: DashboardDefinitionPayload) -> DashboardDefinition:
+    try:
+        return DashboardDefinition(
+            schema_version=payload.schema_version,
+            items=tuple(
+                DashboardItem(
+                    id=item.id,
+                    chart_id=item.chart_id,
+                    x=item.x,
+                    y=item.y,
+                    width=item.width,
+                    height=item.height,
+                )
+                for item in payload.items
+            ),
+        )
+    except ValueError as exc:
+        raise InvalidDashboardDefinitionError(str(exc)) from exc
+
+
+def _response(value: Dashboard) -> DashboardResponse:
+    return DashboardResponse(
+        id=value.id,
+        owner_id=value.owner_id,
+        name=value.name,
+        revision=value.revision,
+        definition=DashboardDefinitionPayload.model_validate(value.definition.to_document()),
+        created_at=value.created_at,
+        updated_at=value.updated_at,
+    )
+
+
+def _etag(revision: int) -> str:
+    return f'"dashboard-{revision}"'
+
+
+def _expected_revision(value: str | None) -> int:
+    if value is None:
+        raise ApiProblem(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            code="dashboard_revision_required",
+            title="Dashboard revision required",
+            detail="Supply the current dashboard ETag in the If-Match header.",
+        )
+    match = _DASHBOARD_ETAG.fullmatch(value)
+    if match is None:
+        raise ApiProblem(
+            status_code=400,
+            code="invalid_dashboard_revision",
+            title="Invalid dashboard revision",
+            detail="The If-Match header is not a valid dashboard ETag.",
+        )
+    return int(match.group(1))
+
+
+def _not_found() -> ApiProblem:
+    return ApiProblem(
+        status_code=404,
+        code="dashboard_not_found",
+        title="Dashboard not found",
+        detail="The requested dashboard does not exist.",
+    )
+
+
+def _invalid(exc: Exception) -> ApiProblem:
+    return ApiProblem(
+        status_code=422,
+        code="dashboard_definition_invalid",
+        title="Dashboard definition invalid",
+        detail=str(exc) or "The dashboard layout is invalid.",
+    )
+
+
+_COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
+    400: {"model": ProblemDetails},
+    401: {"model": ProblemDetails},
+    403: {"model": ProblemDetails},
+    404: {"model": ProblemDetails},
+    409: {"model": ProblemDetails},
+    412: {"model": ProblemDetails},
+    422: {"model": ProblemDetails},
+    428: {"model": ProblemDetails},
+}
+
+
+@router.post(
+    "",
+    response_model=DashboardResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=_COMMON_RESPONSES,
+)
+async def create_dashboard(
+    payload: CreateDashboardRequest,
+    request: Request,
+    response: Response,
+    session: CsrfSession,
+) -> DashboardResponse:
+    try:
+        dashboard = await _service(request).create(
+            actor=session.user,
+            value=DashboardCreate(payload.name, _definition(payload.definition)),
+            request_id=request_id(),
+        )
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    except DashboardAlreadyExistsError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dashboard_name_conflict",
+            title="Dashboard name conflict",
+            detail="The dashboard owner already has a dashboard with this name.",
+        ) from exc
+    except InvalidDashboardDefinitionError as exc:
+        raise _invalid(exc) from exc
+    response.headers["ETag"] = _etag(dashboard.revision)
+    response.headers["Location"] = f"/api/v1/dashboards/{dashboard.id}"
+    return _response(dashboard)
+
+
+@router.get("", response_model=DashboardCollectionResponse, responses=_COMMON_RESPONSES)
+async def list_dashboards(
+    request: Request,
+    session: CurrentSession,
+    cursor: Annotated[str | None, Query(max_length=4096)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> DashboardCollectionResponse:
+    try:
+        page = await _service(request).list(actor=session.user, cursor=cursor, limit=limit)
+    except InvalidDashboardCursorError as exc:
+        raise ApiProblem(
+            status_code=400,
+            code="invalid_dashboard_cursor",
+            title="Invalid dashboard cursor",
+            detail="The dashboard collection cursor is invalid.",
+        ) from exc
+    return DashboardCollectionResponse(
+        data=[_response(item) for item in page.dashboards],
+        meta=CursorMeta(next_cursor=page.next_cursor),
+    )
+
+
+@router.get("/{dashboard_id}", response_model=DashboardResponse, responses=_COMMON_RESPONSES)
+async def read_dashboard(
+    dashboard_id: UUID,
+    request: Request,
+    response: Response,
+    session: CurrentSession,
+) -> DashboardResponse:
+    try:
+        dashboard = await _service(request).get(actor=session.user, dashboard_id=dashboard_id)
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    response.headers["ETag"] = _etag(dashboard.revision)
+    return _response(dashboard)
+
+
+@router.put("/{dashboard_id}", response_model=DashboardResponse, responses=_COMMON_RESPONSES)
+async def update_dashboard(
+    dashboard_id: UUID,
+    payload: UpdateDashboardRequest,
+    request: Request,
+    response: Response,
+    session: CsrfSession,
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> DashboardResponse:
+    try:
+        dashboard = await _service(request).update(
+            actor=session.user,
+            dashboard_id=dashboard_id,
+            expected_revision=_expected_revision(if_match),
+            name=payload.name,
+            definition=_definition(payload.definition),
+            request_id=request_id(),
+        )
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    except DashboardRevisionConflictError as exc:
+        raise ApiProblem(
+            status_code=412,
+            code="dashboard_revision_conflict",
+            title="Dashboard revision conflict",
+            detail="Reload the dashboard before replacing a newer revision.",
+        ) from exc
+    except DashboardAlreadyExistsError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dashboard_name_conflict",
+            title="Dashboard name conflict",
+            detail="The dashboard owner already has a dashboard with this name.",
+        ) from exc
+    except InvalidDashboardDefinitionError as exc:
+        raise _invalid(exc) from exc
+    response.headers["ETag"] = _etag(dashboard.revision)
+    return _response(dashboard)

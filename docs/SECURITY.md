@@ -78,6 +78,8 @@ A viewer with dashboard access may receive chart results but must not use that r
 
 Direct chart resources are private to their creator and administrators. Active analysts must have effective dataset `view_rows` both when creating or replacing a definition and whenever querying it; revocation therefore blocks the next query. Saved field UUIDs are resolved only against the active published contract, filter values remain bound parameters, and execution uses bounded DuckDB reads over the active Parquet snapshot. Direct chart routes do not give viewers a path to aggregate arbitrary fields; future dashboard-context access will execute only an already-authorized saved chart.
 
+Dashboard resources are likewise private to their owner and administrators. Each write is CSRF-protected, complete replacement requires the current opaque revision ETag, and every referenced chart must exist and belong to the dashboard owner. This owner check still applies when an administrator edits the layout, preventing a dashboard from becoming an indirect bridge between private chart owners. The stored layout contains identifiers and geometry only, never chart results or business rows; successful material writes create redacted audit events.
+
 ## PostgreSQL source safety
 
 - Administrators should configure a dedicated read-only PostgreSQL role.

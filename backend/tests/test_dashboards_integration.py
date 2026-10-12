@@ -1,0 +1,380 @@
+"""Private dashboard layout API integration tests."""
+
+import asyncio
+import os
+from collections.abc import Generator
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, cast
+from uuid import UUID, uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+from redis.asyncio import Redis
+from sqlalchemy import select, text
+
+from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datepipette.application.auth_service import bootstrap_first_admin
+from datepipette.config import Settings
+from datepipette.infrastructure.database import create_database_engine, create_session_factory
+from datepipette.infrastructure.models import (
+    AuditEventModel,
+    ChartModel,
+    DashboardChartDependencyModel,
+    DatasetModel,
+    PostgresConnectionModel,
+    UserModel,
+)
+from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datepipette.main import create_app
+
+ADMIN_EMAIL = "dashboard-admin@example.com"
+ADMIN_PASSWORD = "correct horse battery staple"
+
+
+@pytest.fixture
+def dashboard_settings(tmp_path: Path) -> Settings:
+    database_url = os.environ.get(
+        "DATEPIPETTE_TEST_DATABASE_URL",
+        "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette",
+    )
+    return Settings(
+        environment="test",
+        docs_enabled=False,
+        snapshot_storage_path=tmp_path / "snapshots",
+        metadata_database_url=SecretStr(database_url),
+    )
+
+
+async def _reset(settings: Settings) -> None:
+    engine = create_database_engine(settings)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "TRUNCATE dashboard_chart_dependencies, dashboards, "
+                    "chart_field_dependencies, charts, dataset_snapshots, "
+                    "dataset_refresh_requests, dataset_refresh_runs, dataset_versions, datasets, "
+                    "postgresql_connections, browser_sessions, audit_events, users "
+                    "RESTART IDENTITY CASCADE"
+                )
+            )
+    finally:
+        await engine.dispose()
+    redis = Redis.from_url(settings.redis_url.get_secret_value(), decode_responses=True)
+    try:
+        await redis.flushdb()
+    finally:
+        await redis.aclose()
+
+
+@pytest.fixture(autouse=True)
+def clean_state(dashboard_settings: Settings) -> Generator[None, None, None]:
+    asyncio.run(_reset(dashboard_settings))
+    yield
+    asyncio.run(_reset(dashboard_settings))
+
+
+async def _seed_charts(settings: Settings) -> tuple[UUID, UUID, UUID, UUID]:
+    engine = create_database_engine(settings)
+    session_factory = create_session_factory(engine)
+    try:
+        await bootstrap_first_admin(
+            SqlAlchemyAuthenticationStore(session_factory),
+            ADMIN_EMAIL,
+            "Dashboard Admin",
+            ADMIN_PASSWORD,
+        )
+        now = datetime.now(UTC)
+        connection_id = uuid4()
+        dataset_one_id = uuid4()
+        dataset_two_id = uuid4()
+        chart_one_id = uuid4()
+        chart_two_id = uuid4()
+        async with session_factory() as session, session.begin():
+            admin = await session.scalar(select(UserModel).where(UserModel.email == ADMIN_EMAIL))
+            assert admin is not None
+            session.add(
+                PostgresConnectionModel(
+                    id=connection_id,
+                    name="Dashboard source",
+                    host="source.invalid",
+                    port=5432,
+                    database_name="analytics",
+                    username="readonly",
+                    encrypted_password="encrypted",
+                    encrypted_ca_certificate=None,
+                    ssl_mode="disable",
+                    created_by=admin.id,
+                    last_tested_at=None,
+                    last_test_succeeded=None,
+                    last_test_error_code=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            await session.flush()
+            session.add_all(
+                (
+                    DatasetModel(
+                        id=dataset_one_id,
+                        name="Sales",
+                        owner_id=admin.id,
+                        connection_id=connection_id,
+                        active_version_id=None,
+                        active_snapshot_id=None,
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                    DatasetModel(
+                        id=dataset_two_id,
+                        name="Operations",
+                        owner_id=admin.id,
+                        connection_id=connection_id,
+                        active_version_id=None,
+                        active_snapshot_id=None,
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
+            )
+            await session.flush()
+            definition = {
+                "schema_version": 2,
+                "chart_type": "kpi",
+                "dimensions": [],
+                "measures": [
+                    {
+                        "id": str(uuid4()),
+                        "field_id": str(uuid4()),
+                        "aggregation": "count",
+                        "label": "Count",
+                    }
+                ],
+                "filters": [],
+                "sorts": [],
+                "limit": 1,
+            }
+            session.add_all(
+                (
+                    ChartModel(
+                        id=chart_one_id,
+                        dataset_id=dataset_one_id,
+                        owner_id=admin.id,
+                        name="Sales KPI",
+                        revision=1,
+                        definition=definition,
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                    ChartModel(
+                        id=chart_two_id,
+                        dataset_id=dataset_two_id,
+                        owner_id=admin.id,
+                        name="Operations KPI",
+                        revision=1,
+                        definition=definition,
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
+            )
+        return chart_one_id, chart_two_id, dataset_one_id, dataset_two_id
+    finally:
+        await engine.dispose()
+
+
+def _login(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+    assert response.status_code == 201, response.text
+
+
+def _csrf(client: TestClient) -> dict[str, str]:
+    return {"X-CSRF-Token": client.cookies[CSRF_COOKIE_NAME]}
+
+
+def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
+    dashboard_settings: Settings,
+) -> None:
+    chart_one_id, chart_two_id, dataset_one_id, dataset_two_id = asyncio.run(
+        _seed_charts(dashboard_settings)
+    )
+    item_one_id = uuid4()
+    item_two_id = uuid4()
+    definition: dict[str, Any] = {
+        "schema_version": 1,
+        "items": [
+            {
+                "id": str(item_one_id),
+                "chart_id": str(chart_one_id),
+                "x": 0,
+                "y": 0,
+                "width": 6,
+                "height": 4,
+            },
+            {
+                "id": str(item_two_id),
+                "chart_id": str(chart_two_id),
+                "x": 6,
+                "y": 0,
+                "width": 6,
+                "height": 4,
+            },
+        ],
+    }
+    payload = {"name": "Executive overview", "definition": definition}
+
+    with TestClient(create_app(dashboard_settings)) as client:
+        _login(client)
+        created = client.post("/api/v1/dashboards", json=payload, headers=_csrf(client))
+        assert created.status_code == 201, created.text
+        dashboard_id = cast(str, created.json()["id"])
+        assert created.headers["etag"] == '"dashboard-1"'
+
+        read = client.get(f"/api/v1/dashboards/{dashboard_id}")
+        assert read.status_code == 200
+        assert read.json()["definition"] == definition
+
+        duplicate = client.post("/api/v1/dashboards", json=payload, headers=_csrf(client))
+        assert duplicate.status_code == 409
+        assert duplicate.json()["code"] == "dashboard_name_conflict"
+
+        unavailable = client.post(
+            "/api/v1/dashboards",
+            json={
+                "name": "Unavailable chart",
+                "definition": {
+                    "schema_version": 1,
+                    "items": [
+                        {
+                            "id": str(uuid4()),
+                            "chart_id": str(uuid4()),
+                            "x": 0,
+                            "y": 0,
+                            "width": 6,
+                            "height": 4,
+                        }
+                    ],
+                },
+            },
+            headers=_csrf(client),
+        )
+        assert unavailable.status_code == 422
+        assert unavailable.json()["code"] == "dashboard_definition_invalid"
+
+        overlapping = client.post(
+            "/api/v1/dashboards",
+            json={
+                "name": "Overlapping layout",
+                "definition": {
+                    "schema_version": 1,
+                    "items": [
+                        definition["items"][0],
+                        {**definition["items"][1], "x": 5},
+                    ],
+                },
+            },
+            headers=_csrf(client),
+        )
+        assert overlapping.status_code == 422
+        assert overlapping.json()["code"] == "dashboard_definition_invalid"
+
+        boolean_geometry = client.post(
+            "/api/v1/dashboards",
+            json={
+                "name": "Boolean geometry",
+                "definition": {
+                    "schema_version": 1,
+                    "items": [{**definition["items"][0], "x": True}],
+                },
+            },
+            headers=_csrf(client),
+        )
+        assert boolean_geometry.status_code == 422
+
+        missing_precondition = client.put(
+            f"/api/v1/dashboards/{dashboard_id}",
+            json=payload,
+            headers=_csrf(client),
+        )
+        assert missing_precondition.status_code == 428
+        assert missing_precondition.json()["code"] == "dashboard_revision_required"
+
+        malformed_precondition = client.put(
+            f"/api/v1/dashboards/{dashboard_id}",
+            json=payload,
+            headers={**_csrf(client), "If-Match": '"chart-1"'},
+        )
+        assert malformed_precondition.status_code == 400
+        assert malformed_precondition.json()["code"] == "invalid_dashboard_revision"
+
+        no_op = client.put(
+            f"/api/v1/dashboards/{dashboard_id}",
+            json=payload,
+            headers={**_csrf(client), "If-Match": created.headers["etag"]},
+        )
+        assert no_op.status_code == 200
+        assert no_op.headers["etag"] == '"dashboard-1"'
+
+        moved_definition = {
+            **definition,
+            "items": [definition["items"][0], {**definition["items"][1], "y": 4}],
+        }
+        updated = client.put(
+            f"/api/v1/dashboards/{dashboard_id}",
+            json={"name": "Executive dashboard", "definition": moved_definition},
+            headers={**_csrf(client), "If-Match": created.headers["etag"]},
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.headers["etag"] == '"dashboard-2"'
+
+        stale = client.put(
+            f"/api/v1/dashboards/{dashboard_id}",
+            json=payload,
+            headers={**_csrf(client), "If-Match": created.headers["etag"]},
+        )
+        assert stale.status_code == 412
+
+        listing = client.get("/api/v1/dashboards")
+        assert listing.status_code == 200
+        assert [item["id"] for item in listing.json()["data"]] == [dashboard_id]
+
+        invalid_cursor = client.get("/api/v1/dashboards", params={"cursor": "bad!"})
+        assert invalid_cursor.status_code == 400
+
+    async def verify_metadata() -> None:
+        engine = create_database_engine(dashboard_settings)
+        try:
+            async with create_session_factory(engine)() as session:
+                dependencies = list(
+                    await session.scalars(
+                        select(DashboardChartDependencyModel).where(
+                            DashboardChartDependencyModel.dashboard_id == UUID(dashboard_id)
+                        )
+                    )
+                )
+                dataset_ids = set(
+                    await session.scalars(
+                        select(ChartModel.dataset_id).where(
+                            ChartModel.id.in_([item.chart_id for item in dependencies])
+                        )
+                    )
+                )
+                actions = set(
+                    await session.scalars(
+                        select(AuditEventModel.action).where(
+                            AuditEventModel.resource_id == UUID(dashboard_id)
+                        )
+                    )
+                )
+            assert {item.chart_id for item in dependencies} == {chart_one_id, chart_two_id}
+            assert dataset_ids == {dataset_one_id, dataset_two_id}
+            assert actions == {"dashboard.created", "dashboard.updated"}
+        finally:
+            await engine.dispose()
+
+    asyncio.run(verify_metadata())

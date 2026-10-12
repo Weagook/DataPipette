@@ -4,7 +4,7 @@
 
 DatePipette is an API-first, snapshot-based business intelligence platform for PostgreSQL. It is designed to work both as a standalone analytics application and as a headless BI backend embedded into other products.
 
-> **Project status:** pre-alpha. The backend implements local identity, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, explainable query-safety validation, version history and schema impact, preview, cancellable manual and scheduled Parquet refresh with bounded transient retries, shared S3-compatible snapshot/export storage with automatic lifecycle cleanup, published table exploration with typed snapshot queries, background exports, and dataset ACLs. Charts and dashboards remain under development.
+> **Project status:** pre-alpha. The backend implements local identity, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, explainable query-safety validation, version history and schema impact, preview, cancellable manual and scheduled Parquet refresh with bounded transient retries, shared S3-compatible snapshot/export storage with automatic lifecycle cleanup, published table exploration with typed snapshot queries, background exports, dataset ACLs, private aggregate charts, and private versioned dashboard layouts. Dashboard sharing and viewer execution remain under development.
 
 ## Why DatePipette?
 
@@ -29,8 +29,8 @@ The backend is the product core. The official web application is a client of the
 - Parquet snapshots and exports in local or S3-compatible storage (implemented)
 - Scheduled and manual refresh through Celery
 - Tabular browsing, typed filters, pagination, CSV export, and XLSX export
-- Bar, line, pie/donut, and KPI visualizations
-- Dashboards containing charts from multiple datasets
+- Bar, line, pie/donut, and KPI visualizations (private backend contract implemented)
+- Dashboards containing charts from multiple datasets (private layout contract implemented)
 - Local accounts, groups, roles, object ACLs, service accounts, and scoped API tokens
 - Append-only application audit log
 
