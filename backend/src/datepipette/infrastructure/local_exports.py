@@ -21,8 +21,8 @@ from datepipette.domain.exports import ExportArtifact, ExportFormat, ExportJob
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
 from datepipette.infrastructure.duckdb_snapshot_queries import (
     _column,
-    _compile_filters,
-    _quote_identifier,
+    compile_snapshot_filters,
+    quote_identifier,
 )
 from datepipette.infrastructure.object_storage import (
     LocalObjectStorage,
@@ -188,8 +188,8 @@ class DatasetExportExecutor:
         sorts: tuple[Any, ...],
     ) -> tuple[str, list[Any]]:
         fields = {field.field_id: field for field in context.fields}
-        projections = [f"{_column(field)} AS {_quote_identifier(field.name)}" for field in selected]
-        clauses, parameters = _compile_filters(filters, fields)
+        projections = [f"{_column(field)} AS {quote_identifier(field.name)}" for field in selected]
+        clauses, parameters = compile_snapshot_filters(filters, fields)
         order = [
             f"{_column(fields[item.field_id])} {item.direction.value.upper()} NULLS LAST"
             for item in sorts

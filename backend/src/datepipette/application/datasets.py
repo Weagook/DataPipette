@@ -12,7 +12,11 @@ from datepipette.application.connection_access import (
     ConnectionAccessAuthorizer,
     ConnectionAccessDeniedError,
 )
-from datepipette.domain.dataset_impact import DatasetSchemaImpact, compare_dataset_schema
+from datepipette.domain.dataset_impact import (
+    DatasetDependencyReference,
+    DatasetSchemaImpact,
+    compare_dataset_schema,
+)
 from datepipette.domain.datasets import (
     Dataset,
     DatasetDefinition,
@@ -108,6 +112,10 @@ class DatasetStore(Protocol):
     ) -> Sequence[DatasetVersion]: ...
 
     async def get_version(self, *, dataset_id: UUID, version_id: UUID) -> DatasetVersion | None: ...
+
+    async def list_chart_dependencies(
+        self, dataset_id: UUID
+    ) -> dict[UUID, tuple[DatasetDependencyReference, ...]]: ...
 
     async def rename(
         self,
@@ -394,7 +402,13 @@ class DatasetService:
             )
             if baseline is None:  # pragma: no cover - foreign-key invariant
                 raise RuntimeError("Active dataset version disappeared")
-        impact = compare_dataset_schema(dataset_id=dataset_id, baseline=baseline, draft=draft)
+        dependencies = await self._store.list_chart_dependencies(dataset_id)
+        impact = compare_dataset_schema(
+            dataset_id=dataset_id,
+            baseline=baseline,
+            draft=draft,
+            dependencies=dependencies,
+        )
         recorded = await self._store.record_impact_analysis(
             dataset_id=dataset_id,
             actor_id=actor.id,

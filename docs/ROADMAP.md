@@ -63,7 +63,7 @@ Outcome: analysts can inspect and extract governed detailed data.
 
 Outcome: analysts create and share the first useful dashboard.
 
-- Chart query specification and validation
+- [x] Chart query specification, aggregate/type validation, private persistence, and bounded snapshot execution
 - Bar, line, pie/donut, and KPI charts
 - Aggregates and timezone-aware time buckets
 - Drag-and-resize dashboard layout

@@ -135,6 +135,7 @@ def compare_dataset_schema(
     dataset_id: UUID,
     baseline: DatasetVersion | None,
     draft: DatasetDraft,
+    dependencies: dict[UUID, tuple[DatasetDependencyReference, ...]] | None = None,
 ) -> DatasetSchemaImpact:
     """Compare one validated draft with its active published baseline."""
 
@@ -265,6 +266,27 @@ def compare_dataset_schema(
                 )
             )
 
+    affected_field_ids = {change.field_id for change in changes}
+    breaking_field_ids = {
+        change.field_id
+        for change in changes
+        if change.compatibility is SchemaChangeCompatibility.BREAKING
+    }
+    dependency_map = dependencies or {}
+    affected_dependencies = {
+        dependency
+        for field_id in affected_field_ids
+        for dependency in dependency_map.get(field_id, ())
+    }
+    blocking_dependencies = {
+        dependency
+        for field_id in breaking_field_ids
+        for dependency in dependency_map.get(field_id, ())
+    }
+
+    def dependency_order(item: DatasetDependencyReference) -> tuple[str, str]:
+        return item.resource_type.value, str(item.resource_id)
+
     return DatasetSchemaImpact(
         dataset_id=dataset_id,
         baseline_version_id=baseline.id if baseline is not None else None,
@@ -272,4 +294,6 @@ def compare_dataset_schema(
         draft_revision=draft.revision,
         draft_validation_state=draft.validation.state,
         changes=tuple(changes),
+        affected_dependencies=tuple(sorted(affected_dependencies, key=dependency_order)),
+        blocking_dependencies=tuple(sorted(blocking_dependencies, key=dependency_order)),
     )

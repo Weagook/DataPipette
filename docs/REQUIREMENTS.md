@@ -94,6 +94,8 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **VIS-006:** A dashboard may contain charts from multiple datasets but shall not perform cross-dataset joins or calculations.
 - **VIS-007:** A chart failure shall not prevent unrelated dashboard charts from rendering.
 - **VIS-008:** Dashboard viewers may read aggregated chart results without receiving detailed dataset access.
+- **VIS-009:** A chart definition shall reference stable published dataset field identifiers, use optimistic revision control, remain private to its owner and administrators by default, and never expand the owner's current dataset permissions.
+- **VIS-010:** Direct chart queries shall validate saved dimensions, measures, typed filters, sorting, and aggregate/type compatibility against the active published contract, execute only against the active snapshot, and return bounded deterministic results with snapshot freshness metadata.
 
 ### Auditing
 

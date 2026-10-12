@@ -85,7 +85,7 @@ Validation is synchronous and supports version-1 single-relation and version-2 m
 
 The Query Safety Advisor recursively summarizes that non-executing plan and combines it with bounded visible catalog metadata for the authorized source relations. Stable findings explain high estimated result rows/cost, join count, large sequential scans and sorts, absent visible indexes, and stale planner statistics. Installation thresholds may warn or block; blocked drafts cannot proceed to preview or refresh. The advisor stores evidence rather than the raw plan, treats estimates as uncertain, and never runs `EXPLAIN ANALYZE` or source DDL.
 
-Immutable published/superseded versions are available through bounded owner-authorized history APIs. Revision-bound impact analysis is metadata-only: it compares stable field UUIDs and validated result contracts against the active published version, classifies compatible/breaking changes, records redacted counts, and never re-executes source SQL. Dependency collections deliberately remain empty until charts provide real references.
+Immutable published/superseded versions are available through bounded owner-authorized history APIs. Revision-bound impact analysis is metadata-only: it compares stable field UUIDs and validated result contracts against the active published version, classifies compatible/breaking changes, records redacted counts, and never re-executes source SQL. Normalized chart field dependencies now populate affected and blocking references for real saved charts.
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under an encoded-byte budget. It persists only a redacted audit event and never creates a snapshot.
 
@@ -99,11 +99,11 @@ Source query execution, bounded streaming, local candidate creation, verified lo
 
 ### Query
 
-Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local and S3-backed snapshots. S3 objects are materialized into unique ephemeral files and verified against persisted size and SHA-256 before DuckDB reads them. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. An authorized exploration descriptor projects ordered saved display settings and type-compatible filter/sort capabilities from the active immutable version; row responses reuse that display contract and freshness projection. Chart query compilation, aggregation, direct or ranged S3 reads, distributed concurrency controls, and production benchmarks remain future work.
+Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local and S3-backed snapshots. S3 objects are materialized into unique ephemeral files and verified against persisted size and SHA-256 before DuckDB reads them. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. An authorized exploration descriptor projects ordered saved display settings and type-compatible filter/sort capabilities from the active immutable version; row responses reuse that display contract and freshness projection. Saved chart specifications now compile validated grouping, aggregation, typed filters, sorting, deterministic tie-breakers, and limits into parameterized DuckDB SQL under the same local resource bounds. Direct or ranged S3 reads, distributed concurrency controls, time buckets, and production benchmarks remain future work.
 
 ### Visualization
 
-Chart specifications, type validation, dashboard layouts, chart dependency tracking, and invalid-state reporting.
+Private versioned chart specifications, aggregate/type validation, bounded snapshot execution, and normalized dataset-field dependency tracking are implemented. Dashboard layouts, shared chart ACLs, time buckets, and durable invalid-state reporting remain future work.
 
 ### Export
 

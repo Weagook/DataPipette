@@ -139,6 +139,20 @@ class PreparedSnapshotQuery:
     sorts: tuple[SnapshotQuerySort, ...]
 
 
+def prepare_snapshot_filters(
+    context: ActiveSnapshotQueryContext,
+    filters: tuple[SnapshotQueryFilter, ...],
+) -> tuple[SnapshotQueryFilter, ...]:
+    """Resolve field identifiers and normalize typed filter values."""
+
+    if len(filters) > MAX_QUERY_FILTERS:
+        raise InvalidSnapshotQueryError("Query contains too many filters")
+    fields_by_id = {field.field_id: field for field in context.fields}
+    if any(item.field_id not in fields_by_id for item in filters):
+        raise InvalidSnapshotQueryError("Query references an unknown field")
+    return tuple(_normalize_filter(item, fields_by_id[item.field_id]) for item in filters)
+
+
 def prepare_snapshot_query(
     context: ActiveSnapshotQueryContext,
     value: SnapshotQuery,
@@ -168,11 +182,11 @@ def prepare_snapshot_query(
                 raise InvalidSnapshotQueryError("Query references an unknown field")
     except KeyError as exc:
         raise InvalidSnapshotQueryError("Query references an unknown field") from exc
-    filters = tuple(_normalize_filter(item, fields_by_id[item.field_id]) for item in value.filters)
+    filters = prepare_snapshot_filters(context, value.filters)
     return PreparedSnapshotQuery(selected_fields, filters, value.sorts)
 
 
-def _type_family(data_type: str) -> str:
+def snapshot_type_family(data_type: str) -> str:
     normalized = " ".join(data_type.lower().split())
     if normalized == "boolean":
         return "boolean"
@@ -215,7 +229,7 @@ def supported_filter_operators(
     """Return the stable No-Code filter vocabulary accepted for one field."""
 
     try:
-        family = _type_family(field.data_type)
+        family = snapshot_type_family(field.data_type)
     except InvalidSnapshotQueryError:
         return ()
     null_operators = (
@@ -255,7 +269,7 @@ def _parse_datetime(value: str) -> datetime:
 
 
 def _normalize_value(field: SnapshotQueryField, value: Any) -> Any:
-    family = _type_family(field.data_type)
+    family = snapshot_type_family(field.data_type)
     try:
         if family == "boolean":
             if not isinstance(value, bool):

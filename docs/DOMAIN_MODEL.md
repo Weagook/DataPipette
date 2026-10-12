@@ -131,6 +131,10 @@ The implemented exploration descriptor exposes the active published field order,
 
 A persistent analytical query and visualization over one dataset snapshot. It stores dimensions, measures, typed filters, groupings, sorting, limits, chart type, and presentation options.
 
+A chart is implemented as a private owner-bound, schema-versioned definition over one dataset. Stable dataset field UUIDs identify its dimension, measures, and filters; stable measure UUIDs identify aggregate result columns. Updates replace the complete definition under an opaque revision ETag. Direct execution re-checks `view_rows`, resolves the current active published snapshot, and runs a bounded aggregate DuckDB query over Parquet without touching source PostgreSQL.
+
+The first implemented definition supports `bar`, `line`, `pie`, `donut`, and `kpi`, zero or one dimension, and `COUNT`, `COUNT DISTINCT`, `SUM`, `AVG`, `MIN`, and `MAX`. A normalized dependency row is stored for every referenced field so dataset schema impact can identify and block breaking changes. Chart deletion is not implemented until archival and dashboard-reference behavior is accepted.
+
 A chart becomes `invalid` rather than being deleted when a forced dataset change breaks its column dependencies.
 
 ### Dashboard

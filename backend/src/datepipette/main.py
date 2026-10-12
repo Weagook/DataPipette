@@ -23,6 +23,7 @@ from datepipette.application.access_control import (
 )
 from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.catalog import CatalogService
+from datepipette.application.charts import ChartService
 from datepipette.application.connection_access import (
     ConnectionAccessAuthorizer,
     ConnectionGrantService,
@@ -44,6 +45,7 @@ from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.dataset_preview import PsycopgSourceDatasetPreviewer
 from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
+from datepipette.infrastructure.duckdb_chart_queries import DuckDbChartQueryExecutor
 from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbSnapshotQueryExecutor
 from datepipette.infrastructure.export_dispatch import CeleryExportDispatcher
 from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
@@ -56,6 +58,7 @@ from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
 from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datepipette.infrastructure.repositories.charts import SqlAlchemyChartStore
 from datepipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
@@ -94,6 +97,7 @@ def create_app(
     group_service: GroupService | None = None,
     dataset_grant_service: DatasetGrantService | None = None,
     connection_grant_service: ConnectionGrantService | None = None,
+    chart_service: ChartService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -135,6 +139,8 @@ def create_app(
                 app.state.dataset_grant_service = dataset_grant_service
             if connection_grant_service is not None:
                 app.state.connection_grant_service = connection_grant_service
+            if chart_service is not None:
+                app.state.chart_service = chart_service
             yield
             return
 
@@ -254,8 +260,9 @@ def create_app(
             access_store,
             access_authorizer,
         )
+        snapshot_query_store = SqlAlchemySnapshotQueryStore(resources.session_factory)
         app.state.snapshot_query_service = snapshot_query_service or DatasetSnapshotQueryService(
-            SqlAlchemySnapshotQueryStore(resources.session_factory),
+            snapshot_query_store,
             DuckDbSnapshotQueryExecutor(
                 object_storages,
                 resolved_settings.snapshot_storage_path,
@@ -270,6 +277,21 @@ def create_app(
             ),
             resolved_settings.snapshot_query_max_response_bytes,
             access_authorizer,
+        )
+        app.state.chart_service = chart_service or ChartService(
+            SqlAlchemyChartStore(resources.session_factory),
+            snapshot_query_store,
+            DuckDbChartQueryExecutor(
+                object_storages,
+                resolved_settings.snapshot_storage_path,
+                timeout_seconds=resolved_settings.snapshot_query_timeout_seconds,
+                memory_limit_mb=resolved_settings.snapshot_query_memory_limit_mb,
+                threads=resolved_settings.snapshot_query_threads,
+                temporary_directory_limit_mb=resolved_settings.snapshot_query_temp_limit_mb,
+                maximum_concurrent_queries=resolved_settings.snapshot_query_concurrency,
+            ),
+            access_authorizer,
+            resolved_settings.snapshot_query_max_response_bytes,
         )
         export_store = SqlAlchemyExportStore(resources.session_factory)
         app.state.export_service = export_service or DatasetExportService(

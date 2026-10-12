@@ -15,7 +15,11 @@ from datepipette.application.datasets import (
     DatasetRevisionConflictError,
 )
 from datepipette.domain.audit import AuditActorType, AuditOutcome
-from datepipette.domain.dataset_impact import DatasetSchemaImpact
+from datepipette.domain.dataset_impact import (
+    DatasetDependencyReference,
+    DatasetSchemaImpact,
+    DependencyResourceType,
+)
 from datepipette.domain.datasets import (
     Dataset,
     DatasetDraft,
@@ -26,6 +30,7 @@ from datepipette.domain.datasets import (
 )
 from datepipette.infrastructure.models import (
     AuditEventModel,
+    ChartFieldDependencyModel,
     DatasetModel,
     DatasetVersionModel,
     PostgresConnectionModel,
@@ -270,6 +275,28 @@ class SqlAlchemyDatasetStore:
                 )
             )
         return _to_version(model) if model is not None else None
+
+    async def list_chart_dependencies(
+        self, dataset_id: UUID
+    ) -> dict[UUID, tuple[DatasetDependencyReference, ...]]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        ChartFieldDependencyModel.field_id,
+                        ChartFieldDependencyModel.chart_id,
+                    ).where(ChartFieldDependencyModel.dataset_id == dataset_id)
+                )
+            ).all()
+        grouped: dict[UUID, list[DatasetDependencyReference]] = {}
+        for field_id, chart_id in rows:
+            grouped.setdefault(field_id, []).append(
+                DatasetDependencyReference(DependencyResourceType.CHART, chart_id)
+            )
+        return {
+            field_id: tuple(sorted(items, key=lambda item: str(item.resource_id)))
+            for field_id, items in grouped.items()
+        }
 
     async def rename(
         self,
