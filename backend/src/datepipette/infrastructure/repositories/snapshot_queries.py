@@ -65,6 +65,8 @@ def query_fields_from_models(
                 data_type=field.data_type,
                 nullable=field.nullable,
                 visible=display_by_id[field.field_id].visible,
+                label=display_by_id[field.field_id].label,
+                display_format=display_by_id[field.field_id].format,
             )
             for field in validation.result_schema
         )

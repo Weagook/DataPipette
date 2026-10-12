@@ -1,6 +1,7 @@
 """Typed snapshot query service, cursor, and local DuckDB adapter tests."""
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from pathlib import Path
@@ -20,8 +21,10 @@ from datepipette.application.snapshot_queries import (
     DatasetSnapshotUnavailableError,
     InvalidSnapshotCursorError,
     InvalidSnapshotQueryError,
+    supported_filter_operators,
 )
 from datepipette.domain.access_control import DatasetAccess, DatasetPermission
+from datepipette.domain.datasets import FieldDisplayFormat
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
@@ -55,11 +58,22 @@ JSON_ID = uuid4()
 BINARY_ID = uuid4()
 
 FIELDS = (
-    SnapshotQueryField(BOOL_ID, "active", "p_bool", "boolean", False, True),
-    SnapshotQueryField(INT_ID, "record_id", "p_int", "bigint", False, True),
-    SnapshotQueryField(NUMBER_ID, "amount", "p_number", "numeric(12,2)", True, True),
-    SnapshotQueryField(TEXT_ID, "label", "p_text", "text", True, True),
-    SnapshotQueryField(DATE_ID, "day", "p_date", "date", True, True),
+    SnapshotQueryField(BOOL_ID, "active", "p_bool", "boolean", False, True, "Active", None),
+    SnapshotQueryField(INT_ID, "record_id", "p_int", "bigint", False, True, "ID", None),
+    SnapshotQueryField(
+        NUMBER_ID, "amount", "p_number", "numeric(12,2)", True, True, "Amount", None
+    ),
+    SnapshotQueryField(TEXT_ID, "label", "p_text", "text", True, True, "Label", None),
+    SnapshotQueryField(
+        DATE_ID,
+        "day",
+        "p_date",
+        "date",
+        True,
+        True,
+        "Day",
+        FieldDisplayFormat.DATE_DD_MM_YYYY,
+    ),
     SnapshotQueryField(
         DATETIME_ID,
         "occurred_at",
@@ -67,10 +81,14 @@ FIELDS = (
         "timestamp with time zone",
         True,
         True,
+        "Occurred at",
+        None,
     ),
-    SnapshotQueryField(TIME_ID, "clock", "p_time", "time without time zone", True, True),
-    SnapshotQueryField(JSON_ID, "payload", "p_json", "jsonb", True, True),
-    SnapshotQueryField(BINARY_ID, "raw", "p_binary", "bytea", True, True),
+    SnapshotQueryField(
+        TIME_ID, "clock", "p_time", "time without time zone", True, True, "Clock", None
+    ),
+    SnapshotQueryField(JSON_ID, "payload", "p_json", "jsonb", True, True, "Payload", None),
+    SnapshotQueryField(BINARY_ID, "raw", "p_binary", "bytea", True, False, "Raw", None),
 )
 
 
@@ -177,6 +195,59 @@ def _query(**changes: Any) -> SnapshotQuery:
     }
     values.update(changes)
     return SnapshotQuery(**values)
+
+
+def test_exploration_returns_published_display_and_filter_capabilities() -> None:
+    service, _, _ = _service()
+
+    result = asyncio.run(service.exploration(actor=_admin(), dataset_id=DATASET_ID))
+
+    assert result.snapshot_id == SNAPSHOT_ID
+    assert result.default_field_ids == tuple(field.field_id for field in FIELDS if field.visible)
+    date_column = next(column for column in result.columns if column.field_id == DATE_ID)
+    assert date_column.label == "Day"
+    assert date_column.display_format is FieldDisplayFormat.DATE_DD_MM_YYYY
+    assert date_column.filter_operators == supported_filter_operators(FIELDS[4])
+    assert SnapshotFilterOperator.BETWEEN in date_column.filter_operators
+    binary_column = next(column for column in result.columns if column.field_id == BINARY_ID)
+    assert binary_column.visible is False
+    assert binary_column.filter_operators == (
+        SnapshotFilterOperator.IS_NULL,
+        SnapshotFilterOperator.IS_NOT_NULL,
+    )
+    unsupported = SnapshotQueryField(
+        uuid4(), "tags", "p_tags", "integer[]", True, True, "Tags", None
+    )
+    assert supported_filter_operators(unsupported) == ()
+    with pytest.raises(DatasetSnapshotNotFoundError):
+        asyncio.run(
+            service.exploration(
+                actor=_admin(SystemRole.VIEWER),
+                dataset_id=DATASET_ID,
+            )
+        )
+
+
+def test_exploration_default_projection_respects_query_field_limit() -> None:
+    fields = tuple(
+        SnapshotQueryField(
+            uuid4(),
+            f"field_{index}",
+            f"p_{index}",
+            "text",
+            True,
+            True,
+            f"Field {index}",
+            None,
+        )
+        for index in range(101)
+    )
+    service, _, _ = _service(FakeStore(replace(_context(), fields=fields)))
+
+    result = asyncio.run(service.exploration(actor=_admin(), dataset_id=DATASET_ID))
+
+    assert len(result.columns) == 101
+    assert result.default_field_ids == tuple(field.field_id for field in fields[:100])
 
 
 def test_service_normalizes_typed_filters_and_round_trips_cursor() -> None:

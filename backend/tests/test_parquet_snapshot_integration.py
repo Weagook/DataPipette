@@ -213,8 +213,8 @@ def _definition(*, include_tags: bool = False) -> dict[str, Any]:
                 "name": output,
                 "display": {
                     "label": output.replace("_", " ").title(),
-                    "format": None,
-                    "visible": True,
+                    "format": ("datetime_dd_mm_yyyy_hh_mm" if output == "occurred_at" else None),
+                    "visible": output != "raw",
                 },
             }
             for source, output in columns
@@ -369,6 +369,7 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
                 _connection(client),
             )
             freshness_url = f"/api/v1/datasets/{dataset_id}/freshness"
+            exploration_url = f"/api/v1/datasets/{dataset_id}/exploration"
             unpublished_freshness = client.get(freshness_url)
             assert unpublished_freshness.status_code == 200
             assert unpublished_freshness.json() == {
@@ -391,6 +392,12 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             )
             assert unpublished.status_code == 409
             assert unpublished.json()["code"] == "dataset_snapshot_not_published"
+            unpublished_exploration = client.get(exploration_url)
+            assert unpublished_exploration.status_code == 409
+            assert unpublished_exploration.json()["code"] == "dataset_snapshot_not_published"
+            missing_exploration = client.get(f"/api/v1/datasets/{uuid4()}/exploration")
+            assert missing_exploration.status_code == 404
+            assert missing_exploration.json()["code"] == "dataset_not_found"
             refresh_url = f"/api/v1/datasets/{dataset_id}/refresh-runs"
             requested = client.post(
                 refresh_url,
@@ -427,6 +434,27 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert draft.json()["definition"] == {"kind": "visual", **original_definition}
             assert draft.json()["validation"]["state"] == "valid"
 
+            exploration = client.get(exploration_url)
+            assert exploration.status_code == 200, exploration.text
+            exploration_payload = exploration.json()
+            assert exploration_payload["dataset_id"] == str(dataset_id)
+            assert exploration_payload["snapshot_id"] == str(first_snapshot_id)
+            assert exploration_payload["snapshot_row_count"] == 2
+            exploration_columns = {field["name"]: field for field in exploration_payload["columns"]}
+            assert exploration_columns["record_id"]["label"] == "Record Id"
+            assert "between" in exploration_columns["record_id"]["filter_operators"]
+            assert "contains" in exploration_columns["label"]["filter_operators"]
+            assert exploration_columns["occurred_at"]["display_format"] == (
+                "datetime_dd_mm_yyyy_hh_mm"
+            )
+            assert exploration_columns["raw"]["visible"] is False
+            assert exploration_columns["raw"]["filter_operators"] == [
+                "is_null",
+                "is_not_null",
+            ]
+            field_ids = {field["name"]: field["id"] for field in original_definition["fields"]}
+            assert field_ids["raw"] not in exploration_payload["default_field_ids"]
+
             first_snapshot = asyncio.run(_snapshot(first_snapshot_id))
             first_path = tmp_path / first_snapshot.object_key
             assert first_path.is_file()
@@ -457,7 +485,6 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert table[by_name["amount"]].to_pylist() == [Decimal("12.30"), None]
             assert table[by_name["payload"]].to_pylist() == ['{"tier":"gold"}', None]
 
-            field_ids = {field["name"]: field["id"] for field in original_definition["fields"]}
             query_url = f"/api/v1/datasets/{dataset_id}/rows:query"
             first_page = client.post(
                 query_url,
@@ -470,6 +497,26 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert first_page.status_code == 200, first_page.text
             assert first_page.json()["data"]["rows"] == [
                 {"record_id": 2, "label": "Beta private value"}
+            ]
+            assert first_page.json()["data"]["columns"] == [
+                {
+                    "field_id": field_ids["record_id"],
+                    "name": "record_id",
+                    "data_type": "bigint",
+                    "nullable": False,
+                    "label": "Record Id",
+                    "visible": True,
+                    "display_format": None,
+                },
+                {
+                    "field_id": field_ids["label"],
+                    "name": "label",
+                    "data_type": "text",
+                    "nullable": False,
+                    "label": "Label",
+                    "visible": True,
+                    "display_format": None,
+                },
             ]
             first_snapshot_cursor = first_page.json()["meta"]["next_cursor"]
             assert first_snapshot_cursor
@@ -508,6 +555,10 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert first_after.state == "superseded"
             assert second_after.state == "active"
             assert second_after.row_count == 3
+            refreshed_exploration = client.get(exploration_url)
+            assert refreshed_exploration.status_code == 200
+            assert refreshed_exploration.json()["snapshot_id"] == str(second_snapshot_id)
+            assert refreshed_exploration.json()["snapshot_row_count"] == 3
 
             active_cursor = None
             paged_ids: list[int] = []

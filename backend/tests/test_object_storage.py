@@ -376,7 +376,16 @@ def test_minio_snapshot_query_export_and_private_download(tmp_path: Path) -> Non
         checksum_sha256=snapshot_checksum,
         content_type="application/vnd.apache.parquet",
     )
-    field = SnapshotQueryField(field_id, "record_id", storage_name, "bigint", False, True)
+    field = SnapshotQueryField(
+        field_id,
+        "record_id",
+        storage_name,
+        "bigint",
+        False,
+        True,
+        "Record ID",
+        None,
+    )
     context = ActiveSnapshotQueryContext(
         dataset_id,
         snapshot_id,
