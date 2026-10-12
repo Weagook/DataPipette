@@ -27,6 +27,15 @@ class ChartType(StrEnum):
     KPI = "kpi"
 
 
+class ChartTimeBucket(StrEnum):
+    HOUR = "hour"
+    DAY = "day"
+    WEEK = "week"
+    MONTH = "month"
+    QUARTER = "quarter"
+    YEAR = "year"
+
+
 class ChartAggregation(StrEnum):
     COUNT = "count"
     COUNT_DISTINCT = "count_distinct"
@@ -49,6 +58,7 @@ class ChartResultColumnRole(StrEnum):
 @dataclass(frozen=True, slots=True)
 class ChartDimension:
     field_id: UUID
+    time_bucket: ChartTimeBucket | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,11 +92,15 @@ class ChartDefinition:
     filters: tuple[SnapshotQueryFilter, ...] = ()
     sorts: tuple[ChartSort, ...] = ()
     limit: int = 100
-    schema_version: int = 1
+    schema_version: int = 2
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1:
+        if self.schema_version not in {1, 2}:
             raise ValueError("Unsupported chart definition schema version")
+        if self.schema_version == 1 and any(
+            item.time_bucket is not None for item in self.dimensions
+        ):
+            raise ValueError("Chart definition schema version 1 does not support time buckets")
         expected_dimensions = 0 if self.chart_type is ChartType.KPI else 1
         if len(self.dimensions) != expected_dimensions:
             raise ValueError(
@@ -127,7 +141,17 @@ class ChartDefinition:
         return {
             "schema_version": self.schema_version,
             "chart_type": self.chart_type.value,
-            "dimensions": [{"field_id": str(item.field_id)} for item in self.dimensions],
+            "dimensions": [
+                {
+                    "field_id": str(item.field_id),
+                    **(
+                        {"time_bucket": item.time_bucket.value}
+                        if item.time_bucket is not None
+                        else {}
+                    ),
+                }
+                for item in self.dimensions
+            ],
             "measures": [
                 {
                     "id": str(item.id),
@@ -166,7 +190,15 @@ class ChartDefinition:
                 schema_version=document["schema_version"],
                 chart_type=ChartType(document["chart_type"]),
                 dimensions=tuple(
-                    ChartDimension(UUID(item["field_id"])) for item in document["dimensions"]
+                    ChartDimension(
+                        UUID(item["field_id"]),
+                        (
+                            ChartTimeBucket(item["time_bucket"])
+                            if item.get("time_bucket") is not None
+                            else None
+                        ),
+                    )
+                    for item in document["dimensions"]
                 ),
                 measures=tuple(
                     ChartMeasure(
@@ -220,6 +252,8 @@ class ChartResultColumn:
     measure_id: UUID | None
     label: str
     data_type: str
+    time_bucket: ChartTimeBucket | None = None
+    timezone: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

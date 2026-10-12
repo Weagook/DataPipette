@@ -64,8 +64,8 @@ Outcome: analysts can inspect and extract governed detailed data.
 Outcome: analysts create and share the first useful dashboard.
 
 - [x] Chart query specification, aggregate/type validation, private persistence, and bounded snapshot execution
-- Bar, line, pie/donut, and KPI charts
-- Aggregates and timezone-aware time buckets
+- [x] Bar, line, pie/donut, and KPI chart query contracts
+- [x] Aggregates and timezone-aware time buckets
 - Drag-and-resize dashboard layout
 - Multi-dataset dashboards with independent failure states
 - Dashboard viewer access without detailed dataset access

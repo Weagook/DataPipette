@@ -5,6 +5,7 @@ import json
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import duckdb
 
@@ -20,6 +21,7 @@ from datepipette.domain.charts import (
     ChartResultColumn,
     ChartResultColumnRole,
     ChartSortTargetType,
+    ChartTimeBucket,
 )
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
 from datepipette.infrastructure.duckdb_snapshot_queries import (
@@ -44,6 +46,28 @@ def _dimension_key(field: SnapshotQueryField) -> str:
 
 def _measure_key(measure_id: Any) -> str:
     return f"measure_{measure_id.hex}"
+
+
+def _sql_string(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _is_timestamp_with_timezone(field: SnapshotQueryField) -> bool:
+    data_type = field.data_type.lower()
+    return data_type.startswith("timestamp") and " with time zone" in data_type
+
+
+def _dimension_expression(
+    field: SnapshotQueryField,
+    bucket: ChartTimeBucket | None,
+    installation_timezone: str,
+) -> str:
+    column = _column(field)
+    if bucket is None:
+        return column
+    if _is_timestamp_with_timezone(field):
+        column = f"timezone({_sql_string(installation_timezone)}, {column})"
+    return f"date_trunc({_sql_string(bucket.value)}, {column})"
 
 
 def _measure_expression(aggregation: ChartAggregation, field: SnapshotQueryField) -> str:
@@ -72,6 +96,7 @@ def _measure_data_type(aggregation: ChartAggregation, field: SnapshotQueryField)
 def _compile_query(
     context: ActiveSnapshotQueryContext,
     prepared: PreparedChartQuery,
+    installation_timezone: str,
 ) -> tuple[str, list[Any], tuple[ChartResultColumn, ...], tuple[SnapshotQueryField, ...]]:
     definition = prepared.definition
     fields = {field.field_id: field for field in context.fields}
@@ -80,9 +105,17 @@ def _compile_query(
     response_fields: list[SnapshotQueryField] = []
     result_aliases: dict[tuple[ChartSortTargetType, Any], str] = {}
 
-    for field in prepared.dimension_fields:
+    for dimension, field in zip(
+        definition.dimensions,
+        prepared.dimension_fields,
+        strict=True,
+    ):
         key = _dimension_key(field)
-        projections.append(f"{_column(field)} AS {quote_identifier(key)}")
+        expression = _dimension_expression(field, dimension.time_bucket, installation_timezone)
+        data_type = (
+            "timestamp without time zone" if dimension.time_bucket is not None else field.data_type
+        )
+        projections.append(f"{expression} AS {quote_identifier(key)}")
         result_columns.append(
             ChartResultColumn(
                 key=key,
@@ -90,10 +123,28 @@ def _compile_query(
                 field_id=field.field_id,
                 measure_id=None,
                 label=field.label,
-                data_type=field.data_type,
+                data_type=data_type,
+                time_bucket=dimension.time_bucket,
+                timezone=(
+                    installation_timezone
+                    if dimension.time_bucket is not None
+                    and field.data_type.lower().startswith("timestamp")
+                    else None
+                ),
             )
         )
-        response_fields.append(field)
+        response_fields.append(
+            SnapshotQueryField(
+                field_id=field.field_id,
+                name=key,
+                storage_name=key,
+                data_type=data_type,
+                nullable=field.nullable,
+                visible=True,
+                label=field.label,
+                display_format=field.display_format,
+            )
+        )
         result_aliases[(ChartSortTargetType.DIMENSION, field.field_id)] = key
 
     for measure, field in zip(definition.measures, prepared.measure_fields, strict=True):
@@ -127,7 +178,7 @@ def _compile_query(
         result_aliases[(ChartSortTargetType.MEASURE, measure.id)] = key
 
     clauses, parameters = compile_snapshot_filters(definition.filters, fields)
-    groups = [_column(field) for field in prepared.dimension_fields]
+    groups = [quote_identifier(_dimension_key(field)) for field in prepared.dimension_fields]
     order = [
         f"{quote_identifier(result_aliases[(item.target_type, item.target_id)])} "
         f"{item.direction.value.upper()} NULLS LAST"
@@ -166,6 +217,7 @@ class DuckDbChartQueryExecutor:
         threads: int,
         temporary_directory_limit_mb: int,
         maximum_concurrent_queries: int,
+        installation_timezone: str = "UTC",
     ) -> None:
         self._storages = storages
         self._work_root = work_root.resolve()
@@ -173,6 +225,7 @@ class DuckDbChartQueryExecutor:
         self._memory_limit_mb = memory_limit_mb
         self._threads = threads
         self._temporary_directory_limit_mb = temporary_directory_limit_mb
+        self._installation_timezone = ZoneInfo(installation_timezone).key
         self._semaphore = asyncio.Semaphore(maximum_concurrent_queries)
 
     async def query(
@@ -202,7 +255,11 @@ class DuckDbChartQueryExecutor:
         prepared: PreparedChartQuery,
         maximum_bytes: int,
     ) -> ChartQueryExecution:
-        statement, parameters, columns, response_fields = _compile_query(context, prepared)
+        statement, parameters, columns, response_fields = _compile_query(
+            context,
+            prepared,
+            self._installation_timezone,
+        )
         try:
             materialized = self._storages.require(context.storage_backend).materialize(
                 context.object_key,
@@ -305,6 +362,7 @@ class DuckDbLocalChartQueryExecutor(DuckDbChartQueryExecutor):
         threads: int,
         temporary_directory_limit_mb: int,
         maximum_concurrent_queries: int,
+        installation_timezone: str = "UTC",
     ) -> None:
         local = LocalObjectStorage(storage_root)
         super().__init__(
@@ -315,4 +373,5 @@ class DuckDbLocalChartQueryExecutor(DuckDbChartQueryExecutor):
             threads=threads,
             temporary_directory_limit_mb=temporary_directory_limit_mb,
             maximum_concurrent_queries=maximum_concurrent_queries,
+            installation_timezone=installation_timezone,
         )

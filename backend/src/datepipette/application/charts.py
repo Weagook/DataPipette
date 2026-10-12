@@ -25,6 +25,7 @@ from datepipette.domain.charts import (
     ChartQueryExecution,
     ChartQueryResult,
     ChartSortTargetType,
+    ChartTimeBucket,
 )
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
@@ -214,7 +215,7 @@ def prepare_chart_query(
         measure_fields = tuple(fields[item.field_id] for item in definition.measures)
     except KeyError as exc:
         raise InvalidChartDefinitionError("Chart references an unknown dataset field") from exc
-    for field in dimensions:
+    for dimension, field in zip(definition.dimensions, dimensions, strict=True):
         try:
             family = snapshot_type_family(field.data_type)
         except InvalidSnapshotQueryError as exc:
@@ -223,6 +224,12 @@ def prepare_chart_query(
             ) from exc
         if family in {"binary", "json"}:
             raise InvalidChartDefinitionError("Binary and JSON fields cannot be chart dimensions")
+        if dimension.time_bucket is not None and family not in {"date", "datetime"}:
+            raise InvalidChartDefinitionError(
+                "Chart time buckets require a date or timestamp dimension"
+            )
+        if dimension.time_bucket is ChartTimeBucket.HOUR and family == "date":
+            raise InvalidChartDefinitionError("Hourly chart buckets require a timestamp dimension")
     for measure, field in zip(definition.measures, measure_fields, strict=True):
         if not _supports_aggregation(field, measure.aggregation):
             raise InvalidChartDefinitionError(

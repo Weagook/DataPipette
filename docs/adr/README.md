@@ -56,3 +56,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0026](0026-bounded-query-safety-advisor.md): Bounded PostgreSQL Query Safety Advisor
 - [ADR-0027](0027-published-dataset-exploration-contract.md): Published dataset exploration contract
 - [ADR-0028](0028-private-chart-query-foundation.md): Private chart specifications and snapshot aggregate queries
+- [ADR-0029](0029-timezone-aware-chart-time-buckets.md): Timezone-aware chart time buckets

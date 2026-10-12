@@ -289,6 +289,7 @@ def create_app(
                 threads=resolved_settings.snapshot_query_threads,
                 temporary_directory_limit_mb=resolved_settings.snapshot_query_temp_limit_mb,
                 maximum_concurrent_queries=resolved_settings.snapshot_query_concurrency,
+                installation_timezone=resolved_settings.installation_timezone,
             ),
             access_authorizer,
             resolved_settings.snapshot_query_max_response_bytes,

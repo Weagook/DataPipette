@@ -69,6 +69,7 @@ def chart_settings(tmp_path: Path) -> Settings:
     return Settings(
         environment="test",
         docs_enabled=False,
+        installation_timezone="Asia/Almaty",
         snapshot_storage_path=tmp_path / "snapshots",
         metadata_database_url=SecretStr(database_url),
     )
@@ -81,7 +82,7 @@ def clean_state(chart_settings: Settings) -> Generator[None, None, None]:
     asyncio.run(_reset(chart_settings))
 
 
-async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID]:
+async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID, UUID]:
     engine = create_database_engine(settings)
     session_factory = create_session_factory(engine)
     try:
@@ -100,6 +101,7 @@ async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID]
         snapshot_id = uuid4()
         region_id = uuid4()
         amount_id = uuid4()
+        occurred_at_id = uuid4()
         relation_id = uuid4()
         definition = {
             "kind": "visual",
@@ -127,6 +129,12 @@ async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID]
                     "name": "amount",
                     "display": {"label": "Amount", "format": "number_decimal_2", "visible": True},
                 },
+                {
+                    "id": str(occurred_at_id),
+                    "source": {"relation_id": str(relation_id), "column": "occurred_at"},
+                    "name": "occurred_at",
+                    "display": {"label": "Occurred at", "format": None, "visible": True},
+                },
             ],
             "joins": [],
         }
@@ -148,6 +156,12 @@ async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID]
                     "data_type": "numeric(12,2)",
                     "nullable": False,
                 },
+                {
+                    "field_id": str(occurred_at_id),
+                    "name": "occurred_at",
+                    "data_type": "timestamp with time zone",
+                    "nullable": False,
+                },
             ],
             "plan": None,
             "findings": [],
@@ -161,11 +175,17 @@ async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID]
                 {
                     "region": ["North", "South", "North"],
                     "amount": [Decimal("10.00"), Decimal("25.00"), Decimal("15.00")],
+                    "occurred_at": [
+                        datetime(2026, 1, 31, 20, 30, tzinfo=UTC),
+                        datetime(2026, 2, 1, 0, 30, tzinfo=UTC),
+                        datetime(2026, 2, 1, 20, 30, tzinfo=UTC),
+                    ],
                 },
                 schema=pa.schema(
                     [
                         pa.field("region", pa.string(), nullable=False),
                         pa.field("amount", pa.decimal128(12, 2), nullable=False),
+                        pa.field("occurred_at", pa.timestamp("us", tz="UTC"), nullable=False),
                     ]
                 ),
             ),
@@ -275,6 +295,7 @@ async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID]
                         "fields": [
                             {"name": "region", "storage_name": "region"},
                             {"name": "amount", "storage_name": "amount"},
+                            {"name": "occurred_at", "storage_name": "occurred_at"},
                         ]
                     },
                     created_at=now,
@@ -287,7 +308,7 @@ async def _seed_published_dataset(settings: Settings) -> tuple[UUID, UUID, UUID]
             await session.flush()
             dataset.active_version_id = version_id
             dataset.active_snapshot_id = snapshot_id
-        return dataset_id, region_id, amount_id
+        return dataset_id, region_id, amount_id, occurred_at_id
     finally:
         await engine.dispose()
 
@@ -307,7 +328,9 @@ def _csrf(client: TestClient) -> dict[str, str]:
 def test_chart_api_persists_updates_queries_and_registers_dependencies(
     chart_settings: Settings,
 ) -> None:
-    dataset_id, region_id, amount_id = asyncio.run(_seed_published_dataset(chart_settings))
+    dataset_id, region_id, amount_id, occurred_at_id = asyncio.run(
+        _seed_published_dataset(chart_settings)
+    )
     measure_id = uuid4()
     payload: dict[str, Any] = {
         "name": "Revenue by region",
@@ -379,6 +402,49 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
         assert [row[columns[1]["key"]] for row in rows] == ["25.00", "25.00"]
         assert queried.json()["meta"]["snapshot_id"]
 
+        bucket_measure_id = uuid4()
+        bucket_payload = {
+            "name": "Daily revenue",
+            "dataset_id": str(dataset_id),
+            "definition": {
+                "schema_version": 2,
+                "chart_type": "line",
+                "dimensions": [{"field_id": str(occurred_at_id), "time_bucket": "day"}],
+                "measures": [
+                    {
+                        "id": str(bucket_measure_id),
+                        "field_id": str(amount_id),
+                        "aggregation": "sum",
+                        "label": "Revenue",
+                    }
+                ],
+                "filters": [],
+                "sorts": [],
+                "limit": 10,
+            },
+        }
+        bucket_created = client.post(
+            "/api/v1/charts",
+            json=bucket_payload,
+            headers=_csrf(client),
+        )
+        assert bucket_created.status_code == 201, bucket_created.text
+        bucket_chart_id = bucket_created.json()["id"]
+        bucket_query = client.post(f"/api/v1/charts/{bucket_chart_id}/data:query")
+        assert bucket_query.status_code == 200, bucket_query.text
+        bucket_columns = bucket_query.json()["data"]["columns"]
+        bucket_rows = bucket_query.json()["data"]["rows"]
+        assert bucket_columns[0]["time_bucket"] == "day"
+        assert bucket_columns[0]["timezone"] == "Asia/Almaty"
+        assert [row[bucket_columns[0]["key"]] for row in bucket_rows] == [
+            "2026-02-01T00:00:00",
+            "2026-02-02T00:00:00",
+        ]
+        assert [row[bucket_columns[1]["key"]] for row in bucket_rows] == [
+            "35.00",
+            "15.00",
+        ]
+
         update_payload = {"name": "Revenue", "definition": payload["definition"]}
         missing_revision = client.put(
             f"/api/v1/charts/{chart_id}",
@@ -412,7 +478,10 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
         assert stale.status_code == 412
         listing = client.get("/api/v1/charts")
         assert listing.status_code == 200
-        assert [item["id"] for item in listing.json()["data"]] == [chart_id]
+        assert [item["id"] for item in listing.json()["data"]] == [
+            chart_id,
+            bucket_chart_id,
+        ]
 
         invalid_cursor = client.get("/api/v1/charts", params={"cursor": "bad!"})
         assert invalid_cursor.status_code == 400
