@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from datepipette.domain.access_control import GrantPrincipalType
 from datepipette.domain.charts import ChartQueryResult
-from datepipette.domain.dashboards import Dashboard, DashboardDefinition
+from datepipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardGrant
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 
 
@@ -24,6 +25,14 @@ class DashboardRevisionConflictError(Exception):
 
 
 class DashboardItemNotFoundError(Exception):
+    pass
+
+
+class DashboardGrantNotFoundError(Exception):
+    pass
+
+
+class DashboardGrantPrincipalNotFoundError(Exception):
     pass
 
 
@@ -64,6 +73,15 @@ class SavedChartQueryService(Protocol):
         request_id: str,
     ) -> ChartQueryResult: ...
 
+    async def query_dashboard_item(
+        self,
+        *,
+        actor: User,
+        chart_id: UUID,
+        dashboard_owner_id: UUID,
+        request_id: str,
+    ) -> ChartQueryResult: ...
+
 
 class DashboardStore(Protocol):
     async def create(
@@ -80,13 +98,40 @@ class DashboardStore(Protocol):
     async def list(
         self,
         *,
-        owner_id: UUID | None,
+        actor_id: UUID,
+        include_all: bool,
         after_created_at: datetime | None,
         after_id: UUID | None,
         limit: int,
     ) -> tuple[Dashboard, ...]: ...
 
     async def get(self, dashboard_id: UUID) -> Dashboard | None: ...
+
+    async def has_view_access(self, *, dashboard_id: UUID, actor_id: UUID) -> bool: ...
+
+    async def list_grants(self, dashboard_id: UUID) -> tuple[DashboardGrant, ...] | None: ...
+
+    async def create_grant(
+        self,
+        *,
+        grant_id: UUID,
+        dashboard_id: UUID,
+        principal_type: GrantPrincipalType,
+        principal_id: UUID,
+        actor_id: UUID,
+        occurred_at: datetime,
+        request_id: str,
+    ) -> DashboardGrant | None: ...
+
+    async def revoke_grant(
+        self,
+        *,
+        dashboard_id: UUID,
+        grant_id: UUID,
+        actor_id: UUID,
+        occurred_at: datetime,
+        request_id: str,
+    ) -> bool | None: ...
 
     async def resolve_chart_owners(self, chart_ids: frozenset[UUID]) -> dict[UUID, UUID]: ...
 
@@ -132,14 +177,12 @@ def _decode_cursor(value: str | None) -> tuple[datetime | None, UUID | None]:
         raise InvalidDashboardCursorError from exc
 
 
-def _require_owner(actor: User, dashboard: Dashboard) -> None:
+def _can_manage(actor: User, dashboard: Dashboard) -> bool:
     if actor.status is not AccountStatus.ACTIVE:
-        raise DashboardNotFoundError
+        return False
     if actor.role is SystemRole.ADMIN:
-        return
-    if actor.role is SystemRole.ANALYST and dashboard.owner_id == actor.id:
-        return
-    raise DashboardNotFoundError
+        return True
+    return actor.role is SystemRole.ANALYST and dashboard.owner_id == actor.id
 
 
 class DashboardService:
@@ -181,11 +224,12 @@ class DashboardService:
         cursor: str | None,
         limit: int,
     ) -> DashboardPage:
-        if actor.status is not AccountStatus.ACTIVE or actor.role is SystemRole.VIEWER:
+        if actor.status is not AccountStatus.ACTIVE:
             return DashboardPage((), None)
         after_created_at, after_id = _decode_cursor(cursor)
         items = await self._store.list(
-            owner_id=None if actor.role is SystemRole.ADMIN else actor.id,
+            actor_id=actor.id,
+            include_all=actor.role is SystemRole.ADMIN,
             after_created_at=after_created_at,
             after_id=after_id,
             limit=limit + 1,
@@ -197,10 +241,21 @@ class DashboardService:
         )
 
     async def get(self, *, actor: User, dashboard_id: UUID) -> Dashboard:
+        if actor.status is not AccountStatus.ACTIVE:
+            raise DashboardNotFoundError
         dashboard = await self._store.get(dashboard_id)
         if dashboard is None:
             raise DashboardNotFoundError
-        _require_owner(actor, dashboard)
+        if not _can_manage(actor, dashboard) and not await self._store.has_view_access(
+            dashboard_id=dashboard.id, actor_id=actor.id
+        ):
+            raise DashboardNotFoundError
+        return dashboard
+
+    async def _get_managed(self, *, actor: User, dashboard_id: UUID) -> Dashboard:
+        dashboard = await self._store.get(dashboard_id)
+        if dashboard is None or not _can_manage(actor, dashboard):
+            raise DashboardNotFoundError
         return dashboard
 
     async def update(
@@ -213,7 +268,7 @@ class DashboardService:
         definition: DashboardDefinition,
         request_id: str,
     ) -> Dashboard:
-        current = await self.get(actor=actor, dashboard_id=dashboard_id)
+        current = await self._get_managed(actor=actor, dashboard_id=dashboard_id)
         await self._validate_references(owner_id=current.owner_id, definition=definition)
         updated = await self._store.update(
             dashboard_id=dashboard_id,
@@ -240,17 +295,76 @@ class DashboardService:
         item = next((value for value in dashboard.definition.items if value.id == item_id), None)
         if item is None:
             raise DashboardItemNotFoundError
-        chart_result = await self._chart_queries.query(
-            actor=actor,
-            chart_id=item.chart_id,
-            request_id=request_id,
-        )
+        if _can_manage(actor, dashboard):
+            chart_result = await self._chart_queries.query(
+                actor=actor,
+                chart_id=item.chart_id,
+                request_id=request_id,
+            )
+        else:
+            chart_result = await self._chart_queries.query_dashboard_item(
+                actor=actor,
+                chart_id=item.chart_id,
+                dashboard_owner_id=dashboard.owner_id,
+                request_id=request_id,
+            )
         return DashboardItemQueryResult(
             dashboard_id=dashboard.id,
             dashboard_revision=dashboard.revision,
             item_id=item.id,
             chart_result=chart_result,
         )
+
+    async def list_grants(self, *, actor: User, dashboard_id: UUID) -> tuple[DashboardGrant, ...]:
+        await self._get_managed(actor=actor, dashboard_id=dashboard_id)
+        grants = await self._store.list_grants(dashboard_id)
+        if grants is None:
+            raise DashboardNotFoundError
+        return grants
+
+    async def create_grant(
+        self,
+        *,
+        actor: User,
+        dashboard_id: UUID,
+        principal_type: GrantPrincipalType,
+        principal_id: UUID,
+        request_id: str,
+    ) -> DashboardGrant:
+        await self._get_managed(actor=actor, dashboard_id=dashboard_id)
+        grant = await self._store.create_grant(
+            grant_id=uuid4(),
+            dashboard_id=dashboard_id,
+            principal_type=principal_type,
+            principal_id=principal_id,
+            actor_id=actor.id,
+            occurred_at=datetime.now(UTC),
+            request_id=request_id,
+        )
+        if grant is None:
+            raise DashboardGrantPrincipalNotFoundError
+        return grant
+
+    async def revoke_grant(
+        self,
+        *,
+        actor: User,
+        dashboard_id: UUID,
+        grant_id: UUID,
+        request_id: str,
+    ) -> None:
+        await self._get_managed(actor=actor, dashboard_id=dashboard_id)
+        result = await self._store.revoke_grant(
+            dashboard_id=dashboard_id,
+            grant_id=grant_id,
+            actor_id=actor.id,
+            occurred_at=datetime.now(UTC),
+            request_id=request_id,
+        )
+        if result is None:
+            raise DashboardNotFoundError
+        if not result:
+            raise DashboardGrantNotFoundError
 
     async def _validate_references(
         self,

@@ -45,6 +45,8 @@ from datepipette.main import create_app
 
 ADMIN_EMAIL = "dashboard-admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
+VIEWER_EMAIL = "dashboard-viewer@example.com"
+VIEWER_PASSWORD = "viewer password for dashboard tests"
 
 
 class StubChartQueryService:
@@ -61,6 +63,12 @@ class StubChartQueryService:
         self.unavailable_error: Exception = ChartDatasetNotAvailableError()
 
     async def query(self, **values: Any) -> ChartQueryResult:
+        return await self._result(values)
+
+    async def query_dashboard_item(self, **values: Any) -> ChartQueryResult:
+        return await self._result(values)
+
+    async def _result(self, values: dict[str, Any]) -> ChartQueryResult:
         chart_id = cast(UUID, values["chart_id"])
         self.calls.append(chart_id)
         if chart_id == self.unavailable_chart_id:
@@ -111,10 +119,11 @@ async def _reset(settings: Settings) -> None:
         async with engine.begin() as connection:
             await connection.execute(
                 text(
-                    "TRUNCATE dashboard_chart_dependencies, dashboards, "
+                    "TRUNCATE dashboard_acl_grants, dashboard_chart_dependencies, dashboards, "
                     "chart_field_dependencies, charts, dataset_snapshots, "
                     "dataset_refresh_requests, dataset_refresh_runs, dataset_versions, datasets, "
-                    "postgresql_connections, browser_sessions, audit_events, users "
+                    "postgresql_connections, group_memberships, identity_groups, "
+                    "browser_sessions, audit_events, users "
                     "RESTART IDENTITY CASCADE"
                 )
             )
@@ -298,6 +307,109 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
         assert created.status_code == 201, created.text
         dashboard_id = cast(str, created.json()["id"])
         assert created.headers["etag"] == '"dashboard-1"'
+
+        viewer_created = client.post(
+            "/api/v1/users",
+            json={
+                "email": VIEWER_EMAIL,
+                "display_name": "Dashboard Viewer",
+                "password": VIEWER_PASSWORD,
+                "role": "viewer",
+            },
+            headers=_csrf(client),
+        )
+        assert viewer_created.status_code == 201, viewer_created.text
+        viewer_id = viewer_created.json()["id"]
+        direct_grant = client.post(
+            f"/api/v1/dashboards/{dashboard_id}/grants",
+            json={"principal_type": "user", "principal_id": viewer_id},
+            headers=_csrf(client),
+        )
+        assert direct_grant.status_code == 201, direct_grant.text
+        grant_id = direct_grant.json()["id"]
+        duplicate_grant = client.post(
+            f"/api/v1/dashboards/{dashboard_id}/grants",
+            json={"principal_type": "user", "principal_id": viewer_id},
+            headers=_csrf(client),
+        )
+        assert duplicate_grant.status_code == 201
+        assert duplicate_grant.json()["id"] == grant_id
+        missing_principal = client.post(
+            f"/api/v1/dashboards/{dashboard_id}/grants",
+            json={"principal_type": "user", "principal_id": str(uuid4())},
+            headers=_csrf(client),
+        )
+        assert missing_principal.status_code == 404
+        assert missing_principal.json()["code"] == "dashboard_grant_principal_not_found"
+        missing_grant = client.delete(
+            f"/api/v1/dashboards/{dashboard_id}/grants/{uuid4()}", headers=_csrf(client)
+        )
+        assert missing_grant.status_code == 404
+        assert missing_grant.json()["code"] == "dashboard_grant_not_found"
+        assert client.get(f"/api/v1/dashboards/{dashboard_id}/grants").json()["data"] == [
+            direct_grant.json()
+        ]
+
+        with TestClient(
+            create_app(
+                dashboard_settings,
+                chart_service=cast(ChartService, chart_queries),
+            )
+        ) as viewer_client:
+            login = viewer_client.post(
+                "/api/v1/auth/sessions",
+                json={"email": VIEWER_EMAIL, "password": VIEWER_PASSWORD},
+            )
+            assert login.status_code == 201, login.text
+            shared_list = viewer_client.get("/api/v1/dashboards")
+            assert [item["id"] for item in shared_list.json()["data"]] == [dashboard_id]
+            assert viewer_client.get(f"/api/v1/dashboards/{dashboard_id}").status_code == 200
+            assert viewer_client.get(f"/api/v1/dashboards/{dashboard_id}/grants").status_code == 404
+            shared_item = viewer_client.post(
+                f"/api/v1/dashboards/{dashboard_id}/items/{item_one_id}/data:query"
+            )
+            assert shared_item.status_code == 200, shared_item.text
+            forbidden_edit = viewer_client.put(
+                f"/api/v1/dashboards/{dashboard_id}",
+                json=payload,
+                headers={**_csrf(viewer_client), "If-Match": created.headers["etag"]},
+            )
+            assert forbidden_edit.status_code == 404
+
+            revoked = client.delete(
+                f"/api/v1/dashboards/{dashboard_id}/grants/{grant_id}",
+                headers=_csrf(client),
+            )
+            assert revoked.status_code == 204
+            assert viewer_client.get(f"/api/v1/dashboards/{dashboard_id}").status_code == 404
+
+            group = client.post(
+                "/api/v1/groups",
+                json={"name": "Leadership"},
+                headers=_csrf(client),
+            )
+            assert group.status_code == 201, group.text
+            group_id = group.json()["id"]
+            assert (
+                client.put(
+                    f"/api/v1/groups/{group_id}/members/{viewer_id}", headers=_csrf(client)
+                ).status_code
+                == 200
+            )
+            group_grant = client.post(
+                f"/api/v1/dashboards/{dashboard_id}/grants",
+                json={"principal_type": "group", "principal_id": group_id},
+                headers=_csrf(client),
+            )
+            assert group_grant.status_code == 201, group_grant.text
+            assert viewer_client.get(f"/api/v1/dashboards/{dashboard_id}").status_code == 200
+            assert (
+                client.delete(
+                    f"/api/v1/groups/{group_id}/members/{viewer_id}", headers=_csrf(client)
+                ).status_code
+                == 204
+            )
+            assert viewer_client.get(f"/api/v1/dashboards/{dashboard_id}").status_code == 404
 
         read = client.get(f"/api/v1/dashboards/{dashboard_id}")
         assert read.status_code == 200
@@ -484,7 +596,12 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
                 )
             assert {item.chart_id for item in dependencies} == {chart_one_id, chart_two_id}
             assert dataset_ids == {dataset_one_id, dataset_two_id}
-            assert actions == {"dashboard.created", "dashboard.updated"}
+            assert actions == {
+                "dashboard.created",
+                "dashboard.updated",
+                "dashboard.grant_created",
+                "dashboard.grant_revoked",
+            }
         finally:
             await engine.dispose()
 

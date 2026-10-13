@@ -17,6 +17,7 @@ from datepipette.application.dashboards import (
     InvalidDashboardCursorError,
     InvalidDashboardDefinitionError,
 )
+from datepipette.domain.access_control import GrantPrincipalType
 from datepipette.domain.charts import ChartQueryResult
 from datepipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardItem
 from datepipette.domain.identity import AccountStatus, SystemRole, User
@@ -56,6 +57,8 @@ class FakeDashboardStore:
         self.chart_owners = chart_owners
         self.dashboard: Dashboard | None = None
         self.audits: list[dict[str, Any]] = []
+        self.grants: dict[UUID, Any] = {}
+        self.shared_with: set[UUID] = set()
 
     async def create(self, **values: Any) -> Dashboard:
         value = values["value"]
@@ -73,13 +76,47 @@ class FakeDashboardStore:
     async def list(self, **values: Any) -> tuple[Dashboard, ...]:
         if self.dashboard is None:
             return ()
-        owner_id = values["owner_id"]
-        return (self.dashboard,) if owner_id is None or owner_id == self.dashboard.owner_id else ()
+        actor_id = values["actor_id"]
+        return (
+            (self.dashboard,)
+            if values["include_all"]
+            or actor_id == self.dashboard.owner_id
+            or actor_id in self.shared_with
+            else ()
+        )
 
     async def get(self, dashboard_id: UUID) -> Dashboard | None:
         if self.dashboard is None or self.dashboard.id != dashboard_id:
             return None
         return self.dashboard
+
+    async def has_view_access(self, **values: Any) -> bool:
+        return values["actor_id"] in self.shared_with
+
+    async def list_grants(self, dashboard_id: UUID) -> tuple[Any, ...] | None:
+        return tuple(self.grants.values()) if self.dashboard is not None else None
+
+    async def create_grant(self, **values: Any) -> Any:
+        from datepipette.domain.dashboards import DashboardGrant
+
+        grant = DashboardGrant(
+            values["grant_id"],
+            values["dashboard_id"],
+            values["principal_type"],
+            values["principal_id"],
+            values["actor_id"],
+            values["occurred_at"],
+        )
+        self.grants[grant.id] = grant
+        self.shared_with.add(grant.principal_id)
+        return grant
+
+    async def revoke_grant(self, **values: Any) -> bool | None:
+        grant = self.grants.pop(values["grant_id"], None)
+        if grant is None:
+            return False
+        self.shared_with.discard(grant.principal_id)
+        return True
 
     async def resolve_chart_owners(self, chart_ids: frozenset[UUID]) -> dict[UUID, UUID]:
         return {
@@ -110,6 +147,12 @@ class FakeChartQueries:
         self.calls: list[dict[str, Any]] = []
 
     async def query(self, **values: Any) -> ChartQueryResult:
+        return await self._result(values)
+
+    async def query_dashboard_item(self, **values: Any) -> ChartQueryResult:
+        return await self._result(values)
+
+    async def _result(self, values: dict[str, Any]) -> ChartQueryResult:
         self.calls.append(values)
         return ChartQueryResult(
             chart_id=values["chart_id"],
@@ -172,6 +215,7 @@ def test_dashboard_service_crud_and_reference_ownership() -> None:
         assert item_result.chart_result.chart_id == CHART_ONE
         assert item_result.dashboard_revision == 1
         assert chart_queries.calls[-1]["chart_id"] == CHART_ONE
+        assert "dashboard_owner_id" not in chart_queries.calls[-1]
         with pytest.raises(DashboardItemNotFoundError):
             await service.query_item(
                 actor=actor,
@@ -228,7 +272,8 @@ def test_dashboard_service_conceals_resources_and_rejects_bad_cursor() -> None:
     actor = _user()
     other = _user()
     store = FakeDashboardStore({CHART_ONE: actor.id, CHART_TWO: actor.id})
-    service = DashboardService(store, FakeChartQueries())
+    chart_queries = FakeChartQueries()
+    service = DashboardService(store, chart_queries)
 
     async def exercise() -> None:
         dashboard = await service.create(
@@ -242,6 +287,39 @@ def test_dashboard_service_conceals_resources_and_rejects_bad_cursor() -> None:
             await service.get(actor=other, dashboard_id=dashboard.id)
         viewer = replace(other, role=SystemRole.VIEWER)
         assert (await service.list(actor=viewer, cursor=None, limit=10)).dashboards == ()
+        grant = await service.create_grant(
+            actor=actor,
+            dashboard_id=dashboard.id,
+            principal_type=GrantPrincipalType.USER,
+            principal_id=viewer.id,
+            request_id="req-grant",
+        )
+        assert await service.get(actor=viewer, dashboard_id=dashboard.id) == dashboard
+        assert (await service.list(actor=viewer, cursor=None, limit=10)).dashboards == (dashboard,)
+        await service.query_item(
+            actor=viewer,
+            dashboard_id=dashboard.id,
+            item_id=dashboard.definition.items[0].id,
+            request_id="req-shared-query",
+        )
+        assert chart_queries.calls[-1]["dashboard_owner_id"] == actor.id
+        with pytest.raises(DashboardNotFoundError):
+            await service.update(
+                actor=viewer,
+                dashboard_id=dashboard.id,
+                expected_revision=1,
+                name="Forbidden",
+                definition=dashboard.definition,
+                request_id="req-forbidden",
+            )
+        await service.revoke_grant(
+            actor=actor,
+            dashboard_id=dashboard.id,
+            grant_id=grant.id,
+            request_id="req-revoke",
+        )
+        with pytest.raises(DashboardNotFoundError):
+            await service.get(actor=viewer, dashboard_id=dashboard.id)
         with pytest.raises(DashboardNotFoundError):
             await service.create(
                 actor=viewer,

@@ -578,6 +578,44 @@ class DashboardChartDependencyModel(Base):
     item_id: Mapped[UUID]
 
 
+class DashboardAclGrantModel(Base):
+    __tablename__ = "dashboard_acl_grants"
+    __table_args__ = (
+        CheckConstraint("principal_type IN ('user', 'group')", name="principal_type_valid"),
+        CheckConstraint(
+            "(principal_type = 'user' AND user_id IS NOT NULL AND group_id IS NULL) OR "
+            "(principal_type = 'group' AND group_id IS NOT NULL AND user_id IS NULL)",
+            name="principal_shape_valid",
+        ),
+        Index(
+            "uq_dashboard_acl_grants_user",
+            "dashboard_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("principal_type = 'user'"),
+        ),
+        Index(
+            "uq_dashboard_acl_grants_group",
+            "dashboard_id",
+            "group_id",
+            unique=True,
+            postgresql_where=text("principal_type = 'group'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    dashboard_id: Mapped[UUID] = mapped_column(
+        ForeignKey("dashboards.id", ondelete="CASCADE"), index=True
+    )
+    principal_type: Mapped[str] = mapped_column(String(20))
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    group_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("identity_groups.id", ondelete="CASCADE")
+    )
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class GroupModel(Base):
     __tablename__ = "identity_groups"
     __table_args__ = (

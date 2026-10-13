@@ -283,16 +283,17 @@ The rationale and bounds are recorded in [ADR-0028](adr/0028-private-chart-query
 
 ## Dashboards
 
-- `POST /api/v1/dashboards` creates a private dashboard; `GET /api/v1/dashboards` uses bounded cursor pagination and returns owned dashboards to analysts or all dashboards to administrators.
+- `POST /api/v1/dashboards` creates a private dashboard; `GET /api/v1/dashboards` uses bounded cursor pagination and returns owned or explicitly shared dashboards, while administrators see all dashboards.
 - `GET /api/v1/dashboards/{dashboard_id}` returns the complete editable definition. `PUT` replaces the normalized name and complete definition and requires the current `"dashboard-N"` ETag in `If-Match`; a no-op replacement does not advance the revision.
 - Definition version 1 uses a fixed 12-column grid with stable item and chart UUIDs plus integer `x`, `y`, `width`, and `height`. Up to 50 items are allowed; identifiers and chart references must be unique, geometry must remain in bounds, and rectangles must not overlap.
 - A dashboard may reference owned charts from different datasets, but it does not query, join, or calculate across those datasets. Every reference is validated and persisted as a normalized dependency in the same transaction as the JSONB definition.
 - `POST /api/v1/dashboards/{dashboard_id}/items/{item_id}/data:query` resolves the chart only from the current saved item and executes it through the existing bounded chart-query path. Its metadata includes the dashboard ID/revision and item ID in addition to chart, dataset, snapshot, and freshness fields.
 - Clients issue one request per item so loading, cancellation, retry, and safe errors remain independent. There is no bulk fan-out response and no request field that accepts a chart ID or arbitrary definition.
-- Creation and replacement require CSRF. Dashboards and item queries are owner/administrator-only in this slice; unauthorized dashboard reads are concealed and viewers receive an empty collection.
+- `GET|POST /api/v1/dashboards/{dashboard_id}/grants` and `DELETE /api/v1/dashboards/{dashboard_id}/grants/{grant_id}` manage additive user/group view grants. Grant writes require CSRF and remain owner/administrator-only.
+- Shared active users, including `Viewer`, may read the saved layout and query only its saved aggregate items. They cannot replace the layout, manage grants, access dataset rows or exports, discover source metadata, or call direct chart resources through this permission. Unauthorized reads remain concealed as `404`.
 - Deletion and archival are intentionally absent until lifecycle behavior for referenced charts is accepted.
 
-The persistence and execution rationale is recorded in [ADR-0030](adr/0030-private-dashboard-layouts.md) and [ADR-0031](adr/0031-independent-dashboard-item-queries.md).
+The persistence and execution rationale is recorded in [ADR-0030](adr/0030-private-dashboard-layouts.md), [ADR-0031](adr/0031-independent-dashboard-item-queries.md), and [ADR-0032](adr/0032-dashboard-sharing-and-viewer-execution.md).
 
 ## Asynchronous operations
 

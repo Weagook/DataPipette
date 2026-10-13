@@ -550,6 +550,23 @@ def test_chart_service_create_update_query_and_rechecks_dataset_access() -> None
         with pytest.raises(ChartDatasetNotAvailableError):
             await service.query(actor=actor, chart_id=chart.id, request_id="req-denied")
 
+        viewer = _user(SystemRole.VIEWER)
+        shared = await service.query_dashboard_item(
+            actor=viewer,
+            chart_id=chart.id,
+            dashboard_owner_id=actor.id,
+            request_id="req-dashboard",
+        )
+        assert shared.rows == ({"ok": True},)
+        assert store.audits[-1]["actor_id"] == viewer.id
+        with pytest.raises(ChartNotFoundError):
+            await service.query_dashboard_item(
+                actor=viewer,
+                chart_id=chart.id,
+                dashboard_owner_id=uuid4(),
+                request_id="req-wrong-owner",
+            )
+
     asyncio.run(exercise())
 
 
