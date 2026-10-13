@@ -8,11 +8,26 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
+from datepipette.api.chart_query_responses import (
+    ChartQueryDataResponse,
+    ChartQueryMetaResponse,
+    chart_query_data_response,
+    chart_query_meta_response,
+)
 from datepipette.api.dependencies.authentication import CsrfSession, CurrentSession, request_id
 from datepipette.api.problems import ApiProblem, ProblemDetails
+from datepipette.application.charts import (
+    ChartDatasetNotAvailableError,
+    ChartNotFoundError,
+    ChartQueryResultTooLargeError,
+    ChartQueryTimeoutError,
+    ChartQueryUnavailableError,
+    InvalidChartDefinitionError,
+)
 from datepipette.application.dashboards import (
     DashboardAlreadyExistsError,
     DashboardCreate,
+    DashboardItemNotFoundError,
     DashboardNotFoundError,
     DashboardRevisionConflictError,
     DashboardService,
@@ -81,6 +96,17 @@ class CursorMeta(BaseModel):
 class DashboardCollectionResponse(BaseModel):
     data: list[DashboardResponse]
     meta: CursorMeta
+
+
+class DashboardItemQueryMetaResponse(ChartQueryMetaResponse):
+    dashboard_id: UUID
+    dashboard_revision: int
+    item_id: UUID
+
+
+class DashboardItemQueryResponse(BaseModel):
+    data: ChartQueryDataResponse
+    meta: DashboardItemQueryMetaResponse
 
 
 def _service(request: Request) -> DashboardService:
@@ -167,8 +193,11 @@ _COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     404: {"model": ProblemDetails},
     409: {"model": ProblemDetails},
     412: {"model": ProblemDetails},
+    413: {"model": ProblemDetails},
     422: {"model": ProblemDetails},
     428: {"model": ProblemDetails},
+    503: {"model": ProblemDetails},
+    504: {"model": ProblemDetails},
 }
 
 
@@ -281,3 +310,77 @@ async def update_dashboard(
         raise _invalid(exc) from exc
     response.headers["ETag"] = _etag(dashboard.revision)
     return _response(dashboard)
+
+
+@router.post(
+    "/{dashboard_id}/items/{item_id}/data:query",
+    response_model=DashboardItemQueryResponse,
+    responses=_COMMON_RESPONSES,
+)
+async def query_dashboard_item_data(
+    dashboard_id: UUID,
+    item_id: UUID,
+    request: Request,
+    session: CurrentSession,
+) -> DashboardItemQueryResponse:
+    try:
+        result = await _service(request).query_item(
+            actor=session.user,
+            dashboard_id=dashboard_id,
+            item_id=item_id,
+            request_id=request_id(),
+        )
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    except DashboardItemNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dashboard_item_not_found",
+            title="Dashboard item not found",
+            detail="The requested item is not present in the dashboard.",
+        ) from exc
+    except (ChartNotFoundError, ChartDatasetNotAvailableError) as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dashboard_item_unavailable",
+            title="Dashboard item unavailable",
+            detail="The saved chart or its published dataset is not available.",
+        ) from exc
+    except InvalidChartDefinitionError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dashboard_item_invalid",
+            title="Dashboard item invalid",
+            detail="The saved chart no longer matches the active published dataset.",
+        ) from exc
+    except ChartQueryResultTooLargeError as exc:
+        raise ApiProblem(
+            status_code=413,
+            code="dashboard_item_result_row_too_large",
+            title="Dashboard item result row too large",
+            detail="One chart result row exceeds the response-size limit.",
+        ) from exc
+    except ChartQueryTimeoutError as exc:
+        raise ApiProblem(
+            status_code=504,
+            code="dashboard_item_query_timeout",
+            title="Dashboard item query timed out",
+            detail="The chart query exceeded the configured execution time.",
+        ) from exc
+    except ChartQueryUnavailableError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="dashboard_item_query_unavailable",
+            title="Dashboard item query unavailable",
+            detail="The active snapshot could not be queried safely.",
+        ) from exc
+    chart_meta = chart_query_meta_response(result.chart_result)
+    return DashboardItemQueryResponse(
+        data=chart_query_data_response(result.chart_result),
+        meta=DashboardItemQueryMetaResponse(
+            dashboard_id=result.dashboard_id,
+            dashboard_revision=result.dashboard_revision,
+            item_id=result.item_id,
+            **chart_meta.model_dump(),
+        ),
+    )

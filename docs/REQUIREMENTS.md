@@ -97,6 +97,7 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **VIS-009:** A chart definition shall reference stable published dataset field identifiers, use optimistic revision control, remain private to its owner and administrators by default, and never expand the owner's current dataset permissions.
 - **VIS-010:** Direct chart queries shall validate saved dimensions, measures, typed filters, sorting, and aggregate/type compatibility against the active published contract, execute only against the active snapshot, and return bounded deterministic results with snapshot freshness metadata.
 - **VIS-011:** A dashboard shall persist a versioned, optimistically updated, bounded grid layout of unique chart references, validate that referenced charts belong to its owner, and remain private to its owner and administrators until explicit sharing is implemented.
+- **VIS-012:** Each dashboard item shall execute only its currently saved chart through an independent bounded request that returns the dashboard revision and preserves per-chart freshness and safe failure metadata.
 
 ### Auditing
 

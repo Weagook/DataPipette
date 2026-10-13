@@ -58,3 +58,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0028](0028-private-chart-query-foundation.md): Private chart specifications and snapshot aggregate queries
 - [ADR-0029](0029-timezone-aware-chart-time-buckets.md): Timezone-aware chart time buckets
 - [ADR-0030](0030-private-dashboard-layouts.md): Private versioned dashboard layouts
+- [ADR-0031](0031-independent-dashboard-item-queries.md): Independent dashboard item queries

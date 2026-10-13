@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from datepipette.domain.charts import ChartQueryResult
 from datepipette.domain.dashboards import Dashboard, DashboardDefinition
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 
@@ -19,6 +20,10 @@ class DashboardAlreadyExistsError(Exception):
 
 
 class DashboardRevisionConflictError(Exception):
+    pass
+
+
+class DashboardItemNotFoundError(Exception):
     pass
 
 
@@ -40,6 +45,24 @@ class DashboardCreate:
 class DashboardPage:
     dashboards: tuple[Dashboard, ...]
     next_cursor: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardItemQueryResult:
+    dashboard_id: UUID
+    dashboard_revision: int
+    item_id: UUID
+    chart_result: ChartQueryResult
+
+
+class SavedChartQueryService(Protocol):
+    async def query(
+        self,
+        *,
+        actor: User,
+        chart_id: UUID,
+        request_id: str,
+    ) -> ChartQueryResult: ...
 
 
 class DashboardStore(Protocol):
@@ -120,8 +143,13 @@ def _require_owner(actor: User, dashboard: Dashboard) -> None:
 
 
 class DashboardService:
-    def __init__(self, store: DashboardStore) -> None:
+    def __init__(
+        self,
+        store: DashboardStore,
+        chart_queries: SavedChartQueryService,
+    ) -> None:
         self._store = store
+        self._chart_queries = chart_queries
 
     async def create(
         self,
@@ -199,6 +227,30 @@ class DashboardService:
         if updated is None:
             raise DashboardNotFoundError
         return updated
+
+    async def query_item(
+        self,
+        *,
+        actor: User,
+        dashboard_id: UUID,
+        item_id: UUID,
+        request_id: str,
+    ) -> DashboardItemQueryResult:
+        dashboard = await self.get(actor=actor, dashboard_id=dashboard_id)
+        item = next((value for value in dashboard.definition.items if value.id == item_id), None)
+        if item is None:
+            raise DashboardItemNotFoundError
+        chart_result = await self._chart_queries.query(
+            actor=actor,
+            chart_id=item.chart_id,
+            request_id=request_id,
+        )
+        return DashboardItemQueryResult(
+            dashboard_id=dashboard.id,
+            dashboard_revision=dashboard.revision,
+            item_id=item.id,
+            chart_result=chart_result,
+        )
 
     async def _validate_references(
         self,

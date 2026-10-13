@@ -145,6 +145,8 @@ The implemented dashboard is a private owner-bound, schema-versioned document wi
 
 The JSONB definition is the authoritative editable document. Normalized chart dependency rows enforce referential integrity and make future chart lifecycle analysis possible without parsing every layout. Administrators may manage another owner's dashboard, but its items must still reference that owner's charts. Sharing, viewer execution, responsive layouts, dashboard filters, and delete/archive behavior remain separate capabilities.
 
+An implemented dashboard-item query resolves one chart solely by the stable item UUID in the current saved definition. Each item is requested independently, so unrelated charts can load, fail, retry, and be cancelled separately. The response carries the dashboard revision alongside the chart and snapshot metadata, allowing clients to reject a late result after a layout replacement. The private owner/administrator path retains the chart's ordinary dataset authorization; shared viewer execution remains deferred.
+
 ### Export job
 
 An asynchronous request to write a filtered dataset table view to CSV or XLSX. The resulting private file expires after 24 hours. Download URLs expire after five minutes and may be reissued while the file exists.

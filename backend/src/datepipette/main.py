@@ -283,7 +283,7 @@ def create_app(
             resolved_settings.snapshot_query_max_response_bytes,
             access_authorizer,
         )
-        app.state.chart_service = chart_service or ChartService(
+        resolved_chart_service = chart_service or ChartService(
             SqlAlchemyChartStore(resources.session_factory),
             snapshot_query_store,
             DuckDbChartQueryExecutor(
@@ -299,8 +299,10 @@ def create_app(
             access_authorizer,
             resolved_settings.snapshot_query_max_response_bytes,
         )
+        app.state.chart_service = resolved_chart_service
         app.state.dashboard_service = dashboard_service or DashboardService(
-            SqlAlchemyDashboardStore(resources.session_factory)
+            SqlAlchemyDashboardStore(resources.session_factory),
+            resolved_chart_service,
         )
         export_store = SqlAlchemyExportStore(resources.session_factory)
         app.state.export_service = export_service or DatasetExportService(

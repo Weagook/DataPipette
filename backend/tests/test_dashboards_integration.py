@@ -16,7 +16,21 @@ from sqlalchemy import select, text
 
 from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
+from datepipette.application.charts import (
+    ChartDatasetNotAvailableError,
+    ChartQueryResultTooLargeError,
+    ChartQueryTimeoutError,
+    ChartQueryUnavailableError,
+    ChartService,
+    InvalidChartDefinitionError,
+)
 from datepipette.config import Settings
+from datepipette.domain.charts import (
+    ChartQueryResult,
+    ChartResultColumn,
+    ChartResultColumnRole,
+)
+from datepipette.domain.snapshot_queries import SnapshotRefreshState
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
 from datepipette.infrastructure.models import (
     AuditEventModel,
@@ -31,6 +45,50 @@ from datepipette.main import create_app
 
 ADMIN_EMAIL = "dashboard-admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
+
+
+class StubChartQueryService:
+    def __init__(
+        self,
+        available_chart_id: UUID,
+        unavailable_chart_id: UUID,
+        available_dataset_id: UUID,
+    ) -> None:
+        self.available_chart_id = available_chart_id
+        self.unavailable_chart_id = unavailable_chart_id
+        self.available_dataset_id = available_dataset_id
+        self.calls: list[UUID] = []
+        self.unavailable_error: Exception = ChartDatasetNotAvailableError()
+
+    async def query(self, **values: Any) -> ChartQueryResult:
+        chart_id = cast(UUID, values["chart_id"])
+        self.calls.append(chart_id)
+        if chart_id == self.unavailable_chart_id:
+            raise self.unavailable_error
+        assert chart_id == self.available_chart_id
+        return ChartQueryResult(
+            chart_id=chart_id,
+            chart_revision=3,
+            dataset_id=self.available_dataset_id,
+            snapshot_id=uuid4(),
+            snapshot_activated_at=datetime.now(UTC),
+            refresh_state=SnapshotRefreshState.IDLE,
+            last_refresh_error=None,
+            last_refresh_error_at=None,
+            is_stale=False,
+            columns=(
+                ChartResultColumn(
+                    key="count",
+                    role=ChartResultColumnRole.MEASURE,
+                    field_id=uuid4(),
+                    measure_id=uuid4(),
+                    label="Count",
+                    data_type="bigint",
+                ),
+            ),
+            rows=({"count": 42},),
+            truncated_by_bytes=False,
+        )
 
 
 @pytest.fixture
@@ -227,8 +285,14 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
         ],
     }
     payload = {"name": "Executive overview", "definition": definition}
+    chart_queries = StubChartQueryService(chart_one_id, chart_two_id, dataset_one_id)
 
-    with TestClient(create_app(dashboard_settings)) as client:
+    with TestClient(
+        create_app(
+            dashboard_settings,
+            chart_service=cast(ChartService, chart_queries),
+        )
+    ) as client:
         _login(client)
         created = client.post("/api/v1/dashboards", json=payload, headers=_csrf(client))
         assert created.status_code == 201, created.text
@@ -238,6 +302,53 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
         read = client.get(f"/api/v1/dashboards/{dashboard_id}")
         assert read.status_code == 200
         assert read.json()["definition"] == definition
+
+        successful_item = client.post(
+            f"/api/v1/dashboards/{dashboard_id}/items/{item_one_id}/data:query"
+        )
+        assert successful_item.status_code == 200, successful_item.text
+        assert successful_item.json()["data"]["rows"] == [{"count": 42}]
+        assert successful_item.json()["meta"]["dashboard_id"] == dashboard_id
+        assert successful_item.json()["meta"]["dashboard_revision"] == 1
+        assert successful_item.json()["meta"]["item_id"] == str(item_one_id)
+        assert successful_item.json()["meta"]["chart_id"] == str(chart_one_id)
+        assert successful_item.json()["meta"]["dataset_id"] == str(dataset_one_id)
+
+        failed_item = client.post(
+            f"/api/v1/dashboards/{dashboard_id}/items/{item_two_id}/data:query"
+        )
+        assert failed_item.status_code == 404
+        assert failed_item.json()["code"] == "dashboard_item_unavailable"
+
+        failure_cases = (
+            (InvalidChartDefinitionError(), 409, "dashboard_item_invalid"),
+            (
+                ChartQueryResultTooLargeError(),
+                413,
+                "dashboard_item_result_row_too_large",
+            ),
+            (ChartQueryUnavailableError(), 503, "dashboard_item_query_unavailable"),
+            (ChartQueryTimeoutError(), 504, "dashboard_item_query_timeout"),
+        )
+        for error, expected_status, expected_code in failure_cases:
+            chart_queries.unavailable_error = error
+            item_failure = client.post(
+                f"/api/v1/dashboards/{dashboard_id}/items/{item_two_id}/data:query"
+            )
+            assert item_failure.status_code == expected_status
+            assert item_failure.json()["code"] == expected_code
+
+        successful_retry = client.post(
+            f"/api/v1/dashboards/{dashboard_id}/items/{item_one_id}/data:query"
+        )
+        assert successful_retry.status_code == 200
+        assert chart_queries.calls[0] == chart_one_id
+        assert chart_queries.calls[-1] == chart_one_id
+        assert chart_queries.calls.count(chart_two_id) == 5
+
+        missing_item = client.post(f"/api/v1/dashboards/{dashboard_id}/items/{uuid4()}/data:query")
+        assert missing_item.status_code == 404
+        assert missing_item.json()["code"] == "dashboard_item_not_found"
 
         duplicate = client.post("/api/v1/dashboards", json=payload, headers=_csrf(client))
         assert duplicate.status_code == 409

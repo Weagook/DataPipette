@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from datepipette.api.chart_query_responses import ChartQueryResponse, chart_query_response
 from datepipette.api.dependencies.authentication import CsrfSession, CurrentSession, request_id
 from datepipette.api.problems import ApiProblem, ProblemDetails
 from datepipette.application.charts import (
@@ -33,7 +34,6 @@ from datepipette.domain.charts import (
     ChartDefinition,
     ChartDimension,
     ChartMeasure,
-    ChartResultColumnRole,
     ChartSort,
     ChartSortTargetType,
     ChartTimeBucket,
@@ -42,7 +42,6 @@ from datepipette.domain.charts import (
 from datepipette.domain.snapshot_queries import (
     SnapshotFilterOperator,
     SnapshotQueryFilter,
-    SnapshotRefreshState,
     SnapshotSortDirection,
 )
 
@@ -135,40 +134,6 @@ class CursorMeta(BaseModel):
 class ChartCollectionResponse(BaseModel):
     data: list[ChartResponse]
     meta: CursorMeta
-
-
-class ChartResultColumnResponse(BaseModel):
-    key: str
-    role: ChartResultColumnRole
-    field_id: UUID
-    measure_id: UUID | None
-    label: str
-    data_type: str
-    time_bucket: ChartTimeBucket | None
-    timezone: str | None
-
-
-class ChartQueryDataResponse(BaseModel):
-    columns: list[ChartResultColumnResponse]
-    rows: list[dict[str, Any]]
-
-
-class ChartQueryMetaResponse(BaseModel):
-    chart_id: UUID
-    chart_revision: int
-    dataset_id: UUID
-    snapshot_id: UUID
-    snapshot_activated_at: datetime
-    refresh_state: SnapshotRefreshState
-    last_refresh_error: str | None
-    last_refresh_error_at: datetime | None
-    is_stale: bool
-    truncated_by_bytes: bool
-
-
-class ChartQueryResponse(BaseModel):
-    data: ChartQueryDataResponse
-    meta: ChartQueryMetaResponse
 
 
 def _service(request: Request) -> ChartService:
@@ -443,33 +408,4 @@ async def query_chart_data(
             title="Chart query unavailable",
             detail="The active snapshot could not be queried safely.",
         ) from exc
-    return ChartQueryResponse(
-        data=ChartQueryDataResponse(
-            columns=[
-                ChartResultColumnResponse(
-                    key=item.key,
-                    role=item.role,
-                    field_id=item.field_id,
-                    measure_id=item.measure_id,
-                    label=item.label,
-                    data_type=item.data_type,
-                    time_bucket=item.time_bucket,
-                    timezone=item.timezone,
-                )
-                for item in result.columns
-            ],
-            rows=list(result.rows),
-        ),
-        meta=ChartQueryMetaResponse(
-            chart_id=result.chart_id,
-            chart_revision=result.chart_revision,
-            dataset_id=result.dataset_id,
-            snapshot_id=result.snapshot_id,
-            snapshot_activated_at=result.snapshot_activated_at,
-            refresh_state=result.refresh_state,
-            last_refresh_error=result.last_refresh_error,
-            last_refresh_error_at=result.last_refresh_error_at,
-            is_stale=result.is_stale,
-            truncated_by_bytes=result.truncated_by_bytes,
-        ),
-    )
+    return chart_query_response(result)

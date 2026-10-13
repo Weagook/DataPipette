@@ -287,10 +287,12 @@ The rationale and bounds are recorded in [ADR-0028](adr/0028-private-chart-query
 - `GET /api/v1/dashboards/{dashboard_id}` returns the complete editable definition. `PUT` replaces the normalized name and complete definition and requires the current `"dashboard-N"` ETag in `If-Match`; a no-op replacement does not advance the revision.
 - Definition version 1 uses a fixed 12-column grid with stable item and chart UUIDs plus integer `x`, `y`, `width`, and `height`. Up to 50 items are allowed; identifiers and chart references must be unique, geometry must remain in bounds, and rectangles must not overlap.
 - A dashboard may reference owned charts from different datasets, but it does not query, join, or calculate across those datasets. Every reference is validated and persisted as a normalized dependency in the same transaction as the JSONB definition.
-- Creation and replacement require CSRF. Dashboards are owner/administrator-only in this slice; unauthorized reads are concealed, viewers receive an empty collection, and dashboard-context chart execution is not yet exposed.
+- `POST /api/v1/dashboards/{dashboard_id}/items/{item_id}/data:query` resolves the chart only from the current saved item and executes it through the existing bounded chart-query path. Its metadata includes the dashboard ID/revision and item ID in addition to chart, dataset, snapshot, and freshness fields.
+- Clients issue one request per item so loading, cancellation, retry, and safe errors remain independent. There is no bulk fan-out response and no request field that accepts a chart ID or arbitrary definition.
+- Creation and replacement require CSRF. Dashboards and item queries are owner/administrator-only in this slice; unauthorized dashboard reads are concealed and viewers receive an empty collection.
 - Deletion and archival are intentionally absent until lifecycle behavior for referenced charts is accepted.
 
-The persistence and authorization rationale is recorded in [ADR-0030](adr/0030-private-dashboard-layouts.md).
+The persistence and execution rationale is recorded in [ADR-0030](adr/0030-private-dashboard-layouts.md) and [ADR-0031](adr/0031-independent-dashboard-item-queries.md).
 
 ## Asynchronous operations
 

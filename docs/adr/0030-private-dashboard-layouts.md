@@ -21,7 +21,7 @@ DatePipette needs a durable backend contract for a drag-and-resize dashboard edi
 - The future frontend can persist deterministic drag-and-resize state without inventing a separate client-only document format.
 - A dashboard may safely compose charts from unrelated datasets while preserving their independent data and authorization boundaries.
 - JSONB keeps the complete editable document easy to load, while normalized dependencies let the database prevent deletion of referenced charts and support future impact analysis.
-- Shared/viewer access, dashboard-context chart execution, dashboard filters, responsive breakpoints, archival/deletion, and per-chart loading or error state are intentionally deferred.
+- Shared/viewer dashboard-context execution, dashboard filters, responsive breakpoints, archival/deletion, and persisted per-chart runtime state are intentionally deferred.
 
 ## Alternatives considered
 
