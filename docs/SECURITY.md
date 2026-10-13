@@ -80,6 +80,8 @@ Direct chart resources are private to their creator and administrators. Active a
 
 Dashboard resources are likewise private to their owner and administrators. Each write is CSRF-protected, complete replacement requires the current opaque revision ETag, and every referenced chart must exist and belong to the dashboard owner. This owner check still applies when an administrator edits the layout, preventing a dashboard from becoming an indirect bridge between private chart owners. The stored layout contains identifiers and geometry only, never chart results or business rows; successful material writes create redacted audit events.
 
+Private dashboard-item queries accept only a dashboard ID and stable item ID; the backend resolves the chart from the current saved layout and then applies the ordinary saved-chart and dataset authorization checks. Separate item requests isolate safe failures and prevent one unavailable dataset from suppressing successful sibling charts. Viewer access is still denied: a future shared-dashboard path must authorize the dashboard grant and execute only its saved aggregate charts without exposing row queries, exports, arbitrary definitions, or unrestricted schema.
+
 ## PostgreSQL source safety
 
 - Administrators should configure a dedicated read-only PostgreSQL role.

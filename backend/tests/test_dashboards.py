@@ -10,18 +10,23 @@ import pytest
 
 from datepipette.application.dashboards import (
     DashboardCreate,
+    DashboardItemNotFoundError,
     DashboardNotFoundError,
     DashboardRevisionConflictError,
     DashboardService,
     InvalidDashboardCursorError,
     InvalidDashboardDefinitionError,
 )
+from datepipette.domain.charts import ChartQueryResult
 from datepipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardItem
 from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.snapshot_queries import SnapshotRefreshState
 
 NOW = datetime(2026, 10, 12, tzinfo=UTC)
 CHART_ONE = uuid4()
 CHART_TWO = uuid4()
+DATASET_ID = uuid4()
+SNAPSHOT_ID = uuid4()
 
 
 def _user(role: SystemRole = SystemRole.ANALYST) -> User:
@@ -100,6 +105,28 @@ class FakeDashboardStore:
         return self.dashboard
 
 
+class FakeChartQueries:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def query(self, **values: Any) -> ChartQueryResult:
+        self.calls.append(values)
+        return ChartQueryResult(
+            chart_id=values["chart_id"],
+            chart_revision=1,
+            dataset_id=DATASET_ID,
+            snapshot_id=SNAPSHOT_ID,
+            snapshot_activated_at=NOW,
+            refresh_state=SnapshotRefreshState.IDLE,
+            last_refresh_error=None,
+            last_refresh_error_at=None,
+            is_stale=False,
+            columns=(),
+            rows=({"value": 1},),
+            truncated_by_bytes=False,
+        )
+
+
 def test_dashboard_definition_round_trips_and_validates_grid() -> None:
     value = _definition()
     assert DashboardDefinition.from_document(value.to_document()) == value
@@ -123,7 +150,8 @@ def test_dashboard_definition_round_trips_and_validates_grid() -> None:
 def test_dashboard_service_crud_and_reference_ownership() -> None:
     actor = _user()
     store = FakeDashboardStore({CHART_ONE: actor.id, CHART_TWO: actor.id})
-    service = DashboardService(store)
+    chart_queries = FakeChartQueries()
+    service = DashboardService(store, chart_queries)
 
     async def exercise() -> None:
         dashboard = await service.create(
@@ -134,6 +162,23 @@ def test_dashboard_service_crud_and_reference_ownership() -> None:
         assert dashboard.name == "Sales overview"
         assert (await service.list(actor=actor, cursor=None, limit=10)).dashboards == (dashboard,)
         assert await service.get(actor=actor, dashboard_id=dashboard.id) == dashboard
+
+        item_result = await service.query_item(
+            actor=actor,
+            dashboard_id=dashboard.id,
+            item_id=dashboard.definition.items[0].id,
+            request_id="req-query",
+        )
+        assert item_result.chart_result.chart_id == CHART_ONE
+        assert item_result.dashboard_revision == 1
+        assert chart_queries.calls[-1]["chart_id"] == CHART_ONE
+        with pytest.raises(DashboardItemNotFoundError):
+            await service.query_item(
+                actor=actor,
+                dashboard_id=dashboard.id,
+                item_id=uuid4(),
+                request_id="req-missing-item",
+            )
 
         page = await service.list(actor=actor, cursor=None, limit=1)
         assert page.next_cursor is None
@@ -183,7 +228,7 @@ def test_dashboard_service_conceals_resources_and_rejects_bad_cursor() -> None:
     actor = _user()
     other = _user()
     store = FakeDashboardStore({CHART_ONE: actor.id, CHART_TWO: actor.id})
-    service = DashboardService(store)
+    service = DashboardService(store, FakeChartQueries())
 
     async def exercise() -> None:
         dashboard = await service.create(

@@ -67,7 +67,7 @@ Outcome: analysts create and share the first useful dashboard.
 - [x] Bar, line, pie/donut, and KPI chart query contracts
 - [x] Aggregates and timezone-aware time buckets
 - [x] Private versioned drag-and-resize dashboard layout contract
-- Multi-dataset dashboards with independent failure states
+- [x] Multi-dataset dashboards with independent per-item loading and failure contracts
 - Dashboard viewer access without detailed dataset access
 
 ## Phase 5 — Headless integrations and production readiness
