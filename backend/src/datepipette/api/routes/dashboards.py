@@ -27,6 +27,8 @@ from datepipette.application.charts import (
 from datepipette.application.dashboards import (
     DashboardAlreadyExistsError,
     DashboardCreate,
+    DashboardGrantNotFoundError,
+    DashboardGrantPrincipalNotFoundError,
     DashboardItemNotFoundError,
     DashboardNotFoundError,
     DashboardRevisionConflictError,
@@ -34,6 +36,7 @@ from datepipette.application.dashboards import (
     InvalidDashboardCursorError,
     InvalidDashboardDefinitionError,
 )
+from datepipette.domain.access_control import GrantPrincipalType
 from datepipette.domain.dashboards import (
     DASHBOARD_GRID_COLUMNS,
     MAX_DASHBOARD_ITEM_HEIGHT,
@@ -41,6 +44,7 @@ from datepipette.domain.dashboards import (
     MAX_DASHBOARD_ROW,
     Dashboard,
     DashboardDefinition,
+    DashboardGrant,
     DashboardItem,
 )
 
@@ -109,6 +113,24 @@ class DashboardItemQueryResponse(BaseModel):
     meta: DashboardItemQueryMetaResponse
 
 
+class DashboardGrantCreateRequest(StrictModel):
+    principal_type: GrantPrincipalType
+    principal_id: UUID
+
+
+class DashboardGrantResponse(BaseModel):
+    id: UUID
+    dashboard_id: UUID
+    principal_type: GrantPrincipalType
+    principal_id: UUID
+    created_by: UUID
+    created_at: datetime
+
+
+class DashboardGrantCollectionResponse(BaseModel):
+    data: list[DashboardGrantResponse]
+
+
 def _service(request: Request) -> DashboardService:
     return cast(DashboardService, request.app.state.dashboard_service)
 
@@ -142,6 +164,17 @@ def _response(value: Dashboard) -> DashboardResponse:
         definition=DashboardDefinitionPayload.model_validate(value.definition.to_document()),
         created_at=value.created_at,
         updated_at=value.updated_at,
+    )
+
+
+def _grant_response(value: DashboardGrant) -> DashboardGrantResponse:
+    return DashboardGrantResponse(
+        id=value.id,
+        dashboard_id=value.dashboard_id,
+        principal_type=value.principal_type,
+        principal_id=value.principal_id,
+        created_by=value.created_by,
+        created_at=value.created_at,
     )
 
 
@@ -310,6 +343,85 @@ async def update_dashboard(
         raise _invalid(exc) from exc
     response.headers["ETag"] = _etag(dashboard.revision)
     return _response(dashboard)
+
+
+@router.get(
+    "/{dashboard_id}/grants",
+    response_model=DashboardGrantCollectionResponse,
+    responses=_COMMON_RESPONSES,
+)
+async def list_dashboard_grants(
+    dashboard_id: UUID,
+    request: Request,
+    session: CurrentSession,
+) -> DashboardGrantCollectionResponse:
+    try:
+        grants = await _service(request).list_grants(actor=session.user, dashboard_id=dashboard_id)
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    return DashboardGrantCollectionResponse(data=[_grant_response(value) for value in grants])
+
+
+@router.post(
+    "/{dashboard_id}/grants",
+    response_model=DashboardGrantResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=_COMMON_RESPONSES,
+)
+async def create_dashboard_grant(
+    dashboard_id: UUID,
+    payload: DashboardGrantCreateRequest,
+    request: Request,
+    session: CsrfSession,
+) -> DashboardGrantResponse:
+    try:
+        grant = await _service(request).create_grant(
+            actor=session.user,
+            dashboard_id=dashboard_id,
+            principal_type=payload.principal_type,
+            principal_id=payload.principal_id,
+            request_id=request_id(),
+        )
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    except DashboardGrantPrincipalNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dashboard_grant_principal_not_found",
+            title="Dashboard grant principal not found",
+            detail="The active user or group does not exist.",
+        ) from exc
+    return _grant_response(grant)
+
+
+@router.delete(
+    "/{dashboard_id}/grants/{grant_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_COMMON_RESPONSES,
+)
+async def revoke_dashboard_grant(
+    dashboard_id: UUID,
+    grant_id: UUID,
+    request: Request,
+    session: CsrfSession,
+) -> Response:
+    try:
+        await _service(request).revoke_grant(
+            actor=session.user,
+            dashboard_id=dashboard_id,
+            grant_id=grant_id,
+            request_id=request_id(),
+        )
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    except DashboardGrantNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dashboard_grant_not_found",
+            title="Dashboard grant not found",
+            detail="The requested dashboard grant does not exist.",
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

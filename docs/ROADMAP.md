@@ -68,7 +68,7 @@ Outcome: analysts create and share the first useful dashboard.
 - [x] Aggregates and timezone-aware time buckets
 - [x] Private versioned drag-and-resize dashboard layout contract
 - [x] Multi-dataset dashboards with independent per-item loading and failure contracts
-- Dashboard viewer access without detailed dataset access
+- [x] Dashboard viewer access without detailed dataset access
 
 ## Phase 5 — Headless integrations and production readiness
 

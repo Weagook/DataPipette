@@ -357,6 +357,37 @@ class ChartService:
     ) -> ChartQueryResult:
         chart = await self.get(actor=actor, chart_id=chart_id)
         context = await self._authorized_context(actor=actor, dataset_id=chart.dataset_id)
+        return await self._execute(actor=actor, chart=chart, context=context, request_id=request_id)
+
+    async def query_dashboard_item(
+        self,
+        *,
+        actor: User,
+        chart_id: UUID,
+        dashboard_owner_id: UUID,
+        request_id: str,
+    ) -> ChartQueryResult:
+        if actor.status is not AccountStatus.ACTIVE:
+            raise ChartNotFoundError
+        chart = await self._store.get(chart_id)
+        if chart is None or chart.owner_id != dashboard_owner_id:
+            raise ChartNotFoundError
+        try:
+            context = await self._snapshot_store.get_active_context(chart.dataset_id)
+        except (DatasetSnapshotNotPublishedError, DatasetSnapshotUnavailableError) as exc:
+            raise ChartDatasetNotAvailableError from exc
+        if context is None:
+            raise ChartDatasetNotAvailableError
+        return await self._execute(actor=actor, chart=chart, context=context, request_id=request_id)
+
+    async def _execute(
+        self,
+        *,
+        actor: User,
+        chart: Chart,
+        context: ActiveSnapshotQueryContext,
+        request_id: str,
+    ) -> ChartQueryResult:
         prepared = prepare_chart_query(context, chart.definition)
         try:
             execution = await self._executor.query(

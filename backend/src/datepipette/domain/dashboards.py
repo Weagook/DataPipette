@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from datepipette.domain.access_control import GrantPrincipalType
+
 MAX_DASHBOARD_ITEMS = 50
 DASHBOARD_GRID_COLUMNS = 12
 MAX_DASHBOARD_ROW = 10_000
@@ -121,3 +123,13 @@ class Dashboard:
     definition: DashboardDefinition
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardGrant:
+    id: UUID
+    dashboard_id: UUID
+    principal_type: GrantPrincipalType
+    principal_id: UUID
+    created_by: UUID
+    created_at: datetime
