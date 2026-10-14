@@ -81,6 +81,16 @@ The durable rationale and consequences are recorded in [ADR-0005](adr/0005-serve
 
 The token lifecycle and authorization rationale is recorded in [ADR-0033](adr/0033-service-account-api-tokens.md).
 
+## Audit events
+
+- `GET /api/v1/audit-events` requires an active administrator browser session. Service tokens and non-administrator sessions cannot read the installation-wide governance history.
+- Results use newest-first opaque cursor pagination ordered by `(occurred_at DESC, id DESC)`. Page size defaults to 50 and is capped at 100.
+- Exact filters are composable for actor type and ID, action, outcome, resource type and ID, and request ID. Inclusive `occurred_from` and `occurred_to` filters require timezone-aware RFC 3339 values.
+- Responses contain stable identifiers and the redacted structured metadata already stored by event producers. They never reconstruct credentials, API-token plaintext, connection secrets, raw exceptions, SQL parameters, or business rows.
+- Reading the log does not itself create an audit event, which avoids recursive read noise. Existing audit events remain append-only and have no public mutation endpoint.
+
+The read boundary and pagination decision is recorded in [ADR-0035](adr/0035-administrator-audit-event-api.md).
+
 ## Local user administration
 
 - User-management endpoints require an active administrator session.

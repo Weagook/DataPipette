@@ -88,7 +88,7 @@ class AuditEventModel(Base):
     __tablename__ = "audit_events"
     __table_args__ = (
         CheckConstraint(
-            "actor_type IN ('user', 'anonymous', 'system')",
+            "actor_type IN ('user', 'service_account', 'anonymous', 'system')",
             name="actor_type_valid",
         ),
         CheckConstraint(

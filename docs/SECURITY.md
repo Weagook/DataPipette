@@ -155,6 +155,8 @@ Dashboard-item queries accept only a dashboard ID and stable item ID; the backen
 
 Audit events are stored separately from application logs in an append-only application table. The application exposes no mutation API for existing events. Events redact secrets and business payloads. This is not proof against a metadata-database administrator; external WORM or SIEM export is a future hardening option.
 
+Only active administrator browser sessions may query the installation-wide event history through `GET /api/v1/audit-events`; bearer service tokens and other roles are rejected. The API bounds each page, uses an opaque newest-first cursor, and permits only typed exact metadata filters plus a timezone-aware occurrence window. It returns producer-controlled redacted details and never expands them from credentials, request bodies, business rows, raw exceptions, or source SQL parameters. Audit reads are intentionally not audited because doing so would recursively create more events; application request IDs still correlate the read in operational logs.
+
 ## Network and deployment
 
 - Production endpoints require TLS at the ingress or application boundary.

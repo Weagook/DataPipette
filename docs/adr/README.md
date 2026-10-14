@@ -62,3 +62,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0032](0032-dashboard-sharing-and-viewer-execution.md): Dashboard sharing and constrained viewer execution
 - [ADR-0033](0033-service-account-api-tokens.md): Service accounts and scoped opaque API tokens
 - [ADR-0034](0034-generated-typescript-api-client.md): Generated TypeScript API client
+- [ADR-0035](0035-administrator-audit-event-api.md): Administrator audit-event read API
