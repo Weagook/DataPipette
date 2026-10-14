@@ -4,7 +4,7 @@
 
 DatePipette is an API-first, snapshot-based business intelligence platform for PostgreSQL. It is designed to work both as a standalone analytics application and as a headless BI backend embedded into other products.
 
-> **Project status:** pre-alpha. The backend implements local identity, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, explainable query-safety validation, version history and schema impact, preview, cancellable manual and scheduled Parquet refresh with bounded transient retries, shared S3-compatible snapshot/export storage with automatic lifecycle cleanup, published table exploration with typed snapshot queries, background exports, dataset ACLs, private aggregate charts, versioned dashboard layouts, user/group dashboard sharing, and constrained Viewer execution of saved aggregate items.
+> **Project status:** pre-alpha. The backend implements local human and service identities, scoped expiring/non-expiring API tokens, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, explainable query-safety validation, version history and schema impact, preview, cancellable manual and scheduled Parquet refresh with bounded transient retries, shared S3-compatible snapshot/export storage with automatic lifecycle cleanup, published table exploration with typed snapshot queries, background exports, dataset ACLs, private aggregate charts, versioned dashboard layouts, user/group dashboard sharing, and constrained Viewer or service-account execution of saved aggregate items.
 
 ## Why DatePipette?
 

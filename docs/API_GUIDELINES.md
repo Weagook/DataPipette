@@ -22,6 +22,10 @@ The DatePipette backend is a public product surface. The official frontend and e
 /api/v1/users
 /api/v1/users/{user_id}
 /api/v1/users/{user_id}/sessions
+/api/v1/service-accounts
+/api/v1/service-accounts/{service_account_id}
+/api/v1/service-accounts/{service_account_id}/tokens
+/api/v1/service-accounts/{service_account_id}/tokens/{token_id}
 /api/v1/groups
 /api/v1/groups/{group_id}
 /api/v1/groups/{group_id}/members
@@ -65,6 +69,17 @@ Final endpoint names must be tested for consistency before implementation. Actio
 - Invalid and unknown credentials return the same public error. Redis limits attempts by normalized account and client address.
 
 The durable rationale and consequences are recorded in [ADR-0005](adr/0005-server-side-browser-sessions.md).
+
+## Service accounts and API tokens
+
+- Administrator browser sessions create, list, read, and update service accounts at `/api/v1/service-accounts`. Mutations require CSRF. Service accounts may be `viewer` or `analyst`, never `admin`, and do not have passwords or browser sessions.
+- `POST /api/v1/service-accounts/{service_account_id}/tokens` creates an independently revocable token with a name, non-empty scope set, and optional future RFC 3339 expiry. The `dpp_...` bearer secret appears only in this response.
+- `GET /api/v1/service-accounts/{service_account_id}/tokens` returns metadata, scopes, expiry, revocation, creation, and last-use timestamps but never token plaintext or hashes. `DELETE .../{token_id}` revokes one token immediately.
+- The initial closed scope is `dashboards:read`. A bearer with that scope may call dashboard list/read and saved-item query endpoints only. Effective dashboard user/group grants and the service account's active state are still evaluated on every request.
+- A bearer token cannot manage its account, tokens, grants, layouts, users, datasets, exports, source connections, or direct charts. Unknown, malformed, expired, revoked, and disabled-account tokens return the same safe `401`; a valid token missing the route scope returns `403`.
+- Multiple live tokens support rotation. Non-expiring tokens are allowed but should be used only when an external secret-rotation process exists.
+
+The token lifecycle and authorization rationale is recorded in [ADR-0033](adr/0033-service-account-api-tokens.md).
 
 ## Local user administration
 
@@ -289,7 +304,7 @@ The rationale and bounds are recorded in [ADR-0028](adr/0028-private-chart-query
 - A dashboard may reference owned charts from different datasets, but it does not query, join, or calculate across those datasets. Every reference is validated and persisted as a normalized dependency in the same transaction as the JSONB definition.
 - `POST /api/v1/dashboards/{dashboard_id}/items/{item_id}/data:query` resolves the chart only from the current saved item and executes it through the existing bounded chart-query path. Its metadata includes the dashboard ID/revision and item ID in addition to chart, dataset, snapshot, and freshness fields.
 - Clients issue one request per item so loading, cancellation, retry, and safe errors remain independent. There is no bulk fan-out response and no request field that accepts a chart ID or arbitrary definition.
-- `GET|POST /api/v1/dashboards/{dashboard_id}/grants` and `DELETE /api/v1/dashboards/{dashboard_id}/grants/{grant_id}` manage additive user/group view grants. Grant writes require CSRF and remain owner/administrator-only.
+- `GET|POST /api/v1/dashboards/{dashboard_id}/grants` and `DELETE /api/v1/dashboards/{dashboard_id}/grants/{grant_id}` manage additive account/group view grants. The existing `user` principal type represents a direct account identifier and accepts an active human or service account; group grants also apply through current service-account membership. Grant writes require CSRF and remain owner/administrator-only.
 - Shared active users, including `Viewer`, may read the saved layout and query only its saved aggregate items. They cannot replace the layout, manage grants, access dataset rows or exports, discover source metadata, or call direct chart resources through this permission. Unauthorized reads remain concealed as `404`.
 - Deletion and archival are intentionally absent until lifecycle behavior for referenced charts is accepted.
 

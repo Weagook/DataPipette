@@ -14,7 +14,12 @@ from datepipette.api.chart_query_responses import (
     chart_query_data_response,
     chart_query_meta_response,
 )
-from datepipette.api.dependencies.authentication import CsrfSession, CurrentSession, request_id
+from datepipette.api.dependencies.authentication import (
+    CsrfSession,
+    CurrentSession,
+    DashboardReader,
+    request_id,
+)
 from datepipette.api.problems import ApiProblem, ProblemDetails
 from datepipette.application.charts import (
     ChartDatasetNotAvailableError,
@@ -271,7 +276,7 @@ async def create_dashboard(
 @router.get("", response_model=DashboardCollectionResponse, responses=_COMMON_RESPONSES)
 async def list_dashboards(
     request: Request,
-    session: CurrentSession,
+    session: DashboardReader,
     cursor: Annotated[str | None, Query(max_length=4096)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> DashboardCollectionResponse:
@@ -295,7 +300,7 @@ async def read_dashboard(
     dashboard_id: UUID,
     request: Request,
     response: Response,
-    session: CurrentSession,
+    session: DashboardReader,
 ) -> DashboardResponse:
     try:
         dashboard = await _service(request).get(actor=session.user, dashboard_id=dashboard_id)
@@ -433,7 +438,7 @@ async def query_dashboard_item_data(
     dashboard_id: UUID,
     item_id: UUID,
     request: Request,
-    session: CurrentSession,
+    session: DashboardReader,
 ) -> DashboardItemQueryResponse:
     try:
         result = await _service(request).query_item(

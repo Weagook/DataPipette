@@ -67,7 +67,7 @@ Dependencies point inward: infrastructure and API adapters may depend on applica
 
 ### Identity and access
 
-Users, groups, roles, service accounts, token lifecycle, sessions, scopes, ACL evaluation, and object ownership.
+Users, groups, roles, service accounts, opaque API-token lifecycle, browser sessions, scopes, ACL evaluation, and object ownership. The initial bearer surface is deliberately limited to `dashboards:read`; token, account, and ACL state are re-evaluated from metadata on every request.
 
 Groups, human-user memberships, additive dataset grants, and scoped connection grants are stored in metadata PostgreSQL. Protected dataset operations evaluate authoritative grants per request: administrators and owners have full dataset access, analysts receive the union of direct and group permissions, and the viewer role is denied detailed rows and source connections regardless of grants. The implemented permissions separate row browsing, export, grant management, and source authoring. Redis is not an authorization cache, so revocation applies to the next request and is re-checked by refresh workers.
 

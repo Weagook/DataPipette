@@ -8,7 +8,11 @@ A human identity with a local account. A user has one system role and may belong
 
 ### Service account
 
-A non-human identity used by one external integration. It has a role, group membership or direct grants, and one or more independently revocable API tokens.
+A non-human identity used by one external integration. It has a `viewer` or `analyst` role, active/disabled lifecycle, group membership or direct grants, and one or more independently revocable API tokens. It cannot authenticate with a password or become an administrator.
+
+### API token
+
+An opaque bearer credential owned by one service account. Its plaintext is returned exactly once; metadata stores only a SHA-256 digest plus a display name, closed scope set, optional expiry, revocation timestamp, creation metadata, and last-used timestamp. Multiple tokens support rotation. The initial `dashboards:read` scope permits only granted dashboard reads and saved aggregate-item execution and never expands the account's role or ACLs.
 
 ### Group
 

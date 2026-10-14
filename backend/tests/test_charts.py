@@ -35,7 +35,7 @@ from datepipette.domain.charts import (
     ChartTimeBucket,
     ChartType,
 )
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.identity import AccountStatus, AccountType, SystemRole, User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     SnapshotFilterOperator,
@@ -545,6 +545,16 @@ def test_chart_service_create_update_query_and_rechecks_dataset_access() -> None
         result = await service.query(actor=actor, chart_id=chart.id, request_id="req-query")
         assert result.rows == ({"ok": True},)
         assert store.audits[-1]["returned_rows"] == 1
+        assert store.audits[-1]["actor_type"] is AccountType.HUMAN
+
+        service_actor = replace(actor, account_type=AccountType.SERVICE)
+        result = await service.query(
+            actor=service_actor,
+            chart_id=chart.id,
+            request_id="req-service-query",
+        )
+        assert result.rows == ({"ok": True},)
+        assert AccountType(store.audits[-1]["actor_type"]) is AccountType.SERVICE
 
         access.allowed = False
         with pytest.raises(ChartDatasetNotAvailableError):

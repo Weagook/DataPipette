@@ -27,7 +27,7 @@ from datepipette.domain.charts import (
     ChartSortTargetType,
     ChartTimeBucket,
 )
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.identity import AccountStatus, AccountType, SystemRole, User
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
 
 
@@ -130,6 +130,7 @@ class ChartStore(Protocol):
         chart: Chart,
         context: ActiveSnapshotQueryContext,
         actor_id: UUID,
+        actor_type: AccountType,
         returned_rows: int,
         truncated_by_bytes: bool,
         error_code: str | None,
@@ -399,7 +400,7 @@ class ChartService:
             await self._record_query(
                 chart=chart,
                 context=context,
-                actor_id=actor.id,
+                actor=actor,
                 returned_rows=0,
                 truncated_by_bytes=False,
                 error_code="execution_failed",
@@ -409,7 +410,7 @@ class ChartService:
         await self._record_query(
             chart=chart,
             context=context,
-            actor_id=actor.id,
+            actor=actor,
             returned_rows=len(execution.rows),
             truncated_by_bytes=execution.truncated_by_bytes,
             error_code=None,
@@ -457,7 +458,7 @@ class ChartService:
         *,
         chart: Chart,
         context: ActiveSnapshotQueryContext,
-        actor_id: UUID,
+        actor: User,
         returned_rows: int,
         truncated_by_bytes: bool,
         error_code: str | None,
@@ -466,7 +467,8 @@ class ChartService:
         await self._store.record_query(
             chart=chart,
             context=context,
-            actor_id=actor_id,
+            actor_id=actor.id,
+            actor_type=actor.account_type,
             returned_rows=returned_rows,
             truncated_by_bytes=truncated_by_bytes,
             error_code=error_code,

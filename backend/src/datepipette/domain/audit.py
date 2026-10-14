@@ -5,6 +5,7 @@ from enum import StrEnum
 
 class AuditActorType(StrEnum):
     USER = "user"
+    SERVICE_ACCOUNT = "service_account"
     ANONYMOUS = "anonymous"
     SYSTEM = "system"
 

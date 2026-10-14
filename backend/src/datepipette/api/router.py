@@ -13,6 +13,7 @@ from datepipette.api.routes.exports import router as exports_router
 from datepipette.api.routes.health import router as health_router
 from datepipette.api.routes.refresh_runs import router as refresh_runs_router
 from datepipette.api.routes.schedules import router as schedules_router
+from datepipette.api.routes.service_accounts import router as service_accounts_router
 from datepipette.api.routes.snapshot_queries import router as snapshot_queries_router
 from datepipette.api.routes.users import router as users_router
 
@@ -28,5 +29,6 @@ api_v1_router.include_router(exports_router)
 api_v1_router.include_router(health_router)
 api_v1_router.include_router(refresh_runs_router)
 api_v1_router.include_router(schedules_router)
+api_v1_router.include_router(service_accounts_router)
 api_v1_router.include_router(snapshot_queries_router)
 api_v1_router.include_router(users_router)

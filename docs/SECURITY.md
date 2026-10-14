@@ -44,10 +44,14 @@ See [ADR-0005](adr/0005-server-side-browser-sessions.md) for the implemented bro
 ### Service accounts
 
 - Each external integration uses a distinct service account.
+- Service accounts have no password or browser session, cannot be administrators, and are disabled independently of human accounts.
+- API token plaintext is returned once, carries a `dpp_` prefix, and is stored only as a SHA-256 digest. Tokens may expire or remain non-expiring, are independently revocable, and record last successful use.
+- Bearer authentication reloads token expiry/revocation, account status/role, closed scopes, and current object/group grants on every request. The initial `dashboards:read` scope reaches only dashboard list/read and saved-item query endpoints.
+- A token scope narrows but never supplies object access. An active service account still needs an effective dashboard grant, and bearer tokens are not accepted by administration, authoring, row, export, source, refresh, grant-management, or direct-chart routes.
 - Token plaintext is shown once and only a secure hash and non-secret identifier are retained.
 - Tokens may be expiring or non-expiring, are revocable, and support overlapping rotation.
 - Token scopes may only narrow service-account permissions.
-- Logs and traces must redact authorization headers and token-like values.
+- Logs and traces must redact authorization headers and token-like values. API responses and audit events never contain token plaintext after the one-time creation response.
 
 ## Authorization
 
@@ -55,7 +59,7 @@ Authorization combines:
 
 1. principal status;
 2. system role;
-3. token scopes when applicable;
+3. token scopes when applicable (currently only `dashboards:read`);
 4. direct and group ACL grants;
 5. resource state; and
 6. request context.

@@ -10,7 +10,7 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **IAM-002:** The system shall support groups and grants to individual users or groups.
 - **IAM-003:** New datasets, charts, dashboards, and exports shall be private by default.
 - **IAM-004:** Effective grants shall be additive; explicit deny rules are outside MVP scope.
-- **IAM-005:** External systems shall authenticate as service accounts using scoped bearer tokens.
+- **IAM-005:** External systems shall authenticate as non-human service accounts using scoped bearer tokens; service accounts shall not have passwords, browser sessions, or the `Admin` role.
 - **IAM-006:** Tokens shall support optional expiration, immediate revocation, safe rotation, and last-used tracking.
 - **IAM-007:** A token scope may narrow but never expand the service account's role and ACL permissions.
 

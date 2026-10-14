@@ -10,6 +10,7 @@ from datepipette.application.authentication import SessionSecrets
 from datepipette.domain.audit import AuditActorType, AuditOutcome
 from datepipette.domain.identity import (
     AccountStatus,
+    AccountType,
     AuthenticatedSession,
     SystemRole,
     User,
@@ -28,6 +29,7 @@ def to_user(model: UserModel) -> User:
         last_login_at=model.last_login_at,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        account_type=AccountType(model.account_type),
     )
 
 
@@ -38,7 +40,10 @@ class SqlAlchemyAuthenticationStore:
     async def get_credentials(self, normalized_email: str) -> UserCredentials | None:
         async with self._session_factory() as session:
             model = await session.scalar(
-                select(UserModel).where(UserModel.email == normalized_email)
+                select(UserModel).where(
+                    UserModel.email == normalized_email,
+                    UserModel.account_type == AccountType.HUMAN.value,
+                )
             )
         if model is None:
             return None
@@ -55,7 +60,12 @@ class SqlAlchemyAuthenticationStore:
         async with self._session_factory() as session, session.begin():
             await session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
             admin_count = await session.scalar(
-                select(func.count()).select_from(UserModel).where(UserModel.role == "admin")
+                select(func.count())
+                .select_from(UserModel)
+                .where(
+                    UserModel.role == "admin",
+                    UserModel.account_type == AccountType.HUMAN.value,
+                )
             )
             if admin_count:
                 return None
@@ -70,6 +80,7 @@ class SqlAlchemyAuthenticationStore:
                 last_login_at=None,
                 created_at=occurred_at,
                 updated_at=occurred_at,
+                account_type=AccountType.HUMAN.value,
             )
             session.add(user_model)
             session.add(
@@ -163,7 +174,10 @@ class SqlAlchemyAuthenticationStore:
                 await session.execute(
                     select(BrowserSessionModel, UserModel)
                     .join(UserModel, UserModel.id == BrowserSessionModel.user_id)
-                    .where(BrowserSessionModel.token_hash == token_hash)
+                    .where(
+                        BrowserSessionModel.token_hash == token_hash,
+                        UserModel.account_type == AccountType.HUMAN.value,
+                    )
                 )
             ).one_or_none()
         if row is None:

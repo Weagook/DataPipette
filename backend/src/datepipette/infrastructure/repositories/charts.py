@@ -14,6 +14,7 @@ from datepipette.application.charts import (
 )
 from datepipette.domain.audit import AuditActorType, AuditOutcome
 from datepipette.domain.charts import Chart, ChartDefinition
+from datepipette.domain.identity import AccountType
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext
 from datepipette.infrastructure.models import (
     AuditEventModel,
@@ -185,6 +186,7 @@ class SqlAlchemyChartStore:
         chart: Chart,
         context: ActiveSnapshotQueryContext,
         actor_id: UUID,
+        actor_type: AccountType,
         returned_rows: int,
         truncated_by_bytes: bool,
         error_code: str | None,
@@ -195,6 +197,11 @@ class SqlAlchemyChartStore:
             session.add(
                 self._audit(
                     actor_id=actor_id,
+                    actor_type=(
+                        AuditActorType.SERVICE_ACCOUNT
+                        if actor_type is AccountType.SERVICE
+                        else AuditActorType.USER
+                    ),
                     action="chart.queried" if error_code is None else "chart.query_failed",
                     resource_id=chart.id,
                     occurred_at=occurred_at,
@@ -238,11 +245,12 @@ class SqlAlchemyChartStore:
         request_id: str,
         details: dict[str, object],
         outcome: AuditOutcome = AuditOutcome.SUCCESS,
+        actor_type: AuditActorType = AuditActorType.USER,
     ) -> AuditEventModel:
         return AuditEventModel(
             id=uuid4(),
             occurred_at=occurred_at,
-            actor_type=AuditActorType.USER.value,
+            actor_type=actor_type.value,
             actor_id=actor_id,
             action=action,
             outcome=outcome.value,
