@@ -38,6 +38,11 @@ class ReplaceQuerySafetyPolicyRequest(BaseModel):
     sequential_scan_rows_warning: int = Field(ge=1, le=1_000_000_000_000)
     sort_rows_warning: int = Field(ge=1, le=1_000_000_000_000)
     stale_statistics_days: int = Field(ge=1, le=3650)
+    preview_statement_timeout_seconds: int = Field(ge=1, le=60)
+    preview_max_rows: int = Field(ge=1, le=200)
+    preview_max_response_bytes: int = Field(ge=65_536, le=1_048_576)
+    refresh_statement_timeout_seconds: int = Field(ge=1, le=86_400)
+    refresh_max_rows: int = Field(ge=1, le=1_000_000_000)
 
     @model_validator(mode="after")
     def validate_threshold_order(self) -> "ReplaceQuerySafetyPolicyRequest":
@@ -61,6 +66,11 @@ class QuerySafetyPolicyResponse(BaseModel):
     sequential_scan_rows_warning: int
     sort_rows_warning: int
     stale_statistics_days: int
+    preview_statement_timeout_seconds: int
+    preview_max_rows: int
+    preview_max_response_bytes: int
+    refresh_statement_timeout_seconds: int
+    refresh_max_rows: int
     updated_at: datetime | None
     updated_by: UUID | None
 

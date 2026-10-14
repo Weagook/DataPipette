@@ -135,6 +135,11 @@ class QuerySafetyPolicyModel(Base):
     sequential_scan_rows_warning: Mapped[int] = mapped_column(BigInteger)
     sort_rows_warning: Mapped[int] = mapped_column(BigInteger)
     stale_statistics_days: Mapped[int] = mapped_column(Integer)
+    preview_statement_timeout_seconds: Mapped[int] = mapped_column(Integer)
+    preview_max_rows: Mapped[int] = mapped_column(Integer)
+    preview_max_response_bytes: Mapped[int] = mapped_column(BigInteger)
+    refresh_statement_timeout_seconds: Mapped[int] = mapped_column(Integer)
+    refresh_max_rows: Mapped[int] = mapped_column(BigInteger)
     updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

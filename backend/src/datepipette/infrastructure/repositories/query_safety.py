@@ -26,6 +26,11 @@ def _policy(model: QuerySafetyPolicyModel) -> QuerySafetyPolicy:
         sequential_scan_rows_warning=model.sequential_scan_rows_warning,
         sort_rows_warning=model.sort_rows_warning,
         stale_statistics_days=model.stale_statistics_days,
+        preview_statement_timeout_seconds=model.preview_statement_timeout_seconds,
+        preview_max_rows=model.preview_max_rows,
+        preview_max_response_bytes=model.preview_max_response_bytes,
+        refresh_statement_timeout_seconds=model.refresh_statement_timeout_seconds,
+        refresh_max_rows=model.refresh_max_rows,
     )
 
 
@@ -79,6 +84,11 @@ class SqlAlchemyQuerySafetyPolicyStore:
                 "sequential_scan_rows_warning": policy.sequential_scan_rows_warning,
                 "sort_rows_warning": policy.sort_rows_warning,
                 "stale_statistics_days": policy.stale_statistics_days,
+                "preview_statement_timeout_seconds": policy.preview_statement_timeout_seconds,
+                "preview_max_rows": policy.preview_max_rows,
+                "preview_max_response_bytes": policy.preview_max_response_bytes,
+                "refresh_statement_timeout_seconds": policy.refresh_statement_timeout_seconds,
+                "refresh_max_rows": policy.refresh_max_rows,
             }
             if model is None:
                 model = QuerySafetyPolicyModel(

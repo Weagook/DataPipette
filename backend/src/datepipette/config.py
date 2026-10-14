@@ -2,12 +2,15 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from datepipette.domain.datasets import QuerySafetyPolicy
 
 DEVELOPMENT_CONNECTION_ENCRYPTION_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
@@ -43,7 +46,11 @@ class Settings(BaseSettings):
     query_safety_sequential_scan_rows_warning: int = Field(default=250_000, ge=1)
     query_safety_sort_rows_warning: int = Field(default=500_000, ge=1)
     query_safety_stale_statistics_days: int = Field(default=30, ge=1, le=3650)
+    preview_statement_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    preview_max_rows: int = Field(default=200, ge=1, le=200)
+    preview_max_response_bytes: int = Field(default=1_048_576, ge=65_536, le=1_048_576)
     refresh_statement_timeout_seconds: int = Field(default=1800, ge=1, le=86_400)
+    refresh_max_rows: int = Field(default=10_000_000, ge=1, le=1_000_000_000)
     refresh_batch_rows: int = Field(default=50_000, ge=1_000, le=100_000)
     refresh_max_attempts: int = Field(default=3, ge=1, le=10)
     refresh_retry_base_seconds: int = Field(default=5, ge=1, le=3600)
@@ -149,6 +156,28 @@ class Settings(BaseSettings):
         if self.environment == "production":
             return True
         return bool(self.session_cookie_secure)
+
+    def default_query_safety_policy(self) -> "QuerySafetyPolicy":
+        """Build revision-zero policy defaults shared by API and workers."""
+
+        from datepipette.domain.datasets import QuerySafetyPolicy
+
+        return QuerySafetyPolicy(
+            estimated_rows_warning=self.query_safety_estimated_rows_warning,
+            estimated_rows_block=self.query_safety_estimated_rows_block,
+            total_cost_warning=self.query_safety_total_cost_warning,
+            total_cost_block=self.query_safety_total_cost_block,
+            join_count_warning=self.query_safety_join_count_warning,
+            join_count_block=self.query_safety_join_count_block,
+            sequential_scan_rows_warning=self.query_safety_sequential_scan_rows_warning,
+            sort_rows_warning=self.query_safety_sort_rows_warning,
+            stale_statistics_days=self.query_safety_stale_statistics_days,
+            preview_statement_timeout_seconds=self.preview_statement_timeout_seconds,
+            preview_max_rows=self.preview_max_rows,
+            preview_max_response_bytes=self.preview_max_response_bytes,
+            refresh_statement_timeout_seconds=self.refresh_statement_timeout_seconds,
+            refresh_max_rows=self.refresh_max_rows,
+        )
 
 
 @lru_cache

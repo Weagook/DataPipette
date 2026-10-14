@@ -46,7 +46,6 @@ from datepipette.application.service_accounts import (
 from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
-from datepipette.domain.datasets import QuerySafetyPolicy
 from datepipette.infrastructure.catalog import PsycopgSourceCatalogInspector
 from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
@@ -201,19 +200,7 @@ def create_app(
         app.state.audit_event_service = audit_event_service or AuditEventService(
             SqlAlchemyAuditEventStore(resources.session_factory)
         )
-        default_query_safety_policy = QuerySafetyPolicy(
-            estimated_rows_warning=resolved_settings.query_safety_estimated_rows_warning,
-            estimated_rows_block=resolved_settings.query_safety_estimated_rows_block,
-            total_cost_warning=resolved_settings.query_safety_total_cost_warning,
-            total_cost_block=resolved_settings.query_safety_total_cost_block,
-            join_count_warning=resolved_settings.query_safety_join_count_warning,
-            join_count_block=resolved_settings.query_safety_join_count_block,
-            sequential_scan_rows_warning=(
-                resolved_settings.query_safety_sequential_scan_rows_warning
-            ),
-            sort_rows_warning=resolved_settings.query_safety_sort_rows_warning,
-            stale_statistics_days=resolved_settings.query_safety_stale_statistics_days,
-        )
+        default_query_safety_policy = resolved_settings.default_query_safety_policy()
         query_safety_policy_store = SqlAlchemyQuerySafetyPolicyStore(
             resources.session_factory,
             default_query_safety_policy,
@@ -278,6 +265,7 @@ def create_app(
                 resolved_settings.source_statement_timeout_seconds,
             ),
             connection_authorizer,
+            query_safety_policy_store,
         )
         app.state.refresh_run_service = refresh_run_service or RefreshRunService(
             SqlAlchemyRefreshRunStore(resources.session_factory),

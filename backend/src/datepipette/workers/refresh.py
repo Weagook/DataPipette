@@ -17,6 +17,7 @@ from datepipette.infrastructure.parquet_snapshots import ParquetSnapshotExecutor
 from datepipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
+from datepipette.infrastructure.repositories.query_safety import SqlAlchemyQuerySafetyPolicyStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 
 
@@ -29,6 +30,10 @@ async def _execute(run_id: UUID) -> RefreshClaimOutcome:
             SqlAlchemyConnectionAccessStore(session_factory)
         )
         object_storages = create_object_storage_registry(settings)
+        policy = await SqlAlchemyQuerySafetyPolicyStore(
+            session_factory,
+            settings.default_query_safety_policy(),
+        ).get()
         service = RefreshWorkerService(
             SqlAlchemyRefreshRunStore(session_factory),
             ParquetSnapshotExecutor(
@@ -37,9 +42,10 @@ async def _execute(run_id: UUID) -> RefreshClaimOutcome:
                 object_storages.default,
                 settings.snapshot_storage_path,
                 settings.source_connect_timeout_seconds,
-                settings.refresh_statement_timeout_seconds,
+                policy.policy.refresh_statement_timeout_seconds,
                 settings.refresh_batch_rows,
                 connection_authorizer,
+                maximum_rows=policy.policy.refresh_max_rows,
             ),
             max_attempts=settings.refresh_max_attempts,
             retry_base_seconds=settings.refresh_retry_base_seconds,

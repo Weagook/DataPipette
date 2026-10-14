@@ -14,7 +14,6 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 - Which non-aggregate row-level operations belong in the visual builder beyond projection and joins?
 - Are calculated row-level fields part of MVP or a later milestone?
-- What are the exact preview row, byte, and time limits?
 - Which PostgreSQL types require special normalization in Parquet and API JSON?
 - How should identifiers behave when source tables or columns are renamed?
 
@@ -22,8 +21,7 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 - Benchmark whole-object S3 materialization against direct/ranged DuckDB reads and a verified local cache under the reference workload.
 - Define Parquet file sizing, row-group sizing, compression, and object-key layout from benchmarks.
-- Define default refresh timeouts, retry classes, cancellation behavior, and dead-letter handling.
-- Define worker leases, heartbeats, and safe stale-`running` recovery before enabling long source execution.
+- Decide whether a dead-letter workflow is needed beyond durable terminal refresh state and administrator-visible safe errors.
 
 ## API
 

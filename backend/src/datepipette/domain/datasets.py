@@ -559,6 +559,11 @@ class QuerySafetyPolicy:
     sequential_scan_rows_warning: int = 250_000
     sort_rows_warning: int = 500_000
     stale_statistics_days: int = 30
+    preview_statement_timeout_seconds: int = 5
+    preview_max_rows: int = 200
+    preview_max_response_bytes: int = 1_048_576
+    refresh_statement_timeout_seconds: int = 1800
+    refresh_max_rows: int = 10_000_000
 
     def __post_init__(self) -> None:
         numeric_values = (
@@ -571,6 +576,11 @@ class QuerySafetyPolicy:
             self.sequential_scan_rows_warning,
             self.sort_rows_warning,
             self.stale_statistics_days,
+            self.preview_statement_timeout_seconds,
+            self.preview_max_rows,
+            self.preview_max_response_bytes,
+            self.refresh_statement_timeout_seconds,
+            self.refresh_max_rows,
         )
         if any(value <= 0 for value in numeric_values):
             raise ValueError("Query Safety thresholds must be positive")
@@ -580,6 +590,10 @@ class QuerySafetyPolicy:
             raise ValueError("Planner cost warning threshold must be below block threshold")
         if self.join_count_warning >= self.join_count_block:
             raise ValueError("Join warning threshold must be below block threshold")
+        if self.preview_max_rows > 200:
+            raise ValueError("Preview row limit cannot exceed the hard API ceiling")
+        if self.preview_max_response_bytes > 1_048_576:
+            raise ValueError("Preview byte limit cannot exceed the hard API ceiling")
 
 
 @dataclass(frozen=True, slots=True)
@@ -802,6 +816,7 @@ class DatasetVersion:
 @dataclass(frozen=True, slots=True)
 class DatasetPreview:
     revision: int
+    policy_revision: int
     columns: tuple[ValidatedDatasetField, ...]
     rows: tuple[dict[str, Any], ...]
     requested_limit: int
