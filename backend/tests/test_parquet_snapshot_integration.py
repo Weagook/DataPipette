@@ -41,6 +41,9 @@ from datepipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
+from datepipette.infrastructure.repositories.query_safety import (
+    SqlAlchemyQuerySafetyPolicyStore,
+)
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.infrastructure.repositories.snapshot_queries import (
     SqlAlchemySnapshotQueryStore,
@@ -310,21 +313,16 @@ def _create_and_validate(
 def _snapshot_query_service(
     session_factory: Any,
     storage_root: Path,
-    maximum_bytes: int = 2_097_152,
 ) -> DatasetSnapshotQueryService:
     return DatasetSnapshotQueryService(
         SqlAlchemySnapshotQueryStore(session_factory),
-        DuckDbLocalSnapshotQueryExecutor(
-            storage_root,
-            timeout_seconds=10,
-            memory_limit_mb=128,
-            threads=2,
-            temporary_directory_limit_mb=128,
-            maximum_concurrent_queries=2,
-        ),
+        DuckDbLocalSnapshotQueryExecutor(storage_root),
         EncryptedSnapshotCursorCodec(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
-        maximum_bytes,
         DatasetAccessAuthorizer(SqlAlchemyAccessControlStore(session_factory)),
+        SqlAlchemyQuerySafetyPolicyStore(
+            session_factory,
+            TEST_SETTINGS.default_query_safety_policy(),
+        ),
     )
 
 
@@ -495,6 +493,7 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
                 },
             )
             assert first_page.status_code == 200, first_page.text
+            assert first_page.json()["meta"]["policy_revision"] == 0
             assert first_page.json()["data"]["rows"] == [
                 {"record_id": 2, "label": "Beta private value"}
             ]

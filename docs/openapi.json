@@ -793,6 +793,10 @@
             ],
             "title": "Last Refresh Error At"
           },
+          "policy_revision": {
+            "title": "Policy Revision",
+            "type": "integer"
+          },
           "refresh_state": {
             "$ref": "#/components/schemas/SnapshotRefreshState"
           },
@@ -812,6 +816,7 @@
           }
         },
         "required": [
+          "policy_revision",
           "chart_id",
           "chart_revision",
           "dataset_id",
@@ -1823,6 +1828,10 @@
             ],
             "title": "Last Refresh Error At"
           },
+          "policy_revision": {
+            "title": "Policy Revision",
+            "type": "integer"
+          },
           "refresh_state": {
             "$ref": "#/components/schemas/SnapshotRefreshState"
           },
@@ -1842,6 +1851,7 @@
           }
         },
         "required": [
+          "policy_revision",
           "chart_id",
           "chart_revision",
           "dataset_id",
@@ -3749,6 +3759,30 @@
             "title": "Estimated Rows Warning",
             "type": "integer"
           },
+          "interactive_query_concurrency": {
+            "title": "Interactive Query Concurrency",
+            "type": "integer"
+          },
+          "interactive_query_max_response_bytes": {
+            "title": "Interactive Query Max Response Bytes",
+            "type": "integer"
+          },
+          "interactive_query_memory_limit_mb": {
+            "title": "Interactive Query Memory Limit Mb",
+            "type": "integer"
+          },
+          "interactive_query_temp_limit_mb": {
+            "title": "Interactive Query Temp Limit Mb",
+            "type": "integer"
+          },
+          "interactive_query_threads": {
+            "title": "Interactive Query Threads",
+            "type": "integer"
+          },
+          "interactive_query_timeout_seconds": {
+            "title": "Interactive Query Timeout Seconds",
+            "type": "number"
+          },
           "join_count_block": {
             "title": "Join Count Block",
             "type": "integer"
@@ -3842,6 +3876,12 @@
           "preview_max_response_bytes",
           "refresh_statement_timeout_seconds",
           "refresh_max_rows",
+          "interactive_query_timeout_seconds",
+          "interactive_query_memory_limit_mb",
+          "interactive_query_threads",
+          "interactive_query_concurrency",
+          "interactive_query_temp_limit_mb",
+          "interactive_query_max_response_bytes",
           "updated_at",
           "updated_by"
         ],
@@ -4308,6 +4348,42 @@
             "title": "Estimated Rows Warning",
             "type": "integer"
           },
+          "interactive_query_concurrency": {
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Interactive Query Concurrency",
+            "type": "integer"
+          },
+          "interactive_query_max_response_bytes": {
+            "maximum": 16777216.0,
+            "minimum": 65536.0,
+            "title": "Interactive Query Max Response Bytes",
+            "type": "integer"
+          },
+          "interactive_query_memory_limit_mb": {
+            "maximum": 4096.0,
+            "minimum": 64.0,
+            "title": "Interactive Query Memory Limit Mb",
+            "type": "integer"
+          },
+          "interactive_query_temp_limit_mb": {
+            "maximum": 8192.0,
+            "minimum": 64.0,
+            "title": "Interactive Query Temp Limit Mb",
+            "type": "integer"
+          },
+          "interactive_query_threads": {
+            "maximum": 16.0,
+            "minimum": 1.0,
+            "title": "Interactive Query Threads",
+            "type": "integer"
+          },
+          "interactive_query_timeout_seconds": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 60.0,
+            "title": "Interactive Query Timeout Seconds",
+            "type": "number"
+          },
           "join_count_block": {
             "maximum": 64.0,
             "minimum": 2.0,
@@ -4395,7 +4471,13 @@
           "preview_max_rows",
           "preview_max_response_bytes",
           "refresh_statement_timeout_seconds",
-          "refresh_max_rows"
+          "refresh_max_rows",
+          "interactive_query_timeout_seconds",
+          "interactive_query_memory_limit_mb",
+          "interactive_query_threads",
+          "interactive_query_concurrency",
+          "interactive_query_temp_limit_mb",
+          "interactive_query_max_response_bytes"
         ],
         "title": "ReplaceQuerySafetyPolicyRequest",
         "type": "object"
@@ -4709,6 +4791,10 @@
             ],
             "title": "Next Cursor"
           },
+          "policy_revision": {
+            "title": "Policy Revision",
+            "type": "integer"
+          },
           "refresh_state": {
             "$ref": "#/components/schemas/SnapshotRefreshState"
           },
@@ -4733,6 +4819,7 @@
           }
         },
         "required": [
+          "policy_revision",
           "snapshot_id",
           "snapshot_row_count",
           "last_success_at",

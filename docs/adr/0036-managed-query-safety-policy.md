@@ -16,7 +16,7 @@ Runtime budgets such as preview timeout, refresh timeout, response bytes, memory
 - Restrict policy reads and replacements to active administrator browser sessions. Replacement requires CSRF, uses an opaque ETag, validates bounds and warning/block ordering, and appends a redacted audit event.
 - Resolve the current policy immediately before every live draft validation and persist its revision in the validation JSON artifact. Older artifacts without this field read as revision zero.
 - Permit an override only as part of a fresh validation request from an administrator, with a normalized 10–500 character reason, and only if the fresh result is blocked. Downgrade blocking findings to warnings, return `valid_with_warnings`, persist actor/time/reason/codes in the artifact, and append a dedicated audit event.
-- Initially exclude dynamic timeout, result-size, memory, and concurrency controls until each applicable execution path can enforce them. [ADR-0037](0037-managed-source-runtime-budgets.md) subsequently adds timeout and result-size controls for source preview and refresh; analytical DuckDB controls remain separate deployment settings.
+- Initially exclude dynamic timeout, result-size, memory, and concurrency controls until each applicable execution path can enforce them. [ADR-0037](0037-managed-source-runtime-budgets.md) subsequently adds timeout and result-size controls for source preview and refresh; [ADR-0038](0038-managed-interactive-duckdb-budgets.md) adds interactive DuckDB controls.
 
 ## Consequences
 
@@ -24,7 +24,7 @@ Runtime budgets such as preview timeout, refresh timeout, response bytes, memory
 - Optimistic concurrency prevents one administrator from silently overwriting another administrator's policy edit.
 - An override unlocks the normal preview/publication path for exactly one validation artifact; editing the draft clears that artifact and therefore clears the override.
 - Override reasons are governance metadata visible in the administrator audit API. The API and documentation prohibit secrets or business values in that field.
-- Analytical runtime budgets, recommendations, and actual-versus-estimated feedback remain later Phase 2 slices.
+- Background export budgets, distributed admission control, recommendations, and actual-versus-estimated feedback remain later Phase 2 slices.
 
 ## Alternatives considered
 

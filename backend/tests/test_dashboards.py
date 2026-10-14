@@ -155,6 +155,7 @@ class FakeChartQueries:
     async def _result(self, values: dict[str, Any]) -> ChartQueryResult:
         self.calls.append(values)
         return ChartQueryResult(
+            policy_revision=0,
             chart_id=values["chart_id"],
             chart_revision=1,
             dataset_id=DATASET_ID,

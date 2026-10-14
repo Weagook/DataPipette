@@ -564,6 +564,12 @@ class QuerySafetyPolicy:
     preview_max_response_bytes: int = 1_048_576
     refresh_statement_timeout_seconds: int = 1800
     refresh_max_rows: int = 10_000_000
+    interactive_query_timeout_seconds: float = 10.0
+    interactive_query_memory_limit_mb: int = 256
+    interactive_query_threads: int = 2
+    interactive_query_concurrency: int = 4
+    interactive_query_temp_limit_mb: int = 512
+    interactive_query_max_response_bytes: int = 2_097_152
 
     def __post_init__(self) -> None:
         numeric_values = (
@@ -581,6 +587,12 @@ class QuerySafetyPolicy:
             self.preview_max_response_bytes,
             self.refresh_statement_timeout_seconds,
             self.refresh_max_rows,
+            self.interactive_query_timeout_seconds,
+            self.interactive_query_memory_limit_mb,
+            self.interactive_query_threads,
+            self.interactive_query_concurrency,
+            self.interactive_query_temp_limit_mb,
+            self.interactive_query_max_response_bytes,
         )
         if any(value <= 0 for value in numeric_values):
             raise ValueError("Query Safety thresholds must be positive")
@@ -594,6 +606,23 @@ class QuerySafetyPolicy:
             raise ValueError("Preview row limit cannot exceed the hard API ceiling")
         if self.preview_max_response_bytes > 1_048_576:
             raise ValueError("Preview byte limit cannot exceed the hard API ceiling")
+        interactive_bounds = (
+            (self.interactive_query_timeout_seconds, 60, "timeout"),
+            (self.interactive_query_memory_limit_mb, 4096, "memory"),
+            (self.interactive_query_threads, 16, "thread"),
+            (self.interactive_query_concurrency, 64, "concurrency"),
+            (self.interactive_query_temp_limit_mb, 8192, "temporary disk"),
+            (self.interactive_query_max_response_bytes, 16_777_216, "response byte"),
+        )
+        for value, maximum, label in interactive_bounds:
+            if value > maximum:
+                raise ValueError(f"Interactive query {label} limit cannot exceed the hard ceiling")
+        if self.interactive_query_memory_limit_mb < 64:
+            raise ValueError("Interactive query memory limit must be at least 64 MiB")
+        if self.interactive_query_temp_limit_mb < 64:
+            raise ValueError("Interactive query temporary disk limit must be at least 64 MiB")
+        if self.interactive_query_max_response_bytes < 65_536:
+            raise ValueError("Interactive query response limit must be at least 64 KiB")
 
 
 @dataclass(frozen=True, slots=True)

@@ -1292,6 +1292,8 @@ export interface components {
             last_refresh_error: string | null;
             /** Last Refresh Error At */
             last_refresh_error_at: string | null;
+            /** Policy Revision */
+            policy_revision: number;
             refresh_state: components["schemas"]["SnapshotRefreshState"];
             /**
              * Snapshot Activated At
@@ -1723,6 +1725,8 @@ export interface components {
             last_refresh_error: string | null;
             /** Last Refresh Error At */
             last_refresh_error_at: string | null;
+            /** Policy Revision */
+            policy_revision: number;
             refresh_state: components["schemas"]["SnapshotRefreshState"];
             /**
              * Snapshot Activated At
@@ -2511,6 +2515,18 @@ export interface components {
             estimated_rows_block: number;
             /** Estimated Rows Warning */
             estimated_rows_warning: number;
+            /** Interactive Query Concurrency */
+            interactive_query_concurrency: number;
+            /** Interactive Query Max Response Bytes */
+            interactive_query_max_response_bytes: number;
+            /** Interactive Query Memory Limit Mb */
+            interactive_query_memory_limit_mb: number;
+            /** Interactive Query Temp Limit Mb */
+            interactive_query_temp_limit_mb: number;
+            /** Interactive Query Threads */
+            interactive_query_threads: number;
+            /** Interactive Query Timeout Seconds */
+            interactive_query_timeout_seconds: number;
             /** Join Count Block */
             join_count_block: number;
             /** Join Count Warning */
@@ -2711,6 +2727,18 @@ export interface components {
             estimated_rows_block: number;
             /** Estimated Rows Warning */
             estimated_rows_warning: number;
+            /** Interactive Query Concurrency */
+            interactive_query_concurrency: number;
+            /** Interactive Query Max Response Bytes */
+            interactive_query_max_response_bytes: number;
+            /** Interactive Query Memory Limit Mb */
+            interactive_query_memory_limit_mb: number;
+            /** Interactive Query Temp Limit Mb */
+            interactive_query_temp_limit_mb: number;
+            /** Interactive Query Threads */
+            interactive_query_threads: number;
+            /** Interactive Query Timeout Seconds */
+            interactive_query_timeout_seconds: number;
             /** Join Count Block */
             join_count_block: number;
             /** Join Count Warning */
@@ -2854,6 +2882,8 @@ export interface components {
             last_success_at: string;
             /** Next Cursor */
             next_cursor: string | null;
+            /** Policy Revision */
+            policy_revision: number;
             refresh_state: components["schemas"]["SnapshotRefreshState"];
             /**
              * Snapshot Id

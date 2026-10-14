@@ -14,6 +14,10 @@ from datepipette.application.access_control import (
     DatasetAccessAuthorizer,
     DatasetAccessDeniedError,
 )
+from datepipette.application.query_safety import (
+    InteractiveQueryRuntime,
+    QuerySafetyPolicyReader,
+)
 from datepipette.domain.access_control import DatasetPermission
 from datepipette.domain.identity import User
 from datepipette.domain.snapshot_queries import (
@@ -93,6 +97,7 @@ class SnapshotQueryStore(Protocol):
         *,
         context: ActiveSnapshotQueryContext,
         actor_id: UUID,
+        policy_revision: int,
         selected_field_count: int,
         filter_count: int,
         sort_count: int,
@@ -115,7 +120,7 @@ class SnapshotQueryExecutor(Protocol):
         sorts: tuple[SnapshotQuerySort, ...],
         position: SnapshotQueryCursorPosition | None,
         page_size: int,
-        maximum_bytes: int,
+        runtime: InteractiveQueryRuntime,
     ) -> SnapshotQueryExecution: ...
 
 
@@ -397,14 +402,14 @@ class DatasetSnapshotQueryService:
         store: SnapshotQueryStore,
         executor: SnapshotQueryExecutor,
         cursor_codec: SnapshotCursorCodec,
-        maximum_response_bytes: int,
         authorizer: DatasetAccessAuthorizer,
+        policy_store: QuerySafetyPolicyReader,
     ) -> None:
         self._store = store
         self._executor = executor
         self._cursor_codec = cursor_codec
-        self._maximum_response_bytes = maximum_response_bytes
         self._authorizer = authorizer
+        self._policy_store = policy_store
 
     async def freshness(self, *, actor: User, dataset_id: UUID) -> DatasetFreshness:
         try:
@@ -502,6 +507,9 @@ class DatasetSnapshotQueryService:
                 raise InvalidSnapshotCursorError("Cursor does not match this active query")
             position = decoded.position
 
+        managed_policy = await self._policy_store.get()
+        runtime = InteractiveQueryRuntime.from_policy(managed_policy.policy)
+
         try:
             execution = await self._executor.query(
                 context=context,
@@ -510,7 +518,7 @@ class DatasetSnapshotQueryService:
                 sorts=value.sorts,
                 position=position,
                 page_size=value.page_size,
-                maximum_bytes=self._maximum_response_bytes,
+                runtime=runtime,
             )
         except (
             DatasetSnapshotQueryTimeoutError,
@@ -520,6 +528,7 @@ class DatasetSnapshotQueryService:
             await self._store.record_query(
                 context=context,
                 actor_id=actor.id,
+                policy_revision=managed_policy.revision,
                 selected_field_count=len(selected_fields),
                 filter_count=len(filters),
                 sort_count=len(value.sorts),
@@ -551,6 +560,7 @@ class DatasetSnapshotQueryService:
         await self._store.record_query(
             context=context,
             actor_id=actor.id,
+            policy_revision=managed_policy.revision,
             selected_field_count=len(selected_fields),
             filter_count=len(filters),
             sort_count=len(value.sorts),
@@ -562,6 +572,7 @@ class DatasetSnapshotQueryService:
             occurred_at=datetime.now(UTC),
         )
         return SnapshotQueryPage(
+            policy_revision=managed_policy.revision,
             columns=selected_fields,
             rows=execution.rows,
             snapshot_id=context.snapshot_id,

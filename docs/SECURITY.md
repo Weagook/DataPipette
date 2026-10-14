@@ -128,7 +128,7 @@ Dashboard-item queries accept only a dashboard ID and stable item ID; the backen
 - S3 publication uploads a completed local candidate, records its SHA-256 in private object metadata, and verifies remote size and checksum metadata with `HEAD` before metadata success can be published.
 - S3 reads download to a unique ephemeral path, verify the persisted size and SHA-256 before use, and remove the temporary file after the bounded operation.
 - DuckDB queries use validated schema identifiers and bound filter values.
-- Query time, result rows, bytes, memory, and concurrency are limited.
+- Interactive query time, response bytes, memory, DuckDB threads, temporary disk, and per-process concurrency are revisioned administrator policy. Table, chart, and dashboard-item queries share one process-local admission limiter and report the applied policy revision; horizontal instances remain independent.
 - Snapshot access is authorized before storage is touched.
 - Dataset freshness requires the same effective `view_rows` permission as snapshot rows, conceals denied resources as not found, and returns only bounded metadata plus stable safe refresh error codes.
 - Snapshot row requests resolve field UUIDs against the published schema and never accept SQL expressions. Filter values are normalized by type and parameter-bound.
@@ -136,7 +136,7 @@ Dashboard-item queries accept only a dashboard ID and stable item ID; the backen
 - Local snapshot paths are generated metadata keys, resolved under the configured storage root, and rejected if they escape it.
 - S3 bucket names, endpoints, and credentials are deployment configuration rather than object identity. Persisted keys remain relative and cannot select another bucket or endpoint.
 - Cleanup lists and deletes only generated `datasets/` and `exports/` prefixes. Active metadata references are authoritative; orphan deletion additionally requires a long age grace to avoid racing publication.
-- Query audit events contain counts and safe identifiers only; rows, filters, cursor text, SQL, and absolute paths are excluded.
+- Query audit events contain policy revision, counts, and safe identifiers only; rows, filters, cursor text, SQL, and absolute paths are excluded.
 
 ## Export safety
 

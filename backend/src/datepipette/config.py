@@ -177,6 +177,12 @@ class Settings(BaseSettings):
             preview_max_response_bytes=self.preview_max_response_bytes,
             refresh_statement_timeout_seconds=self.refresh_statement_timeout_seconds,
             refresh_max_rows=self.refresh_max_rows,
+            interactive_query_timeout_seconds=self.snapshot_query_timeout_seconds,
+            interactive_query_memory_limit_mb=self.snapshot_query_memory_limit_mb,
+            interactive_query_threads=self.snapshot_query_threads,
+            interactive_query_concurrency=self.snapshot_query_concurrency,
+            interactive_query_temp_limit_mb=self.snapshot_query_temp_limit_mb,
+            interactive_query_max_response_bytes=self.snapshot_query_max_response_bytes,
         )
 
 

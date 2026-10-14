@@ -75,6 +75,7 @@ class StubChartQueryService:
             raise self.unavailable_error
         assert chart_id == self.available_chart_id
         return ChartQueryResult(
+            policy_revision=0,
             chart_id=chart_id,
             chart_revision=3,
             dataset_id=self.available_dataset_id,
@@ -425,6 +426,7 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
         assert successful_item.json()["meta"]["item_id"] == str(item_one_id)
         assert successful_item.json()["meta"]["chart_id"] == str(chart_one_id)
         assert successful_item.json()["meta"]["dataset_id"] == str(dataset_one_id)
+        assert successful_item.json()["meta"]["policy_revision"] == 0
 
         failed_item = client.post(
             f"/api/v1/dashboards/{dashboard_id}/items/{item_two_id}/data:query"

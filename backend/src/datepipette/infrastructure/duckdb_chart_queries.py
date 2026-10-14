@@ -15,6 +15,7 @@ from datepipette.application.charts import (
     ChartQueryUnavailableError,
     PreparedChartQuery,
 )
+from datepipette.application.query_safety import InteractiveQueryRuntime
 from datepipette.domain.charts import (
     ChartAggregation,
     ChartQueryExecution,
@@ -24,6 +25,7 @@ from datepipette.domain.charts import (
     ChartTimeBucket,
 )
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
+from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
 from datepipette.infrastructure.duckdb_snapshot_queries import (
     compile_snapshot_filters,
     quote_identifier,
@@ -212,48 +214,37 @@ class DuckDbChartQueryExecutor:
         storages: ObjectStorageRegistry,
         work_root: Path,
         *,
-        timeout_seconds: float,
-        memory_limit_mb: int,
-        threads: int,
-        temporary_directory_limit_mb: int,
-        maximum_concurrent_queries: int,
+        limiter: DuckDbQueryConcurrencyLimiter,
         installation_timezone: str = "UTC",
     ) -> None:
         self._storages = storages
         self._work_root = work_root.resolve()
-        self._timeout_seconds = timeout_seconds
-        self._memory_limit_mb = memory_limit_mb
-        self._threads = threads
-        self._temporary_directory_limit_mb = temporary_directory_limit_mb
         self._installation_timezone = ZoneInfo(installation_timezone).key
-        self._semaphore = asyncio.Semaphore(maximum_concurrent_queries)
+        self._limiter = limiter
 
     async def query(
         self,
         *,
         context: ActiveSnapshotQueryContext,
         prepared: PreparedChartQuery,
-        maximum_bytes: int,
+        runtime: InteractiveQueryRuntime,
     ) -> ChartQueryExecution:
         try:
-            await asyncio.wait_for(self._semaphore.acquire(), self._timeout_seconds)
+            async with self._limiter.slot(runtime.concurrency, runtime.timeout_seconds):
+                return await self._query_once(
+                    context=context,
+                    prepared=prepared,
+                    runtime=runtime,
+                )
         except TimeoutError as exc:
             raise ChartQueryTimeoutError from exc
-        try:
-            return await self._query_once(
-                context=context,
-                prepared=prepared,
-                maximum_bytes=maximum_bytes,
-            )
-        finally:
-            self._semaphore.release()
 
     async def _query_once(
         self,
         *,
         context: ActiveSnapshotQueryContext,
         prepared: PreparedChartQuery,
-        maximum_bytes: int,
+        runtime: InteractiveQueryRuntime,
     ) -> ChartQueryExecution:
         statement, parameters, columns, response_fields = _compile_query(
             context,
@@ -275,10 +266,10 @@ class DuckDbChartQueryExecutor:
             connection = duckdb.connect(
                 ":memory:",
                 config={
-                    "threads": str(self._threads),
-                    "memory_limit": f"{self._memory_limit_mb}MB",
+                    "threads": str(runtime.threads),
+                    "memory_limit": f"{runtime.memory_limit_mb}MB",
                     "temp_directory": str(temporary_directory),
-                    "max_temp_directory_size": f"{self._temporary_directory_limit_mb}MB",
+                    "max_temp_directory_size": (f"{runtime.temporary_directory_limit_mb}MB"),
                     "autoinstall_known_extensions": "false",
                     "autoload_known_extensions": "false",
                 },
@@ -294,11 +285,11 @@ class DuckDbChartQueryExecutor:
                 [str(path), *parameters, prepared.definition.limit],
                 columns,
                 response_fields,
-                maximum_bytes,
+                runtime.maximum_response_bytes,
             )
         )
         try:
-            return await asyncio.wait_for(asyncio.shield(task), self._timeout_seconds)
+            return await asyncio.wait_for(asyncio.shield(task), runtime.timeout_seconds)
         except TimeoutError as exc:
             connection.interrupt()
             with suppress(Exception):
@@ -357,21 +348,13 @@ class DuckDbLocalChartQueryExecutor(DuckDbChartQueryExecutor):
         self,
         storage_root: Path,
         *,
-        timeout_seconds: float,
-        memory_limit_mb: int,
-        threads: int,
-        temporary_directory_limit_mb: int,
-        maximum_concurrent_queries: int,
+        limiter: DuckDbQueryConcurrencyLimiter | None = None,
         installation_timezone: str = "UTC",
     ) -> None:
         local = LocalObjectStorage(storage_root)
         super().__init__(
             ObjectStorageRegistry(local.backend, {local.backend: local}),
             storage_root,
-            timeout_seconds=timeout_seconds,
-            memory_limit_mb=memory_limit_mb,
-            threads=threads,
-            temporary_directory_limit_mb=temporary_directory_limit_mb,
-            maximum_concurrent_queries=maximum_concurrent_queries,
+            limiter=limiter or DuckDbQueryConcurrencyLimiter(),
             installation_timezone=installation_timezone,
         )

@@ -13,6 +13,10 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
 from datepipette.application.access_control import DatasetAccessAuthorizer
+from datepipette.application.query_safety import (
+    InteractiveQueryRuntime,
+    ManagedQuerySafetyPolicy,
+)
 from datepipette.application.snapshot_queries import (
     DatasetSnapshotNotFoundError,
     DatasetSnapshotQueryService,
@@ -24,7 +28,7 @@ from datepipette.application.snapshot_queries import (
     supported_filter_operators,
 )
 from datepipette.domain.access_control import DatasetAccess, DatasetPermission
-from datepipette.domain.datasets import FieldDisplayFormat
+from datepipette.domain.datasets import FieldDisplayFormat, QuerySafetyPolicy
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
@@ -56,6 +60,15 @@ DATETIME_ID = uuid4()
 TIME_ID = uuid4()
 JSON_ID = uuid4()
 BINARY_ID = uuid4()
+
+RUNTIME = InteractiveQueryRuntime(
+    timeout_seconds=5,
+    memory_limit_mb=128,
+    threads=2,
+    concurrency=2,
+    temporary_directory_limit_mb=128,
+    maximum_response_bytes=65_536,
+)
 
 FIELDS = (
     SnapshotQueryField(BOOL_ID, "active", "p_bool", "boolean", False, True, "Active", None),
@@ -165,10 +178,23 @@ class FakeExecutor:
         return self.result
 
 
+class FakePolicyStore:
+    def __init__(self, maximum_bytes: int = 65_536, revision: int = 7) -> None:
+        self.managed = ManagedQuerySafetyPolicy(
+            QuerySafetyPolicy(interactive_query_max_response_bytes=maximum_bytes),
+            revision,
+            None,
+            None,
+        )
+
+    async def get(self) -> ManagedQuerySafetyPolicy:
+        return self.managed
+
+
 def _service(
     store: FakeStore | None = None,
     executor: FakeExecutor | None = None,
-    maximum_bytes: int = 1024,
+    maximum_bytes: int = 65_536,
 ) -> tuple[DatasetSnapshotQueryService, FakeStore, FakeExecutor]:
     resolved_store = store or FakeStore(_context())
     resolved_executor = executor or FakeExecutor()
@@ -177,8 +203,8 @@ def _service(
             resolved_store,
             resolved_executor,
             EncryptedSnapshotCursorCodec("test-key"),
-            maximum_bytes,
             DatasetAccessAuthorizer(resolved_store),
+            FakePolicyStore(maximum_bytes),
         ),
         resolved_store,
         resolved_executor,
@@ -288,6 +314,8 @@ def test_service_normalizes_typed_filters_and_round_trips_cursor() -> None:
         )
     )
     assert first.next_cursor is not None
+    assert first.policy_revision == 7
+    assert executor.calls[0]["runtime"].maximum_response_bytes == 65_536
     normalized = executor.calls[0]["filters"]
     assert normalized[2].values == (Decimal("1.20"), Decimal("9.90"))
     assert normalized[4].value == date(2026, 2, 1)
@@ -295,6 +323,7 @@ def test_service_normalizes_typed_filters_and_round_trips_cursor() -> None:
     assert normalized[6].value == time(12, 30)
     assert normalized[7].value == '{"a":1,"b":2}'
     assert store.audit[0]["error_code"] is None
+    assert store.audit[0]["policy_revision"] == 7
 
     asyncio.run(
         service.query(
@@ -469,14 +498,8 @@ def _write_fixture(path: Path) -> None:
 
 
 def _executor(root: Path, timeout: float = 5) -> DuckDbLocalSnapshotQueryExecutor:
-    return DuckDbLocalSnapshotQueryExecutor(
-        root,
-        timeout_seconds=timeout,
-        memory_limit_mb=128,
-        threads=2,
-        temporary_directory_limit_mb=128,
-        maximum_concurrent_queries=2,
-    )
+    del timeout
+    return DuckDbLocalSnapshotQueryExecutor(root)
 
 
 def test_duckdb_executor_normalizes_rows_and_pages_null_sort_keys(tmp_path: Path) -> None:
@@ -491,7 +514,7 @@ def test_duckdb_executor_normalizes_rows_and_pages_null_sort_keys(tmp_path: Path
             sorts=sorts,
             position=None,
             page_size=2,
-            maximum_bytes=20_000,
+            runtime=replace(RUNTIME, maximum_response_bytes=20_000),
         )
     )
     assert [row["record_id"] for row in first.rows] == [1, 3]
@@ -508,7 +531,7 @@ def test_duckdb_executor_normalizes_rows_and_pages_null_sort_keys(tmp_path: Path
             sorts=sorts,
             position=first.next_position,
             page_size=2,
-            maximum_bytes=20_000,
+            runtime=replace(RUNTIME, maximum_response_bytes=20_000),
         )
     )
     assert second.rows == ({"record_id": 2},)
@@ -527,7 +550,7 @@ def test_duckdb_executor_normalizes_rows_and_pages_null_sort_keys(tmp_path: Path
             sorts=multi_sort,
             position=None,
             page_size=1,
-            maximum_bytes=20_000,
+            runtime=replace(RUNTIME, maximum_response_bytes=20_000),
         )
     )
     assert multi_first.next_position is not None
@@ -539,7 +562,7 @@ def test_duckdb_executor_normalizes_rows_and_pages_null_sort_keys(tmp_path: Path
             sorts=multi_sort,
             position=multi_first.next_position,
             page_size=2,
-            maximum_bytes=20_000,
+            runtime=replace(RUNTIME, maximum_response_bytes=20_000),
         )
     )
     assert [row["record_id"] for row in (*multi_first.rows, *multi_second.rows)] == [
@@ -563,7 +586,7 @@ def test_duckdb_executor_enforces_paths_bytes_and_timeout(
             sorts=(),
             position=None,
             page_size=3,
-            maximum_bytes=45,
+            runtime=replace(RUNTIME, maximum_response_bytes=45),
         )
     )
     assert truncated.truncated_by_bytes
@@ -577,7 +600,7 @@ def test_duckdb_executor_enforces_paths_bytes_and_timeout(
                 sorts=(),
                 position=None,
                 page_size=3,
-                maximum_bytes=1,
+                runtime=replace(RUNTIME, maximum_response_bytes=1),
             )
         )
     for key in ("missing.parquet", "../outside.parquet"):
@@ -590,7 +613,7 @@ def test_duckdb_executor_enforces_paths_bytes_and_timeout(
                     sorts=(),
                     position=None,
                     page_size=1,
-                    maximum_bytes=100,
+                    runtime=replace(RUNTIME, maximum_response_bytes=100),
                 )
             )
 
@@ -601,7 +624,6 @@ def test_duckdb_executor_enforces_paths_bytes_and_timeout(
         return SnapshotQueryExecution((), None, False)
 
     monkeypatch.setattr(executor, "_execute", slow_execute)
-    executor._timeout_seconds = 0.001
     with pytest.raises(DatasetSnapshotQueryTimeoutError):
         asyncio.run(
             executor.query(
@@ -611,6 +633,10 @@ def test_duckdb_executor_enforces_paths_bytes_and_timeout(
                 sorts=(),
                 position=None,
                 page_size=1,
-                maximum_bytes=100,
+                runtime=replace(
+                    RUNTIME,
+                    timeout_seconds=0.001,
+                    maximum_response_bytes=100,
+                ),
             )
         )

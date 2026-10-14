@@ -98,3 +98,12 @@ def test_policy_cannot_expand_hard_preview_ceilings() -> None:
         QuerySafetyPolicy(preview_max_rows=201)
     with pytest.raises(ValueError, match="byte limit"):
         QuerySafetyPolicy(preview_max_response_bytes=1_048_577)
+
+
+def test_policy_enforces_interactive_query_resource_bounds() -> None:
+    with pytest.raises(ValueError, match="memory limit"):
+        QuerySafetyPolicy(interactive_query_memory_limit_mb=63)
+    with pytest.raises(ValueError, match="concurrency"):
+        QuerySafetyPolicy(interactive_query_concurrency=65)
+    with pytest.raises(ValueError, match="response limit"):
+        QuerySafetyPolicy(interactive_query_max_response_bytes=65_535)

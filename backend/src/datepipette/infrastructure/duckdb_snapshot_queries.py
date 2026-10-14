@@ -12,6 +12,7 @@ from typing import Any
 
 import duckdb
 
+from datepipette.application.query_safety import InteractiveQueryRuntime
 from datepipette.application.snapshot_queries import (
     DatasetSnapshotQueryTimeoutError,
     DatasetSnapshotResultTooLargeError,
@@ -27,6 +28,7 @@ from datepipette.domain.snapshot_queries import (
     SnapshotQuerySort,
     SnapshotSortDirection,
 )
+from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
 from datepipette.infrastructure.object_storage import (
     LocalObjectStorage,
     ObjectStorageRegistry,
@@ -204,19 +206,11 @@ class DuckDbSnapshotQueryExecutor:
         storages: ObjectStorageRegistry,
         work_root: Path,
         *,
-        timeout_seconds: float,
-        memory_limit_mb: int,
-        threads: int,
-        temporary_directory_limit_mb: int,
-        maximum_concurrent_queries: int,
+        limiter: DuckDbQueryConcurrencyLimiter,
     ) -> None:
         self._storages = storages
         self._work_root = work_root.resolve()
-        self._timeout_seconds = timeout_seconds
-        self._memory_limit_mb = memory_limit_mb
-        self._threads = threads
-        self._temporary_directory_limit_mb = temporary_directory_limit_mb
-        self._semaphore = asyncio.Semaphore(maximum_concurrent_queries)
+        self._limiter = limiter
 
     async def query(
         self,
@@ -227,24 +221,21 @@ class DuckDbSnapshotQueryExecutor:
         sorts: tuple[SnapshotQuerySort, ...],
         position: SnapshotQueryCursorPosition | None,
         page_size: int,
-        maximum_bytes: int,
+        runtime: InteractiveQueryRuntime,
     ) -> SnapshotQueryExecution:
         try:
-            await asyncio.wait_for(self._semaphore.acquire(), self._timeout_seconds)
+            async with self._limiter.slot(runtime.concurrency, runtime.timeout_seconds):
+                return await self._query_once(
+                    context=context,
+                    selected_fields=selected_fields,
+                    filters=filters,
+                    sorts=sorts,
+                    position=position,
+                    page_size=page_size,
+                    runtime=runtime,
+                )
         except TimeoutError as exc:
             raise DatasetSnapshotQueryTimeoutError from exc
-        try:
-            return await self._query_once(
-                context=context,
-                selected_fields=selected_fields,
-                filters=filters,
-                sorts=sorts,
-                position=position,
-                page_size=page_size,
-                maximum_bytes=maximum_bytes,
-            )
-        finally:
-            self._semaphore.release()
 
     async def _query_once(
         self,
@@ -255,7 +246,7 @@ class DuckDbSnapshotQueryExecutor:
         sorts: tuple[SnapshotQuerySort, ...],
         position: SnapshotQueryCursorPosition | None,
         page_size: int,
-        maximum_bytes: int,
+        runtime: InteractiveQueryRuntime,
     ) -> SnapshotQueryExecution:
         statement, parameters = _compile_query(
             selected_fields=selected_fields,
@@ -279,10 +270,10 @@ class DuckDbSnapshotQueryExecutor:
             connection = duckdb.connect(
                 ":memory:",
                 config={
-                    "threads": str(self._threads),
-                    "memory_limit": f"{self._memory_limit_mb}MB",
+                    "threads": str(runtime.threads),
+                    "memory_limit": f"{runtime.memory_limit_mb}MB",
                     "temp_directory": str(temporary_directory),
-                    "max_temp_directory_size": f"{self._temporary_directory_limit_mb}MB",
+                    "max_temp_directory_size": (f"{runtime.temporary_directory_limit_mb}MB"),
                     "autoinstall_known_extensions": "false",
                     "autoload_known_extensions": "false",
                 },
@@ -299,11 +290,11 @@ class DuckDbSnapshotQueryExecutor:
                 selected_fields,
                 sorts,
                 page_size,
-                maximum_bytes,
+                runtime.maximum_response_bytes,
             )
         )
         try:
-            return await asyncio.wait_for(asyncio.shield(task), self._timeout_seconds)
+            return await asyncio.wait_for(asyncio.shield(task), runtime.timeout_seconds)
         except TimeoutError as exc:
             connection.interrupt()
             with suppress(Exception):
@@ -377,19 +368,11 @@ class DuckDbLocalSnapshotQueryExecutor(DuckDbSnapshotQueryExecutor):
         self,
         storage_root: Path,
         *,
-        timeout_seconds: float,
-        memory_limit_mb: int,
-        threads: int,
-        temporary_directory_limit_mb: int,
-        maximum_concurrent_queries: int,
+        limiter: DuckDbQueryConcurrencyLimiter | None = None,
     ) -> None:
         local = LocalObjectStorage(storage_root)
         super().__init__(
             ObjectStorageRegistry(local.backend, {local.backend: local}),
             storage_root,
-            timeout_seconds=timeout_seconds,
-            memory_limit_mb=memory_limit_mb,
-            threads=threads,
-            temporary_directory_limit_mb=temporary_directory_limit_mb,
-            maximum_concurrent_queries=maximum_concurrent_queries,
+            limiter=limiter or DuckDbQueryConcurrencyLimiter(),
         )

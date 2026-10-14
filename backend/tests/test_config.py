@@ -119,6 +119,12 @@ def test_query_safety_thresholds_are_bounded_and_ordered() -> None:
     assert policy.preview_max_response_bytes == 1_048_576
     assert policy.refresh_statement_timeout_seconds == 1800
     assert policy.refresh_max_rows == 10_000_000
+    assert policy.interactive_query_timeout_seconds == 10
+    assert policy.interactive_query_memory_limit_mb == 256
+    assert policy.interactive_query_threads == 2
+    assert policy.interactive_query_concurrency == 4
+    assert policy.interactive_query_temp_limit_mb == 512
+    assert policy.interactive_query_max_response_bytes == 2_097_152
     with pytest.raises(ValidationError, match="row warning"):
         Settings(
             query_safety_estimated_rows_warning=100,
@@ -137,3 +143,7 @@ def test_query_safety_thresholds_are_bounded_and_ordered() -> None:
         Settings(preview_max_response_bytes=1_048_577)
     with pytest.raises(ValidationError):
         Settings(refresh_max_rows=0)
+    with pytest.raises(ValidationError):
+        Settings(snapshot_query_concurrency=65)
+    with pytest.raises(ValidationError):
+        Settings(snapshot_query_memory_limit_mb=63)

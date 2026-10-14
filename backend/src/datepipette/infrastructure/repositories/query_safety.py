@@ -31,6 +31,12 @@ def _policy(model: QuerySafetyPolicyModel) -> QuerySafetyPolicy:
         preview_max_response_bytes=model.preview_max_response_bytes,
         refresh_statement_timeout_seconds=model.refresh_statement_timeout_seconds,
         refresh_max_rows=model.refresh_max_rows,
+        interactive_query_timeout_seconds=model.interactive_query_timeout_seconds,
+        interactive_query_memory_limit_mb=model.interactive_query_memory_limit_mb,
+        interactive_query_threads=model.interactive_query_threads,
+        interactive_query_concurrency=model.interactive_query_concurrency,
+        interactive_query_temp_limit_mb=model.interactive_query_temp_limit_mb,
+        interactive_query_max_response_bytes=model.interactive_query_max_response_bytes,
     )
 
 
@@ -89,6 +95,14 @@ class SqlAlchemyQuerySafetyPolicyStore:
                 "preview_max_response_bytes": policy.preview_max_response_bytes,
                 "refresh_statement_timeout_seconds": policy.refresh_statement_timeout_seconds,
                 "refresh_max_rows": policy.refresh_max_rows,
+                "interactive_query_timeout_seconds": policy.interactive_query_timeout_seconds,
+                "interactive_query_memory_limit_mb": policy.interactive_query_memory_limit_mb,
+                "interactive_query_threads": policy.interactive_query_threads,
+                "interactive_query_concurrency": policy.interactive_query_concurrency,
+                "interactive_query_temp_limit_mb": policy.interactive_query_temp_limit_mb,
+                "interactive_query_max_response_bytes": (
+                    policy.interactive_query_max_response_bytes
+                ),
             }
             if model is None:
                 model = QuerySafetyPolicyModel(

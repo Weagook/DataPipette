@@ -126,6 +126,7 @@ class SnapshotQueryExecution:
 
 @dataclass(frozen=True, slots=True)
 class SnapshotQueryPage:
+    policy_revision: int
     columns: tuple[SnapshotQueryField, ...]
     rows: tuple[dict[str, Any], ...]
     snapshot_id: UUID
