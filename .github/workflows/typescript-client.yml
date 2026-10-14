@@ -1,0 +1,52 @@
+name: TypeScript client
+
+on:
+  pull_request:
+    paths:
+      - "clients/typescript/**"
+      - "docs/openapi.json"
+      - ".github/workflows/typescript-client.yml"
+  push:
+    branches: [main]
+    paths:
+      - "clients/typescript/**"
+      - "docs/openapi.json"
+      - ".github/workflows/typescript-client.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/typescript
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
+        with:
+          node-version: 22.22.1
+          cache: npm
+          cache-dependency-path: clients/typescript/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check generated contract
+        run: npm run generate:check
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Inspect package contents
+        run: npm pack --dry-run

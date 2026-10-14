@@ -10,6 +10,12 @@ __pycache__/
 .coverage
 htmlcov/
 
+# TypeScript dependencies and build output
+node_modules/
+dist/
+.test-dist/
+.example-dist/
+
 # Local secrets and machine-specific configuration
 .env
 .env.*
