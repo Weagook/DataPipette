@@ -2684,6 +2684,20 @@
               }
             ]
           },
+          "policy_revision": {
+            "title": "Policy Revision",
+            "type": "integer"
+          },
+          "query_safety_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuerySafetyOverrideResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "relation_statistics": {
             "items": {
               "$ref": "#/components/schemas/RelationStatisticsResponse"
@@ -2719,7 +2733,9 @@
           "result_schema",
           "plan",
           "findings",
-          "relation_statistics"
+          "relation_statistics",
+          "policy_revision",
+          "query_safety_override"
         ],
         "title": "DatasetValidationResponse",
         "type": "object"
@@ -3685,6 +3701,123 @@
         "title": "ProblemDetails",
         "type": "object"
       },
+      "QuerySafetyOverrideResponse": {
+        "properties": {
+          "actor_id": {
+            "format": "uuid",
+            "title": "Actor Id",
+            "type": "string"
+          },
+          "finding_codes": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationFindingCode"
+            },
+            "title": "Finding Codes",
+            "type": "array"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor_id",
+          "reason",
+          "occurred_at",
+          "finding_codes"
+        ],
+        "title": "QuerySafetyOverrideResponse",
+        "type": "object"
+      },
+      "QuerySafetyPolicyResponse": {
+        "properties": {
+          "estimated_rows_block": {
+            "title": "Estimated Rows Block",
+            "type": "integer"
+          },
+          "estimated_rows_warning": {
+            "title": "Estimated Rows Warning",
+            "type": "integer"
+          },
+          "join_count_block": {
+            "title": "Join Count Block",
+            "type": "integer"
+          },
+          "join_count_warning": {
+            "title": "Join Count Warning",
+            "type": "integer"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "sequential_scan_rows_warning": {
+            "title": "Sequential Scan Rows Warning",
+            "type": "integer"
+          },
+          "sort_rows_warning": {
+            "title": "Sort Rows Warning",
+            "type": "integer"
+          },
+          "stale_statistics_days": {
+            "title": "Stale Statistics Days",
+            "type": "integer"
+          },
+          "total_cost_block": {
+            "title": "Total Cost Block",
+            "type": "number"
+          },
+          "total_cost_warning": {
+            "title": "Total Cost Warning",
+            "type": "number"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "revision",
+          "estimated_rows_warning",
+          "estimated_rows_block",
+          "total_cost_warning",
+          "total_cost_block",
+          "join_count_warning",
+          "join_count_block",
+          "sequential_scan_rows_warning",
+          "sort_rows_warning",
+          "stale_statistics_days",
+          "updated_at",
+          "updated_by"
+        ],
+        "title": "QuerySafetyPolicyResponse",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "properties": {
           "checks": {
@@ -4128,6 +4261,78 @@
           "definition"
         ],
         "title": "ReplaceDraftRequest",
+        "type": "object"
+      },
+      "ReplaceQuerySafetyPolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "estimated_rows_block": {
+            "maximum": 1000000000000.0,
+            "minimum": 2.0,
+            "title": "Estimated Rows Block",
+            "type": "integer"
+          },
+          "estimated_rows_warning": {
+            "maximum": 1000000000000.0,
+            "minimum": 1.0,
+            "title": "Estimated Rows Warning",
+            "type": "integer"
+          },
+          "join_count_block": {
+            "maximum": 64.0,
+            "minimum": 2.0,
+            "title": "Join Count Block",
+            "type": "integer"
+          },
+          "join_count_warning": {
+            "maximum": 63.0,
+            "minimum": 1.0,
+            "title": "Join Count Warning",
+            "type": "integer"
+          },
+          "sequential_scan_rows_warning": {
+            "maximum": 1000000000000.0,
+            "minimum": 1.0,
+            "title": "Sequential Scan Rows Warning",
+            "type": "integer"
+          },
+          "sort_rows_warning": {
+            "maximum": 1000000000000.0,
+            "minimum": 1.0,
+            "title": "Sort Rows Warning",
+            "type": "integer"
+          },
+          "stale_statistics_days": {
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Stale Statistics Days",
+            "type": "integer"
+          },
+          "total_cost_block": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000000.0,
+            "title": "Total Cost Block",
+            "type": "number"
+          },
+          "total_cost_warning": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000000.0,
+            "title": "Total Cost Warning",
+            "type": "number"
+          }
+        },
+        "required": [
+          "estimated_rows_warning",
+          "estimated_rows_block",
+          "total_cost_warning",
+          "total_cost_block",
+          "join_count_warning",
+          "join_count_block",
+          "sequential_scan_rows_warning",
+          "sort_rows_warning",
+          "stale_statistics_days"
+        ],
+        "title": "ReplaceQuerySafetyPolicyRequest",
         "type": "object"
       },
       "ReplaceRefreshScheduleRequest": {
@@ -4996,6 +5201,22 @@
           "role"
         ],
         "title": "UserResponse",
+        "type": "object"
+      },
+      "ValidateDatasetDraftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "override_reason": {
+            "maxLength": 500,
+            "minLength": 10,
+            "title": "Override Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "override_reason"
+        ],
+        "title": "ValidateDatasetDraftRequest",
         "type": "object"
       },
       "ValidatedFieldResponse": {
@@ -10199,6 +10420,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ValidateDatasetDraftRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -13325,6 +13563,239 @@
         "summary": "Readiness",
         "tags": [
           "operations"
+        ]
+      }
+    },
+    "/api/v1/query-safety-policy": {
+      "get": {
+        "operationId": "read_query_safety_policy_api_v1_query_safety_policy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuerySafetyPolicyResponse"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque revision of the Query Safety policy.",
+                "schema": {
+                  "example": "\"query-safety-policy-2\"",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Read Query Safety Policy",
+        "tags": [
+          "query safety"
+        ]
+      },
+      "put": {
+        "operationId": "replace_query_safety_policy_api_v1_query_safety_policy_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceQuerySafetyPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuerySafetyPolicyResponse"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque revision of the Query Safety policy.",
+                "schema": {
+                  "example": "\"query-safety-policy-2\"",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Replace Query Safety Policy",
+        "tags": [
+          "query safety"
         ]
       }
     },

@@ -274,6 +274,7 @@ def test_validation_compiles_quoted_select_persists_types_and_is_invalidated() -
 def test_validation_returns_structured_findings_for_source_drift() -> None:
     asyncio.run(_bootstrap_source())
     with TestClient(create_app(settings=TEST_SETTINGS)) as client:
+        assert client.get("/api/v1/query-safety-policy").status_code == 401
         _login(client)
         connection_id = _connection(client)
 
@@ -320,16 +321,58 @@ def test_validation_returns_structured_findings_for_source_drift() -> None:
         ]
 
 
-def test_query_safety_block_is_persisted_and_prevents_preview() -> None:
+def test_managed_query_safety_policy_blocks_and_admin_override_is_audited() -> None:
     asyncio.run(_bootstrap_source())
-    settings = Settings(
-        environment="test",
-        docs_enabled=False,
-        query_safety_total_cost_warning=0.01,
-        query_safety_total_cost_block=0.02,
-    )
-    with TestClient(create_app(settings=settings)) as client:
+    with TestClient(create_app(settings=TEST_SETTINGS)) as client:
         _login(client)
+        initial_policy = client.get("/api/v1/query-safety-policy")
+        assert initial_policy.status_code == 200
+        assert initial_policy.json()["revision"] == 0
+        assert initial_policy.headers["ETag"] == '"query-safety-policy-0"'
+        replacement = {
+            **{
+                key: value
+                for key, value in initial_policy.json().items()
+                if key not in {"revision", "updated_at", "updated_by"}
+            },
+            "total_cost_warning": 0.01,
+            "total_cost_block": 0.02,
+        }
+        missing_csrf = client.put(
+            "/api/v1/query-safety-policy",
+            json=replacement,
+            headers={"If-Match": initial_policy.headers["ETag"]},
+        )
+        assert missing_csrf.status_code == 403
+        missing_revision = client.put(
+            "/api/v1/query-safety-policy",
+            json=replacement,
+            headers=_csrf(client),
+        )
+        assert missing_revision.status_code == 428
+        policy = client.put(
+            "/api/v1/query-safety-policy",
+            json=replacement,
+            headers={**_csrf(client), "If-Match": initial_policy.headers["ETag"]},
+        )
+        assert policy.status_code == 200, policy.text
+        assert policy.json()["revision"] == 1
+        assert policy.headers["ETag"] == '"query-safety-policy-1"'
+        stale_policy = client.put(
+            "/api/v1/query-safety-policy",
+            json=replacement,
+            headers={**_csrf(client), "If-Match": '"query-safety-policy-0"'},
+        )
+        assert stale_policy.status_code == 409
+        assert stale_policy.json()["code"] == "query_safety_policy_revision_conflict"
+        second_policy = client.put(
+            "/api/v1/query-safety-policy",
+            json=replacement,
+            headers={**_csrf(client), "If-Match": policy.headers["ETag"]},
+        )
+        assert second_policy.status_code == 200
+        assert second_policy.json()["revision"] == 2
+
         definition = _definition()
         dataset_id, etag = _dataset(client, _connection(client), definition)
 
@@ -340,6 +383,8 @@ def test_query_safety_block_is_persisted_and_prevents_preview() -> None:
 
         assert validation.status_code == 200, validation.text
         assert validation.json()["state"] == "blocked"
+        assert validation.json()["policy_revision"] == 2
+        assert validation.json()["query_safety_override"] is None
         cost_finding = next(
             item for item in validation.json()["findings"] if item["code"] == "high_planner_cost"
         )
@@ -353,6 +398,41 @@ def test_query_safety_block_is_persisted_and_prevents_preview() -> None:
         )
         assert preview.status_code == 409
         assert preview.json()["code"] == "dataset_draft_not_validated"
+
+        overridden = client.post(
+            f"/api/v1/datasets/{dataset_id}/draft/validations",
+            json={"override_reason": "Approved for a bounded portfolio test execution."},
+            headers={**_csrf(client), "If-Match": etag},
+        )
+        assert overridden.status_code == 200, overridden.text
+        assert overridden.json()["state"] == "valid_with_warnings"
+        assert overridden.json()["policy_revision"] == 2
+        assert overridden.json()["query_safety_override"]["reason"] == (
+            "Approved for a bounded portfolio test execution."
+        )
+        assert "high_planner_cost" in overridden.json()["query_safety_override"]["finding_codes"]
+        assert all(item["severity"] != "blocked" for item in overridden.json()["findings"])
+
+        preview_after_override = client.post(
+            f"/api/v1/datasets/{dataset_id}/draft/previews",
+            json={"limit": 1},
+            headers={**_csrf(client), "If-Match": etag},
+        )
+        assert preview_after_override.status_code == 200, preview_after_override.text
+
+        policy_audit = client.get(
+            "/api/v1/audit-events",
+            params={"action": "query_safety.policy_replaced"},
+        )
+        override_audit = client.get(
+            "/api/v1/audit-events",
+            params={"action": "query_safety.block_override_applied"},
+        )
+        assert len(policy_audit.json()["data"]) == 2
+        assert len(override_audit.json()["data"]) == 1
+        assert override_audit.json()["data"][0]["details"]["reason"] == (
+            "Approved for a bounded portfolio test execution."
+        )
 
 
 def test_validation_requires_csrf_revision_and_redacts_source_failures() -> None:

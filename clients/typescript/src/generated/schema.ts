@@ -843,6 +843,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/query-safety-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Query Safety Policy */
+        get: operations["read_query_safety_policy_api_v1_query_safety_policy_get"];
+        /** Replace Query Safety Policy */
+        put: operations["replace_query_safety_policy_api_v1_query_safety_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/service-accounts": {
         parameters: {
             query?: never;
@@ -2038,6 +2056,9 @@ export interface components {
             /** Findings */
             findings: components["schemas"]["ValidationFindingResponse"][];
             plan: components["schemas"]["PlanSummaryResponse"] | null;
+            /** Policy Revision */
+            policy_revision: number;
+            query_safety_override: components["schemas"]["QuerySafetyOverrideResponse"] | null;
             /** Relation Statistics */
             relation_statistics: components["schemas"]["RelationStatisticsResponse"][];
             /** Result Schema */
@@ -2465,6 +2486,50 @@ export interface components {
             /** Type */
             type: string;
         };
+        /** QuerySafetyOverrideResponse */
+        QuerySafetyOverrideResponse: {
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string;
+            /** Finding Codes */
+            finding_codes: components["schemas"]["ValidationFindingCode"][];
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Reason */
+            reason: string;
+        };
+        /** QuerySafetyPolicyResponse */
+        QuerySafetyPolicyResponse: {
+            /** Estimated Rows Block */
+            estimated_rows_block: number;
+            /** Estimated Rows Warning */
+            estimated_rows_warning: number;
+            /** Join Count Block */
+            join_count_block: number;
+            /** Join Count Warning */
+            join_count_warning: number;
+            /** Revision */
+            revision: number;
+            /** Sequential Scan Rows Warning */
+            sequential_scan_rows_warning: number;
+            /** Sort Rows Warning */
+            sort_rows_warning: number;
+            /** Stale Statistics Days */
+            stale_statistics_days: number;
+            /** Total Cost Block */
+            total_cost_block: number;
+            /** Total Cost Warning */
+            total_cost_warning: number;
+            /** Updated At */
+            updated_at: string | null;
+            /** Updated By */
+            updated_by: string | null;
+        };
         /** ReadinessResponse */
         ReadinessResponse: {
             /** Checks */
@@ -2627,6 +2692,27 @@ export interface components {
         ReplaceDraftRequest: {
             /** Definition */
             definition: components["schemas"]["VisualDefinitionPayload"] | components["schemas"]["SqlDefinitionPayload"];
+        };
+        /** ReplaceQuerySafetyPolicyRequest */
+        ReplaceQuerySafetyPolicyRequest: {
+            /** Estimated Rows Block */
+            estimated_rows_block: number;
+            /** Estimated Rows Warning */
+            estimated_rows_warning: number;
+            /** Join Count Block */
+            join_count_block: number;
+            /** Join Count Warning */
+            join_count_warning: number;
+            /** Sequential Scan Rows Warning */
+            sequential_scan_rows_warning: number;
+            /** Sort Rows Warning */
+            sort_rows_warning: number;
+            /** Stale Statistics Days */
+            stale_statistics_days: number;
+            /** Total Cost Block */
+            total_cost_block: number;
+            /** Total Cost Warning */
+            total_cost_warning: number;
         };
         /** ReplaceRefreshScheduleRequest */
         ReplaceRefreshScheduleRequest: {
@@ -2924,6 +3010,11 @@ export interface components {
             id: string;
             /** Role */
             role: string;
+        };
+        /** ValidateDatasetDraftRequest */
+        ValidateDatasetDraftRequest: {
+            /** Override Reason */
+            override_reason: string;
         };
         /** ValidatedFieldResponse */
         ValidatedFieldResponse: {
@@ -6300,7 +6391,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ValidateDatasetDraftRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -8504,6 +8599,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+        };
+    };
+    read_query_safety_policy_api_v1_query_safety_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Opaque revision of the Query Safety policy. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuerySafetyPolicyResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    replace_query_safety_policy_api_v1_query_safety_policy_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceQuerySafetyPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Opaque revision of the Query Safety policy. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuerySafetyPolicyResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

@@ -427,6 +427,25 @@ class SqlAlchemyDatasetStore:
                     ),
                 )
             )
+            if validation.query_safety_override is not None:
+                session.add(
+                    self._audit(
+                        actor_id=actor_id,
+                        action="query_safety.block_override_applied",
+                        resource_id=dataset_id,
+                        occurred_at=validation.query_safety_override.occurred_at,
+                        request_id=request_id,
+                        details={
+                            "revision": validation.validated_revision,
+                            "policy_revision": validation.policy_revision,
+                            "reason": validation.query_safety_override.reason,
+                            "finding_codes": [
+                                code.value
+                                for code in validation.query_safety_override.finding_codes
+                            ],
+                        },
+                    )
+                )
             await session.flush()
             return _to_draft(model)
 

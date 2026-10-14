@@ -102,7 +102,9 @@ class PsycopgSourceDatasetValidator:
         password: str,
         ca_certificate: str | None,
         definition: DatasetDefinition,
+        policy: QuerySafetyPolicy | None = None,
     ) -> SourceValidationResult:
+        effective_policy = policy or self._policy
         try:
             async with (
                 open_read_only_source(
@@ -115,7 +117,7 @@ class PsycopgSourceDatasetValidator:
                 source.cursor() as cursor,
             ):
                 if isinstance(definition, SqlDatasetDefinition):
-                    return await self._validate_sql(source, cursor, definition)
+                    return await self._validate_sql(source, cursor, definition, effective_policy)
                 relation_columns: dict[UUID, dict[str, tuple[str, bool]]] = {}
                 relation_statistics: list[DatasetRelationStatistics] = []
                 relation_findings: list[DatasetValidationFinding] = []
@@ -228,6 +230,7 @@ class PsycopgSourceDatasetValidator:
                 state, findings = self._classify(
                     analysis,
                     tuple(relation_statistics),
+                    policy=effective_policy,
                 )
                 return SourceValidationResult(
                     state=state,
@@ -245,6 +248,7 @@ class PsycopgSourceDatasetValidator:
         source: psycopg.AsyncConnection[Any],
         cursor: psycopg.AsyncCursor[Any],
         definition: SqlDatasetDefinition,
+        policy: QuerySafetyPolicy,
     ) -> SourceValidationResult:
         relation_statistics: list[DatasetRelationStatistics] = []
         for relation in definition.source_relations:
@@ -339,7 +343,11 @@ class PsycopgSourceDatasetValidator:
             )
             for field, column in zip(definition.fields, description, strict=True)
         )
-        state, findings = self._classify(analysis, tuple(relation_statistics))
+        state, findings = self._classify(
+            analysis,
+            tuple(relation_statistics),
+            policy=policy,
+        )
         return SourceValidationResult(
             state=state,
             compiled_sql=select_query.as_string(source),
@@ -442,9 +450,10 @@ class PsycopgSourceDatasetValidator:
         relation_statistics: tuple[DatasetRelationStatistics, ...] = (),
         *,
         evaluated_at: datetime | None = None,
+        policy: QuerySafetyPolicy | None = None,
     ) -> tuple[DatasetValidationState, tuple[DatasetValidationFinding, ...]]:
         plan = analysis.summary
-        policy = self._policy
+        policy = policy or self._policy
         findings: list[DatasetValidationFinding] = []
 
         def threshold_finding(

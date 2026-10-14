@@ -157,6 +157,8 @@ Audit events are stored separately from application logs in an append-only appli
 
 Only active administrator browser sessions may query the installation-wide event history through `GET /api/v1/audit-events`; bearer service tokens and other roles are rejected. The API bounds each page, uses an opaque newest-first cursor, and permits only typed exact metadata filters plus a timezone-aware occurrence window. It returns producer-controlled redacted details and never expands them from credentials, request bodies, business rows, raw exceptions, or source SQL parameters. Audit reads are intentionally not audited because doing so would recursively create more events; application request IDs still correlate the read in operational logs.
 
+Query Safety planner thresholds are installation-wide metadata and may be read or replaced only by an active administrator browser session; replacement is CSRF- and ETag-protected and audited. A policy block remains the default execution boundary. An override requires a fresh validation, an administrator, and a 10–500 character governance reason. The artifact retains policy revision and override provenance, blocked findings become warnings, and a separate audit event records the safe reason and stable finding codes. Operators must not put credentials, SQL values, or business data in an override reason.
+
 ## Network and deployment
 
 - Production endpoints require TLS at the ingress or application boundary.
