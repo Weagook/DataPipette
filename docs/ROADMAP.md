@@ -75,7 +75,7 @@ Outcome: analysts create and share the first useful dashboard.
 Outcome: another application can securely embed DatePipette backend capabilities.
 
 - [x] Service accounts and scoped expiring/non-expiring API tokens (`dashboards:read` initial scope)
-- Generated TypeScript client and integration examples
+- [x] Generated TypeScript client and service-token dashboard integration example
 - Rate limiting, idempotency, optimistic concurrency, and deprecation policy
 - Backup and restore procedures
 - Operational dashboards, alerts, and capacity guidance

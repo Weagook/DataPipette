@@ -330,6 +330,16 @@ Mutable resources use optimistic concurrency, such as an opaque revision or ETag
 - Breaking changes require a new major API version or an approved migration strategy.
 - Generated client and contract tests must detect OpenAPI drift in CI.
 
+## Generated TypeScript client
+
+- `clients/typescript` is generated from the committed `docs/openapi.json`; generated request/response types are not edited or duplicated by hand.
+- `npm run generate:check --prefix clients/typescript` regenerates into a temporary location and fails on byte-level drift. Any intentional API change commits both OpenAPI and the reviewed TypeScript schema.
+- Browser and bearer constructors are separate. Browser mode includes cookies and keeps CSRF explicit; bearer mode accepts one caller-owned secret and never falls back to cookies.
+- `DatePipetteApiError` preserves safe Problem Details and `X-Request-ID`. The client does not expose raw backend failures, persist credentials, retry mutations, or weaken endpoint authorization.
+- The package is independently buildable and currently private to the monorepo. npm publication and semantic-version release automation require a later compatibility decision.
+
+The generation boundary is recorded in [ADR-0034](adr/0034-generated-typescript-api-client.md).
+
 ## Observability
 
 Every response includes or exposes a request identifier. Background jobs preserve correlation with the initiating request and actor. Rate-limit and retry information should use standard headers where practical.

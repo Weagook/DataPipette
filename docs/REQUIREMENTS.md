@@ -119,3 +119,4 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **NFR-008 — API stability:** Breaking public API changes require a versioning and deprecation path.
 - **NFR-009 — Testability:** Core behavior must be testable without external cloud services through local PostgreSQL, Redis, and filesystem/MinIO adapters.
 - **NFR-010 — Portability:** Docker Compose is the first deployment target; application design must not block later Kubernetes deployment.
+- **NFR-011 — Client compatibility:** The TypeScript client shall be generated from the reviewed OpenAPI contract, and CI shall reject generated-schema, strict-type, runtime-test, or build drift.

@@ -15,6 +15,7 @@ Thank you for your interest in DatePipette. The project is pre-alpha and is esta
 Requirements:
 
 - uv with Python 3.12 support;
+- Node.js 22.12 or newer with npm for the generated TypeScript client;
 - Docker with Compose v2 for PostgreSQL, Redis, and the MinIO-compatible development object store.
 
 Install the locked workspace, start local dependencies, and apply metadata migrations:
@@ -84,6 +85,18 @@ The API listens on `http://127.0.0.1:8000` by default. Useful endpoints are:
 
 Browser authentication uses an HTTP-only session cookie. State-changing requests also send the readable `datepipette_csrf` cookie value in the `X-CSRF-Token` header. Production forces secure cookies even if local configuration attempts to disable them.
 
+The independently buildable TypeScript client is generated from the committed OpenAPI contract. Install its exact dependencies and verify it from the repository root:
+
+```bash
+npm ci --prefix clients/typescript
+npm run generate:check --prefix clients/typescript
+npm run typecheck --prefix clients/typescript
+npm test --prefix clients/typescript
+npm run build --prefix clients/typescript
+```
+
+After an intentional API change, run `npm run generate --prefix clients/typescript` and commit the reviewed generated schema together with `docs/openapi.json`. See the [client README](clients/typescript/README.md) for browser and service-token usage and the executable dashboard example.
+
 The bootstrap administrator creates further local accounts through `POST /api/v1/users`. User creation and mutations are administrator-only and CSRF-protected. DatePipette prevents supported API operations from disabling or demoting the final active administrator.
 
 PostgreSQL connection passwords and optional CA certificates require `DATEPIPETTE_CONNECTION_ENCRYPTION_KEY`, a URL-safe base64 encoding of exactly 32 random bytes. The built-in default is only for local development and is rejected in production. Generate a key without storing it in shell history:
@@ -119,6 +132,11 @@ uv run --package datepipette alembic -c backend/alembic.ini check
 uv run --package datepipette python tools/export_openapi.py
 git diff --exit-code -- docs/openapi.json
 docker compose --env-file .env -f deploy/compose/compose.yaml config --quiet
+npm ci --prefix clients/typescript
+npm run generate:check --prefix clients/typescript
+npm run typecheck --prefix clients/typescript
+npm test --prefix clients/typescript
+npm run build --prefix clients/typescript
 ```
 
 To include the real MinIO round-trip tests, export the `DATEPIPETTE_TEST_S3_ENDPOINT`, `DATEPIPETTE_TEST_S3_BUCKET`, `DATEPIPETTE_TEST_S3_ACCESS_KEY_ID`, and `DATEPIPETTE_TEST_S3_SECRET_ACCESS_KEY` values for the running development service before invoking `pytest`.

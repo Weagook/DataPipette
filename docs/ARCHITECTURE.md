@@ -53,13 +53,15 @@ DatePipette/
 │   │   ├── infrastructure/
 │   ├── migrations/
 │   └── tests/
+├── clients/
+│   └── typescript/
 ├── deploy/
 │   └── compose/
 ├── docs/
 └── pyproject.toml
 ```
 
-The current foundation creates directories only when they own working code. `domain/`, `workers/`, `frontend/`, and `tools/` will be added with the first feature that needs them rather than as empty placeholders.
+The current foundation creates directories only when they own working code. `frontend/` will be added with its first UI vertical slice rather than as empty scaffolding. The TypeScript client remains independently buildable so the future frontend and external integrations share one generated contract.
 
 Dependencies point inward: infrastructure and API adapters may depend on application and domain interfaces; the domain must not depend on FastAPI, Celery, SQLAlchemy, Redis, S3, or DuckDB.
 
@@ -195,5 +197,9 @@ Python 3.12, uv, FastAPI, Uvicorn, Pydantic v2, SQLAlchemy 2, Alembic, Psycopg 3
 ### Frontend
 
 React, TypeScript, Vite, TanStack Query, TanStack Table, Apache ECharts, a grid-layout library, and a generated OpenAPI client.
+
+### TypeScript API client
+
+Node.js 22, TypeScript, `openapi-typescript`, and `openapi-fetch`. The committed generated schema comes only from `docs/openapi.json`; a dedicated CI workflow checks regeneration, strict typing, runtime behavior, build output, and package contents. See [ADR-0034](adr/0034-generated-typescript-api-client.md).
 
 Technology choices remain subject to focused prototypes where risk is material, particularly streaming Parquet creation and concurrent DuckDB reads from S3-compatible storage.
