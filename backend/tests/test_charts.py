@@ -554,7 +554,7 @@ def test_chart_service_create_update_query_and_rechecks_dataset_access() -> None
             request_id="req-service-query",
         )
         assert result.rows == ({"ok": True},)
-        assert store.audits[-1]["actor_type"] is AccountType.SERVICE
+        assert AccountType(store.audits[-1]["actor_type"]) is AccountType.SERVICE
 
         access.allowed = False
         with pytest.raises(ChartDatasetNotAvailableError):
