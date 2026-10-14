@@ -21,6 +21,7 @@ from datepipette.application.access_control import (
     DatasetGrantService,
     GroupService,
 )
+from datepipette.application.audit_events import AuditEventService
 from datepipette.application.auth_service import AuthenticationService
 from datepipette.application.catalog import CatalogService
 from datepipette.application.charts import ChartService
@@ -62,6 +63,7 @@ from datepipette.infrastructure.object_storage import (
 from datepipette.infrastructure.rate_limit import RedisLoginRateLimiter
 from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
 from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
+from datepipette.infrastructure.repositories.audit_events import SqlAlchemyAuditEventStore
 from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datepipette.infrastructure.repositories.charts import SqlAlchemyChartStore
 from datepipette.infrastructure.repositories.connection_access import (
@@ -108,6 +110,7 @@ def create_app(
     dashboard_service: DashboardService | None = None,
     service_account_service: ServiceAccountService | None = None,
     api_token_authentication_service: ApiTokenAuthenticationService | None = None,
+    audit_event_service: AuditEventService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -157,6 +160,8 @@ def create_app(
                 app.state.service_account_service = service_account_service
             if api_token_authentication_service is not None:
                 app.state.api_token_authentication_service = api_token_authentication_service
+            if audit_event_service is not None:
+                app.state.audit_event_service = audit_event_service
             yield
             return
 
@@ -187,6 +192,9 @@ def create_app(
         )
         app.state.api_token_authentication_service = (
             api_token_authentication_service or ApiTokenAuthenticationService(service_account_store)
+        )
+        app.state.audit_event_service = audit_event_service or AuditEventService(
+            SqlAlchemyAuditEventStore(resources.session_factory)
         )
         connection_store = SqlAlchemyConnectionStore(resources.session_factory)
         connection_access_store = SqlAlchemyConnectionAccessStore(resources.session_factory)

@@ -168,6 +168,8 @@ Each job is bound to the active immutable snapshot at creation and stores select
 
 An append-only record of a security-sensitive or governance-relevant action. It records the actor, action, resource, result, request correlation, and redacted metadata.
 
+The administrator read projection preserves human-user, service-account, anonymous, and system actor types. It is ordered newest first by occurrence time and UUID, supports bounded opaque-cursor pages and exact governance filters, and has no update or delete operation. Event details are producer-defined safe metadata rather than captured request payloads or business data.
+
 ## Relationships
 
 ```text

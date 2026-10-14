@@ -32,7 +32,7 @@ The backend is the product core. The official web application is a client of the
 - Bar, line, pie/donut, and KPI visualizations (private backend contract implemented)
 - Dashboards containing charts from multiple datasets (private layout contract implemented)
 - Local accounts, groups, roles, object ACLs, service accounts, and scoped API tokens
-- Append-only application audit log
+- Append-only application audit log with a filtered administrator read API
 
 See [MVP scope](docs/MVP.md) for explicit boundaries and acceptance criteria.
 
