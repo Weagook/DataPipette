@@ -561,12 +561,33 @@ class QuerySafetyPolicy:
     stale_statistics_days: int = 30
 
     def __post_init__(self) -> None:
+        numeric_values = (
+            self.estimated_rows_warning,
+            self.estimated_rows_block,
+            self.total_cost_warning,
+            self.total_cost_block,
+            self.join_count_warning,
+            self.join_count_block,
+            self.sequential_scan_rows_warning,
+            self.sort_rows_warning,
+            self.stale_statistics_days,
+        )
+        if any(value <= 0 for value in numeric_values):
+            raise ValueError("Query Safety thresholds must be positive")
         if self.estimated_rows_warning >= self.estimated_rows_block:
             raise ValueError("Estimated row warning threshold must be below block threshold")
         if self.total_cost_warning >= self.total_cost_block:
             raise ValueError("Planner cost warning threshold must be below block threshold")
         if self.join_count_warning >= self.join_count_block:
             raise ValueError("Join warning threshold must be below block threshold")
+
+
+@dataclass(frozen=True, slots=True)
+class QuerySafetyOverride:
+    actor_id: UUID
+    reason: str
+    occurred_at: datetime
+    finding_codes: tuple[ValidationFindingCode, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,6 +600,8 @@ class DatasetValidation:
     plan: DatasetPlanSummary | None
     findings: tuple[DatasetValidationFinding, ...]
     relation_statistics: tuple[DatasetRelationStatistics, ...] = ()
+    policy_revision: int = 0
+    query_safety_override: QuerySafetyOverride | None = None
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -640,12 +663,26 @@ class DatasetValidation:
                 }
                 for item in self.relation_statistics
             ],
+            "policy_revision": self.policy_revision,
+            "query_safety_override": (
+                {
+                    "actor_id": str(self.query_safety_override.actor_id),
+                    "reason": self.query_safety_override.reason,
+                    "occurred_at": self.query_safety_override.occurred_at.isoformat(),
+                    "finding_codes": [
+                        code.value for code in self.query_safety_override.finding_codes
+                    ],
+                }
+                if self.query_safety_override is not None
+                else None
+            ),
         }
 
     @classmethod
     def from_document(cls, document: dict[str, Any]) -> "DatasetValidation":
         try:
             plan_value = document["plan"]
+            override_value = document.get("query_safety_override")
             return cls(
                 state=DatasetValidationState(document["state"]),
                 validated_revision=int(document["validated_revision"]),
@@ -718,6 +755,19 @@ class DatasetValidation:
                         ),
                     )
                     for item in document.get("relation_statistics", ())
+                ),
+                policy_revision=int(document.get("policy_revision", 0)),
+                query_safety_override=(
+                    QuerySafetyOverride(
+                        actor_id=UUID(override_value["actor_id"]),
+                        reason=override_value["reason"],
+                        occurred_at=datetime.fromisoformat(override_value["occurred_at"]),
+                        finding_codes=tuple(
+                            ValidationFindingCode(code) for code in override_value["finding_codes"]
+                        ),
+                    )
+                    if override_value is not None
+                    else None
                 ),
             )
         except (KeyError, TypeError, ValueError) as exc:

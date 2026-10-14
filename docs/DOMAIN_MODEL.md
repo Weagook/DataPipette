@@ -170,6 +170,12 @@ An append-only record of a security-sensitive or governance-relevant action. It 
 
 The administrator read projection preserves human-user, service-account, anonymous, and system actor types. It is ordered newest first by occurrence time and UUID, supports bounded opaque-cursor pages and exact governance filters, and has no update or delete operation. Event details are producer-defined safe metadata rather than captured request payloads or business data.
 
+### Query Safety policy
+
+The singleton installation-wide planner policy contains warning and block thresholds for estimated rows, planner cost, and join count plus advisory scan, sort, and statistics-age thresholds. Absence of a stored row means revision-zero installation defaults. Complete administrator replacement creates or increments the metadata revision under an ETag and produces an audit event.
+
+Each new dataset validation stores the exact policy revision used. A privileged override is embedded in that immutable validation artifact with actor, reason, occurrence time, and stable blocked finding codes; it is not a reusable permission or a global bypass.
+
 ## Relationships
 
 ```text

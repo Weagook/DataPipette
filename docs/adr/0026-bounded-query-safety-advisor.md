@@ -15,16 +15,16 @@ Planner estimates are useful signals, not measured runtime. The advisor must not
 - During the same read-only source transaction, collect bounded metadata only for the definition's already-authorized relations: planner row estimate, relation/index bytes, valid ready index count, and the latest manual or automatic analyze timestamp.
 - Return stable finding codes with `info`, `warning`, `blocked`, or existing structural `error` severity. Numeric findings include observed and threshold values. Relation-specific findings carry a stable visual relation ID when one exists.
 - Treat planner row, total-cost, and join-count hard limits as `blocked`. A blocked validation artifact is persisted for diagnosis but cannot be previewed, refreshed, scheduled, or published. Warning and info findings remain advisory.
-- Configure foundation thresholds through validated `DATEPIPETTE_QUERY_SAFETY_*` installation settings. Warning thresholds must be lower than their corresponding block thresholds.
+- Use validated `DATEPIPETTE_QUERY_SAFETY_*` installation settings as revision-zero defaults. The metadata-backed administrator policy accepted in [ADR-0036](0036-managed-query-safety-policy.md) may replace them; warning thresholds remain lower than their corresponding block thresholds.
 - Describe only observable evidence. `no_visible_index_for_large_scan` means no valid ready index was visible for a relation participating in a large sequential scan; it does not claim that adding an index will improve the query.
-- Never issue `EXPLAIN ANALYZE`, DDL, `ANALYZE`, or index creation. Persistent administrator policies, operation-specific limits, privileged overrides, and actual-versus-estimated execution feedback remain separate later slices.
+- Never issue `EXPLAIN ANALYZE`, DDL, `ANALYZE`, or index creation. Operation-specific runtime limits and actual-versus-estimated execution feedback remain separate later slices; managed planner policy and privileged overrides are defined by ADR-0036.
 
 ## Consequences
 
 - The dataset editor can present actionable risk before source execution and can distinguish a warning from a policy block.
 - Validation artifacts and the API grow additively. Readers supply defaults for older JSON documents, so no metadata migration is required.
 - Catalog visibility and statistics quality constrain the advice. Missing or stale statistics are surfaced explicitly; estimates must never be presented as certainty.
-- Installation configuration is intentionally coarse. A later metadata-backed administrator policy can replace it without changing stable finding codes or the safety boundary.
+- Installation configuration is the safe bootstrap policy. Metadata-backed replacement preserves stable finding codes and the safety boundary.
 
 ## Alternatives considered
 

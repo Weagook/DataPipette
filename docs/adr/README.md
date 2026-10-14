@@ -63,3 +63,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0033](0033-service-account-api-tokens.md): Service accounts and scoped opaque API tokens
 - [ADR-0034](0034-generated-typescript-api-client.md): Generated TypeScript API client
 - [ADR-0035](0035-administrator-audit-event-api.md): Administrator audit-event read API
+- [ADR-0036](0036-managed-query-safety-policy.md): Managed Query Safety planner policy and audited overrides

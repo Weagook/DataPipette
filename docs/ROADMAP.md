@@ -44,7 +44,8 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Draft/published versions, schema comparison, and impact analysis (schema impact implemented; chart dependency blocking activates with chart resources)
 - [x] Extend the initial non-executing PostgreSQL plan guard into a configurable Query Safety Advisor foundation
 - [x] Explainable warnings for large scans, absence of visible indexes, expensive joins/sorts, stale statistics, and oversized results
-- Administrator policies that warn or block by estimated rows, planner cost, joins, timeout, result size, and concurrency, with audited privileged overrides
+- [x] Revisioned administrator planner policies for estimated rows, planner cost, and joins, with audited privileged overrides
+- Operation-specific runtime policies for timeout, result size, memory, and concurrency
 - Read-only index/query recommendations and estimate-versus-actual execution metrics; DatePipette never applies source DDL
 - [x] Filtered, paginated administrator audit-event API
 - Administrator audit UI (frontend phase)

@@ -36,6 +36,7 @@ from datepipette.application.dataset_validation import DatasetValidationService
 from datepipette.application.datasets import DatasetService
 from datepipette.application.exports import DatasetExportService, ExportDownloadService
 from datepipette.application.health import ReadinessProbe
+from datepipette.application.query_safety import QuerySafetyPolicyService
 from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.schedules import RefreshScheduleService
 from datepipette.application.service_accounts import (
@@ -73,6 +74,7 @@ from datepipette.infrastructure.repositories.connections import SqlAlchemyConnec
 from datepipette.infrastructure.repositories.dashboards import SqlAlchemyDashboardStore
 from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
 from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
+from datepipette.infrastructure.repositories.query_safety import SqlAlchemyQuerySafetyPolicyStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.infrastructure.repositories.schedules import SqlAlchemyRefreshScheduleStore
 from datepipette.infrastructure.repositories.service_accounts import SqlAlchemyServiceAccountStore
@@ -111,6 +113,7 @@ def create_app(
     service_account_service: ServiceAccountService | None = None,
     api_token_authentication_service: ApiTokenAuthenticationService | None = None,
     audit_event_service: AuditEventService | None = None,
+    query_safety_policy_service: QuerySafetyPolicyService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -162,6 +165,8 @@ def create_app(
                 app.state.api_token_authentication_service = api_token_authentication_service
             if audit_event_service is not None:
                 app.state.audit_event_service = audit_event_service
+            if query_safety_policy_service is not None:
+                app.state.query_safety_policy_service = query_safety_policy_service
             yield
             return
 
@@ -195,6 +200,26 @@ def create_app(
         )
         app.state.audit_event_service = audit_event_service or AuditEventService(
             SqlAlchemyAuditEventStore(resources.session_factory)
+        )
+        default_query_safety_policy = QuerySafetyPolicy(
+            estimated_rows_warning=resolved_settings.query_safety_estimated_rows_warning,
+            estimated_rows_block=resolved_settings.query_safety_estimated_rows_block,
+            total_cost_warning=resolved_settings.query_safety_total_cost_warning,
+            total_cost_block=resolved_settings.query_safety_total_cost_block,
+            join_count_warning=resolved_settings.query_safety_join_count_warning,
+            join_count_block=resolved_settings.query_safety_join_count_block,
+            sequential_scan_rows_warning=(
+                resolved_settings.query_safety_sequential_scan_rows_warning
+            ),
+            sort_rows_warning=resolved_settings.query_safety_sort_rows_warning,
+            stale_statistics_days=resolved_settings.query_safety_stale_statistics_days,
+        )
+        query_safety_policy_store = SqlAlchemyQuerySafetyPolicyStore(
+            resources.session_factory,
+            default_query_safety_policy,
+        )
+        app.state.query_safety_policy_service = (
+            query_safety_policy_service or QuerySafetyPolicyService(query_safety_policy_store)
         )
         connection_store = SqlAlchemyConnectionStore(resources.session_factory)
         connection_access_store = SqlAlchemyConnectionAccessStore(resources.session_factory)
@@ -238,25 +263,10 @@ def create_app(
                 PsycopgSourceDatasetValidator(
                     resolved_settings.source_connect_timeout_seconds,
                     resolved_settings.source_statement_timeout_seconds,
-                    QuerySafetyPolicy(
-                        estimated_rows_warning=(
-                            resolved_settings.query_safety_estimated_rows_warning
-                        ),
-                        estimated_rows_block=resolved_settings.query_safety_estimated_rows_block,
-                        total_cost_warning=resolved_settings.query_safety_total_cost_warning,
-                        total_cost_block=resolved_settings.query_safety_total_cost_block,
-                        join_count_warning=resolved_settings.query_safety_join_count_warning,
-                        join_count_block=resolved_settings.query_safety_join_count_block,
-                        sequential_scan_rows_warning=(
-                            resolved_settings.query_safety_sequential_scan_rows_warning
-                        ),
-                        sort_rows_warning=resolved_settings.query_safety_sort_rows_warning,
-                        stale_statistics_days=(
-                            resolved_settings.query_safety_stale_statistics_days
-                        ),
-                    ),
+                    default_query_safety_policy,
                 ),
                 connection_authorizer,
+                query_safety_policy_store,
             )
         )
         app.state.dataset_preview_service = dataset_preview_service or DatasetPreviewService(

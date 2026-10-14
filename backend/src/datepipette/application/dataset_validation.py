@@ -1,6 +1,6 @@
 """Explicit live validation of dataset drafts."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
@@ -20,6 +20,10 @@ from datepipette.application.datasets import (
     DatasetStore,
     require_dataset_owner,
 )
+from datepipette.application.query_safety import (
+    QuerySafetyPolicyStore,
+    require_query_safety_administrator,
+)
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
     DatasetDefinition,
@@ -29,13 +33,20 @@ from datepipette.domain.datasets import (
     DatasetValidation,
     DatasetValidationFinding,
     DatasetValidationState,
+    QuerySafetyOverride,
+    QuerySafetyPolicy,
     ValidatedDatasetField,
+    ValidationSeverity,
     definition_relations,
 )
 from datepipette.domain.identity import User
 
 
 class SourceDatasetValidationUnavailableError(Exception):
+    pass
+
+
+class QuerySafetyOverrideNotApplicableError(Exception):
     pass
 
 
@@ -57,6 +68,7 @@ class SourceDatasetValidator(Protocol):
         password: str,
         ca_certificate: str | None,
         definition: DatasetDefinition,
+        policy: QuerySafetyPolicy,
     ) -> SourceValidationResult: ...
 
 
@@ -68,12 +80,14 @@ class DatasetValidationService:
         cipher: SecretCipher,
         source_validator: SourceDatasetValidator,
         authorizer: ConnectionAccessAuthorizer,
+        policy_store: QuerySafetyPolicyStore,
     ) -> None:
         self._dataset_store = dataset_store
         self._connection_store = connection_store
         self._cipher = cipher
         self._source_validator = source_validator
         self._authorizer = authorizer
+        self._policy_store = policy_store
 
     async def validate(
         self,
@@ -82,7 +96,15 @@ class DatasetValidationService:
         dataset_id: UUID,
         expected_revision: int,
         request_id: str,
+        override_reason: str | None = None,
     ) -> DatasetDraft:
+        normalized_reason = (
+            " ".join(override_reason.split()) if override_reason is not None else None
+        )
+        if normalized_reason is not None:
+            require_query_safety_administrator(actor)
+            if not 10 <= len(normalized_reason) <= 500:
+                raise ValueError("Override reason must contain between 10 and 500 characters")
         dataset = await self._dataset_store.get(dataset_id)
         draft = await self._dataset_store.get_draft(dataset_id)
         if dataset is None or draft is None:
@@ -117,11 +139,13 @@ class DatasetValidationService:
                 if secrets.ca_certificate is not None
                 else None
             )
+            managed_policy = await self._policy_store.get()
             source_result = await self._source_validator.validate(
                 connection,
                 password=password,
                 ca_certificate=ca_certificate,
                 definition=draft.definition,
+                policy=managed_policy.policy,
             )
         except (ConnectionSecretUnavailableError, SourceDatasetValidationUnavailableError) as exc:
             await self._dataset_store.record_validation_failure(
@@ -132,15 +156,41 @@ class DatasetValidationService:
                 occurred_at=datetime.now(UTC),
             )
             raise SourceDatasetValidationUnavailableError from exc
+        override = None
+        findings = source_result.findings
+        state = source_result.state
+        if normalized_reason is not None:
+            if state is not DatasetValidationState.BLOCKED:
+                raise QuerySafetyOverrideNotApplicableError
+            blocked_codes = tuple(
+                finding.code
+                for finding in findings
+                if finding.severity is ValidationSeverity.BLOCKED
+            )
+            findings = tuple(
+                replace(finding, severity=ValidationSeverity.WARNING)
+                if finding.severity is ValidationSeverity.BLOCKED
+                else finding
+                for finding in findings
+            )
+            state = DatasetValidationState.VALID_WITH_WARNINGS
+            override = QuerySafetyOverride(
+                actor_id=actor.id,
+                reason=normalized_reason,
+                occurred_at=datetime.now(UTC),
+                finding_codes=blocked_codes,
+            )
         validation = DatasetValidation(
-            state=source_result.state,
+            state=state,
             validated_revision=draft.revision,
             validated_at=datetime.now(UTC),
             compiled_sql=source_result.compiled_sql,
             result_schema=source_result.result_schema,
             plan=source_result.plan,
-            findings=source_result.findings,
+            findings=findings,
             relation_statistics=source_result.relation_statistics,
+            policy_revision=managed_policy.revision,
+            query_safety_override=override,
         )
         stored = await self._dataset_store.record_validation(
             dataset_id=dataset.id,

@@ -5,9 +5,11 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -107,6 +109,34 @@ class AuditEventModel(Base):
     resource_id: Mapped[UUID | None]
     request_id: Mapped[str | None] = mapped_column(String(128), index=True)
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+
+
+class QuerySafetyPolicyModel(Base):
+    __tablename__ = "query_safety_policy"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton"),
+        CheckConstraint("revision >= 1", name="revision_positive"),
+        CheckConstraint(
+            "estimated_rows_warning < estimated_rows_block",
+            name="estimated_rows_ordered",
+        ),
+        CheckConstraint("total_cost_warning < total_cost_block", name="total_cost_ordered"),
+        CheckConstraint("join_count_warning < join_count_block", name="join_count_ordered"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    estimated_rows_warning: Mapped[int] = mapped_column(BigInteger)
+    estimated_rows_block: Mapped[int] = mapped_column(BigInteger)
+    total_cost_warning: Mapped[float] = mapped_column(Float)
+    total_cost_block: Mapped[float] = mapped_column(Float)
+    join_count_warning: Mapped[int] = mapped_column(Integer)
+    join_count_block: Mapped[int] = mapped_column(Integer)
+    sequential_scan_rows_warning: Mapped[int] = mapped_column(BigInteger)
+    sort_rows_warning: Mapped[int] = mapped_column(BigInteger)
+    stale_statistics_days: Mapped[int] = mapped_column(Integer)
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class PostgresConnectionModel(Base):

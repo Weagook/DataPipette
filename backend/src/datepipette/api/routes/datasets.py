@@ -22,6 +22,7 @@ from datepipette.application.dataset_preview import (
 )
 from datepipette.application.dataset_validation import (
     DatasetValidationService,
+    QuerySafetyOverrideNotApplicableError,
     SourceDatasetValidationUnavailableError,
 )
 from datepipette.application.datasets import (
@@ -34,6 +35,7 @@ from datepipette.application.datasets import (
     DatasetService,
     InvalidDatasetCursorError,
 )
+from datepipette.application.query_safety import QuerySafetyAdministratorRequiredError
 from datepipette.domain.dataset_impact import (
     DatasetDependencyReference,
     DatasetSchemaImpact,
@@ -175,6 +177,10 @@ class PreviewDatasetDraftRequest(StrictModel):
     limit: int = Field(default=100, ge=1, le=MAX_PREVIEW_ROWS)
 
 
+class ValidateDatasetDraftRequest(StrictModel):
+    override_reason: str = Field(min_length=10, max_length=500)
+
+
 class DatasetResponse(BaseModel):
     id: UUID
     name: str
@@ -228,6 +234,13 @@ class RelationStatisticsResponse(BaseModel):
     statistics_updated_at: datetime | None
 
 
+class QuerySafetyOverrideResponse(BaseModel):
+    actor_id: UUID
+    reason: str
+    occurred_at: datetime
+    finding_codes: list[ValidationFindingCode]
+
+
 class DatasetValidationResponse(BaseModel):
     state: DatasetValidationState
     validated_revision: int
@@ -237,6 +250,8 @@ class DatasetValidationResponse(BaseModel):
     plan: PlanSummaryResponse | None
     findings: list[ValidationFindingResponse]
     relation_statistics: list[RelationStatisticsResponse]
+    policy_revision: int
+    query_safety_override: QuerySafetyOverrideResponse | None
 
 
 class DatasetDraftResponse(BaseModel):
@@ -546,6 +561,17 @@ def _validation_response(value: DatasetValidation) -> DatasetValidationResponse:
             )
             for item in value.relation_statistics
         ],
+        policy_revision=value.policy_revision,
+        query_safety_override=(
+            QuerySafetyOverrideResponse(
+                actor_id=value.query_safety_override.actor_id,
+                reason=value.query_safety_override.reason,
+                occurred_at=value.query_safety_override.occurred_at,
+                finding_codes=list(value.query_safety_override.finding_codes),
+            )
+            if value.query_safety_override is not None
+            else None
+        ),
     )
 
 
@@ -897,6 +923,7 @@ async def validate_dataset_draft(
     dataset_id: UUID,
     request: Request,
     session: CsrfSession,
+    payload: ValidateDatasetDraftRequest | None = None,
     if_match: Annotated[str | None, Header(alias="If-Match", max_length=64)] = None,
 ) -> DatasetValidationResponse:
     try:
@@ -905,6 +932,7 @@ async def validate_dataset_draft(
             dataset_id=dataset_id,
             expected_revision=expected_draft_revision(if_match),
             request_id=request_id(),
+            override_reason=payload.override_reason if payload is not None else None,
         )
     except DatasetRevisionConflictError as exc:
         raise ApiProblem(
@@ -921,6 +949,27 @@ async def validate_dataset_draft(
             code="source_validation_unavailable",
             title="Source validation unavailable",
             detail="The PostgreSQL source could not be reached or inspected safely.",
+        ) from exc
+    except QuerySafetyAdministratorRequiredError as exc:
+        raise ApiProblem(
+            status_code=403,
+            code="query_safety_override_forbidden",
+            title="Query Safety override forbidden",
+            detail="Only an administrator may override a blocked validation.",
+        ) from exc
+    except QuerySafetyOverrideNotApplicableError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="query_safety_override_not_applicable",
+            title="Query Safety override not applicable",
+            detail="The fresh validation did not contain a blocking policy finding.",
+        ) from exc
+    except ValueError as exc:
+        raise ApiProblem(
+            status_code=422,
+            code="query_safety_override_invalid",
+            title="Query Safety override invalid",
+            detail=str(exc),
         ) from exc
     if draft.validation is None:  # pragma: no cover - persistence contract guard
         raise RuntimeError("Dataset validation was not persisted")
