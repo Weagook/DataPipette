@@ -52,6 +52,7 @@ from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.dataset_preview import PsycopgSourceDatasetPreviewer
 from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
 from datepipette.infrastructure.duckdb_chart_queries import DuckDbChartQueryExecutor
+from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
 from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbSnapshotQueryExecutor
 from datepipette.infrastructure.export_dispatch import CeleryExportDispatcher
 from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
@@ -290,22 +291,19 @@ def create_app(
             access_authorizer,
         )
         snapshot_query_store = SqlAlchemySnapshotQueryStore(resources.session_factory)
+        interactive_query_limiter = DuckDbQueryConcurrencyLimiter()
         app.state.snapshot_query_service = snapshot_query_service or DatasetSnapshotQueryService(
             snapshot_query_store,
             DuckDbSnapshotQueryExecutor(
                 object_storages,
                 resolved_settings.snapshot_storage_path,
-                timeout_seconds=resolved_settings.snapshot_query_timeout_seconds,
-                memory_limit_mb=resolved_settings.snapshot_query_memory_limit_mb,
-                threads=resolved_settings.snapshot_query_threads,
-                temporary_directory_limit_mb=(resolved_settings.snapshot_query_temp_limit_mb),
-                maximum_concurrent_queries=resolved_settings.snapshot_query_concurrency,
+                limiter=interactive_query_limiter,
             ),
             EncryptedSnapshotCursorCodec(
                 resolved_settings.connection_encryption_key.get_secret_value()
             ),
-            resolved_settings.snapshot_query_max_response_bytes,
             access_authorizer,
+            query_safety_policy_store,
         )
         resolved_chart_service = chart_service or ChartService(
             SqlAlchemyChartStore(resources.session_factory),
@@ -313,15 +311,11 @@ def create_app(
             DuckDbChartQueryExecutor(
                 object_storages,
                 resolved_settings.snapshot_storage_path,
-                timeout_seconds=resolved_settings.snapshot_query_timeout_seconds,
-                memory_limit_mb=resolved_settings.snapshot_query_memory_limit_mb,
-                threads=resolved_settings.snapshot_query_threads,
-                temporary_directory_limit_mb=resolved_settings.snapshot_query_temp_limit_mb,
-                maximum_concurrent_queries=resolved_settings.snapshot_query_concurrency,
+                limiter=interactive_query_limiter,
                 installation_timezone=resolved_settings.installation_timezone,
             ),
             access_authorizer,
-            resolved_settings.snapshot_query_max_response_bytes,
+            query_safety_policy_store,
         )
         app.state.chart_service = resolved_chart_service
         app.state.dashboard_service = dashboard_service or DashboardService(

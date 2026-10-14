@@ -25,9 +25,34 @@ class ManagedQuerySafetyPolicy:
     updated_by: UUID | None
 
 
-class QuerySafetyPolicyStore(Protocol):
+@dataclass(frozen=True, slots=True)
+class InteractiveQueryRuntime:
+    """One immutable set of DuckDB limits captured for a request."""
+
+    timeout_seconds: float
+    memory_limit_mb: int
+    threads: int
+    concurrency: int
+    temporary_directory_limit_mb: int
+    maximum_response_bytes: int
+
+    @classmethod
+    def from_policy(cls, policy: QuerySafetyPolicy) -> "InteractiveQueryRuntime":
+        return cls(
+            timeout_seconds=policy.interactive_query_timeout_seconds,
+            memory_limit_mb=policy.interactive_query_memory_limit_mb,
+            threads=policy.interactive_query_threads,
+            concurrency=policy.interactive_query_concurrency,
+            temporary_directory_limit_mb=policy.interactive_query_temp_limit_mb,
+            maximum_response_bytes=policy.interactive_query_max_response_bytes,
+        )
+
+
+class QuerySafetyPolicyReader(Protocol):
     async def get(self) -> ManagedQuerySafetyPolicy: ...
 
+
+class QuerySafetyPolicyStore(QuerySafetyPolicyReader, Protocol):
     async def replace(
         self,
         *,

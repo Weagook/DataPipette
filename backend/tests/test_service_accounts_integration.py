@@ -52,6 +52,7 @@ class StubChartService:
     async def _result(self, values: dict[str, Any]) -> ChartQueryResult:
         self.actors.append(values["actor"].account_type)
         return ChartQueryResult(
+            policy_revision=0,
             chart_id=self.chart_id,
             chart_revision=1,
             dataset_id=self.dataset_id,

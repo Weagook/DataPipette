@@ -31,6 +31,7 @@ class ChartQueryDataResponse(BaseModel):
 
 
 class ChartQueryMetaResponse(BaseModel):
+    policy_revision: int
     chart_id: UUID
     chart_revision: int
     dataset_id: UUID
@@ -69,6 +70,7 @@ def chart_query_data_response(result: ChartQueryResult) -> ChartQueryDataRespons
 
 def chart_query_meta_response(result: ChartQueryResult) -> ChartQueryMetaResponse:
     return ChartQueryMetaResponse(
+        policy_revision=result.policy_revision,
         chart_id=result.chart_id,
         chart_revision=result.chart_revision,
         dataset_id=result.dataset_id,

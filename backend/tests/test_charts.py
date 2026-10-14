@@ -23,6 +23,10 @@ from datepipette.application.charts import (
     InvalidChartDefinitionError,
     prepare_chart_query,
 )
+from datepipette.application.query_safety import (
+    InteractiveQueryRuntime,
+    ManagedQuerySafetyPolicy,
+)
 from datepipette.domain.access_control import DatasetAccess, DatasetPermission
 from datepipette.domain.charts import (
     Chart,
@@ -35,6 +39,7 @@ from datepipette.domain.charts import (
     ChartTimeBucket,
     ChartType,
 )
+from datepipette.domain.datasets import QuerySafetyPolicy
 from datepipette.domain.identity import AccountStatus, AccountType, SystemRole, User
 from datepipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
@@ -54,6 +59,15 @@ AMOUNT_ID = uuid4()
 ORDER_ID = uuid4()
 OCCURRED_AT_ID = uuid4()
 MEASURE_ID = uuid4()
+
+RUNTIME = InteractiveQueryRuntime(
+    timeout_seconds=2,
+    memory_limit_mb=64,
+    threads=1,
+    concurrency=1,
+    temporary_directory_limit_mb=64,
+    maximum_response_bytes=100_000,
+)
 
 FIELDS = (
     SnapshotQueryField(REGION_ID, "region", "region", "text", False, True, "Region", None),
@@ -201,6 +215,11 @@ class RecordingExecutor:
         return ChartQueryExecution((), ({"ok": True},), False)
 
 
+class FakePolicyStore:
+    async def get(self) -> ManagedQuerySafetyPolicy:
+        return ManagedQuerySafetyPolicy(QuerySafetyPolicy(), 9, None, None)
+
+
 def test_chart_definition_round_trips_and_enforces_chart_shape() -> None:
     value = _definition()
     assert ChartDefinition.from_document(value.to_document()) == value
@@ -319,20 +338,13 @@ def test_duckdb_chart_query_groups_filters_sorts_and_limits(tmp_path: Path) -> N
         ),
         tmp_path / "snapshot.parquet",
     )
-    executor = DuckDbLocalChartQueryExecutor(
-        tmp_path,
-        timeout_seconds=2,
-        memory_limit_mb=64,
-        threads=1,
-        temporary_directory_limit_mb=64,
-        maximum_concurrent_queries=1,
-    )
+    executor = DuckDbLocalChartQueryExecutor(tmp_path)
 
     result = asyncio.run(
         executor.query(
             context=_context(),
             prepared=prepare_chart_query(_context(), _definition()),
-            maximum_bytes=100_000,
+            runtime=RUNTIME,
         )
     )
 
@@ -372,20 +384,13 @@ def test_duckdb_chart_query_supports_all_measure_functions(tmp_path: Path) -> No
         measures=measures,
         limit=10,
     )
-    executor = DuckDbLocalChartQueryExecutor(
-        tmp_path,
-        timeout_seconds=2,
-        memory_limit_mb=64,
-        threads=1,
-        temporary_directory_limit_mb=64,
-        maximum_concurrent_queries=1,
-    )
+    executor = DuckDbLocalChartQueryExecutor(tmp_path)
 
     result = asyncio.run(
         executor.query(
             context=_context(),
             prepared=prepare_chart_query(_context(), definition),
-            maximum_bytes=100_000,
+            runtime=RUNTIME,
         )
     )
 
@@ -440,11 +445,6 @@ def test_duckdb_chart_query_uses_installation_timezone_for_time_buckets(
     )
     executor = DuckDbLocalChartQueryExecutor(
         tmp_path,
-        timeout_seconds=2,
-        memory_limit_mb=64,
-        threads=1,
-        temporary_directory_limit_mb=64,
-        maximum_concurrent_queries=1,
         installation_timezone="Asia/Almaty",
     )
 
@@ -452,7 +452,7 @@ def test_duckdb_chart_query_uses_installation_timezone_for_time_buckets(
         executor.query(
             context=_context(),
             prepared=prepare_chart_query(_context(), definition),
-            maximum_bytes=100_000,
+            runtime=RUNTIME,
         )
     )
 
@@ -489,11 +489,6 @@ def test_duckdb_chart_hour_buckets_follow_daylight_saving_transition(tmp_path: P
     )
     executor = DuckDbLocalChartQueryExecutor(
         tmp_path,
-        timeout_seconds=2,
-        memory_limit_mb=64,
-        threads=1,
-        temporary_directory_limit_mb=64,
-        maximum_concurrent_queries=1,
         installation_timezone="America/New_York",
     )
 
@@ -501,7 +496,7 @@ def test_duckdb_chart_hour_buckets_follow_daylight_saving_transition(tmp_path: P
         executor.query(
             context=_context(),
             prepared=prepare_chart_query(_context(), definition),
-            maximum_bytes=100_000,
+            runtime=RUNTIME,
         )
     )
 
@@ -521,7 +516,7 @@ def test_chart_service_create_update_query_and_rechecks_dataset_access() -> None
         FakeSnapshotStore(_context()),
         RecordingExecutor(),
         DatasetAccessAuthorizer(access),
-        100_000,
+        FakePolicyStore(),
     )
 
     async def exercise() -> None:
@@ -544,7 +539,9 @@ def test_chart_service_create_update_query_and_rechecks_dataset_access() -> None
         assert updated.revision == 2
         result = await service.query(actor=actor, chart_id=chart.id, request_id="req-query")
         assert result.rows == ({"ok": True},)
+        assert result.policy_revision == 9
         assert store.audits[-1]["returned_rows"] == 1
+        assert store.audits[-1]["policy_revision"] == 9
         assert store.audits[-1]["actor_type"] is AccountType.HUMAN
 
         service_actor = replace(actor, account_type=AccountType.SERVICE)
@@ -589,7 +586,7 @@ def test_chart_service_conceals_other_owners_and_rejects_bad_cursor() -> None:
         FakeSnapshotStore(_context()),
         RecordingExecutor(),
         DatasetAccessAuthorizer(FakeAccessStore(actor.id)),
-        100_000,
+        FakePolicyStore(),
     )
 
     async def exercise() -> None:
@@ -615,7 +612,7 @@ def test_viewer_cannot_create_chart_even_with_nominal_dataset_access() -> None:
         FakeSnapshotStore(_context()),
         RecordingExecutor(),
         DatasetAccessAuthorizer(FakeAccessStore(actor.id)),
-        100_000,
+        FakePolicyStore(),
     )
 
     async def exercise() -> None:

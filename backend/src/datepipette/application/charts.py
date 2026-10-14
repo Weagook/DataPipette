@@ -10,6 +10,10 @@ from datepipette.application.access_control import (
     DatasetAccessAuthorizer,
     DatasetAccessDeniedError,
 )
+from datepipette.application.query_safety import (
+    InteractiveQueryRuntime,
+    QuerySafetyPolicyReader,
+)
 from datepipette.application.snapshot_queries import (
     DatasetSnapshotNotPublishedError,
     DatasetSnapshotUnavailableError,
@@ -131,6 +135,7 @@ class ChartStore(Protocol):
         context: ActiveSnapshotQueryContext,
         actor_id: UUID,
         actor_type: AccountType,
+        policy_revision: int,
         returned_rows: int,
         truncated_by_bytes: bool,
         error_code: str | None,
@@ -149,7 +154,7 @@ class ChartQueryExecutor(Protocol):
         *,
         context: ActiveSnapshotQueryContext,
         prepared: PreparedChartQuery,
-        maximum_bytes: int,
+        runtime: InteractiveQueryRuntime,
     ) -> ChartQueryExecution: ...
 
 
@@ -262,13 +267,13 @@ class ChartService:
         snapshot_store: ActiveSnapshotContextStore,
         executor: ChartQueryExecutor,
         authorizer: DatasetAccessAuthorizer,
-        maximum_response_bytes: int,
+        policy_store: QuerySafetyPolicyReader,
     ) -> None:
         self._store = store
         self._snapshot_store = snapshot_store
         self._executor = executor
         self._authorizer = authorizer
-        self._maximum_response_bytes = maximum_response_bytes
+        self._policy_store = policy_store
 
     async def create(self, *, actor: User, value: ChartCreate, request_id: str) -> Chart:
         if actor.status is not AccountStatus.ACTIVE or actor.role not in {
@@ -390,17 +395,20 @@ class ChartService:
         request_id: str,
     ) -> ChartQueryResult:
         prepared = prepare_chart_query(context, chart.definition)
+        managed_policy = await self._policy_store.get()
+        runtime = InteractiveQueryRuntime.from_policy(managed_policy.policy)
         try:
             execution = await self._executor.query(
                 context=context,
                 prepared=prepared,
-                maximum_bytes=self._maximum_response_bytes,
+                runtime=runtime,
             )
         except (ChartQueryTimeoutError, ChartQueryResultTooLargeError, ChartQueryUnavailableError):
             await self._record_query(
                 chart=chart,
                 context=context,
                 actor=actor,
+                policy_revision=managed_policy.revision,
                 returned_rows=0,
                 truncated_by_bytes=False,
                 error_code="execution_failed",
@@ -411,12 +419,14 @@ class ChartService:
             chart=chart,
             context=context,
             actor=actor,
+            policy_revision=managed_policy.revision,
             returned_rows=len(execution.rows),
             truncated_by_bytes=execution.truncated_by_bytes,
             error_code=None,
             request_id=request_id,
         )
         return ChartQueryResult(
+            policy_revision=managed_policy.revision,
             chart_id=chart.id,
             chart_revision=chart.revision,
             dataset_id=chart.dataset_id,
@@ -459,6 +469,7 @@ class ChartService:
         chart: Chart,
         context: ActiveSnapshotQueryContext,
         actor: User,
+        policy_revision: int,
         returned_rows: int,
         truncated_by_bytes: bool,
         error_code: str | None,
@@ -469,6 +480,7 @@ class ChartService:
             context=context,
             actor_id=actor.id,
             actor_type=actor.account_type,
+            policy_revision=policy_revision,
             returned_rows=returned_rows,
             truncated_by_bytes=truncated_by_bytes,
             error_code=error_code,

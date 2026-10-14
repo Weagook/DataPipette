@@ -43,6 +43,12 @@ class ReplaceQuerySafetyPolicyRequest(BaseModel):
     preview_max_response_bytes: int = Field(ge=65_536, le=1_048_576)
     refresh_statement_timeout_seconds: int = Field(ge=1, le=86_400)
     refresh_max_rows: int = Field(ge=1, le=1_000_000_000)
+    interactive_query_timeout_seconds: float = Field(gt=0, le=60)
+    interactive_query_memory_limit_mb: int = Field(ge=64, le=4096)
+    interactive_query_threads: int = Field(ge=1, le=16)
+    interactive_query_concurrency: int = Field(ge=1, le=64)
+    interactive_query_temp_limit_mb: int = Field(ge=64, le=8192)
+    interactive_query_max_response_bytes: int = Field(ge=65_536, le=16_777_216)
 
     @model_validator(mode="after")
     def validate_threshold_order(self) -> "ReplaceQuerySafetyPolicyRequest":
@@ -71,6 +77,12 @@ class QuerySafetyPolicyResponse(BaseModel):
     preview_max_response_bytes: int
     refresh_statement_timeout_seconds: int
     refresh_max_rows: int
+    interactive_query_timeout_seconds: float
+    interactive_query_memory_limit_mb: int
+    interactive_query_threads: int
+    interactive_query_concurrency: int
+    interactive_query_temp_limit_mb: int
+    interactive_query_max_response_bytes: int
     updated_at: datetime | None
     updated_by: UUID | None
 

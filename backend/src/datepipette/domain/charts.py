@@ -265,6 +265,7 @@ class ChartQueryExecution:
 
 @dataclass(frozen=True, slots=True)
 class ChartQueryResult:
+    policy_revision: int
     chart_id: UUID
     chart_revision: int
     dataset_id: UUID

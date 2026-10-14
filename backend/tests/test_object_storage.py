@@ -14,6 +14,7 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
+from datepipette.application.query_safety import InteractiveQueryRuntime
 from datepipette.config import Settings
 from datepipette.domain.exports import ExportFormat, ExportJob, ExportState
 from datepipette.domain.snapshot_queries import (
@@ -22,6 +23,7 @@ from datepipette.domain.snapshot_queries import (
     SnapshotQueryField,
     SnapshotRefreshState,
 )
+from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
 from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbSnapshotQueryExecutor
 from datepipette.infrastructure.local_exports import DatasetExportExecutor
 from datepipette.infrastructure.object_storage import (
@@ -403,11 +405,7 @@ def test_minio_snapshot_query_export_and_private_download(tmp_path: Path) -> Non
     query_executor = DuckDbSnapshotQueryExecutor(
         storages,
         tmp_path,
-        timeout_seconds=5,
-        memory_limit_mb=64,
-        threads=1,
-        temporary_directory_limit_mb=64,
-        maximum_concurrent_queries=1,
+        limiter=DuckDbQueryConcurrencyLimiter(),
     )
     page = asyncio.run(
         query_executor.query(
@@ -417,7 +415,7 @@ def test_minio_snapshot_query_export_and_private_download(tmp_path: Path) -> Non
             sorts=(),
             position=None,
             page_size=10,
-            maximum_bytes=65_536,
+            runtime=InteractiveQueryRuntime(5, 64, 1, 1, 64, 65_536),
         )
     )
     assert page.rows == ({"record_id": 1}, {"record_id": 2}, {"record_id": 3})

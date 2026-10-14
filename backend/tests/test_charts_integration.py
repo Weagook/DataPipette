@@ -393,6 +393,29 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
         assert invalid.status_code == 422
         assert invalid.json()["code"] == "chart_definition_invalid"
 
+        current_policy = client.get("/api/v1/query-safety-policy")
+        replacement = {
+            key: value
+            for key, value in current_policy.json().items()
+            if key not in {"revision", "updated_at", "updated_by"}
+        }
+        replacement.update(
+            {
+                "interactive_query_timeout_seconds": 5,
+                "interactive_query_memory_limit_mb": 64,
+                "interactive_query_threads": 1,
+                "interactive_query_concurrency": 1,
+                "interactive_query_temp_limit_mb": 64,
+                "interactive_query_max_response_bytes": 65_536,
+            }
+        )
+        replaced_policy = client.put(
+            "/api/v1/query-safety-policy",
+            json=replacement,
+            headers={**_csrf(client), "If-Match": current_policy.headers["ETag"]},
+        )
+        assert replaced_policy.status_code == 200, replaced_policy.text
+
         queried = client.post(f"/api/v1/charts/{chart_id}/data:query")
         assert queried.status_code == 200, queried.text
         columns = queried.json()["data"]["columns"]
@@ -401,6 +424,7 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
         assert [row[columns[0]["key"]] for row in rows] == ["North", "South"]
         assert [row[columns[1]["key"]] for row in rows] == ["25.00", "25.00"]
         assert queried.json()["meta"]["snapshot_id"]
+        assert queried.json()["meta"]["policy_revision"] == 1
 
         bucket_measure_id = uuid4()
         bucket_payload = {

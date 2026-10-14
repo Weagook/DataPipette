@@ -110,6 +110,7 @@ class SnapshotRowsDataResponse(BaseModel):
 
 
 class SnapshotRowsMetaResponse(BaseModel):
+    policy_revision: int
     snapshot_id: UUID
     snapshot_state: Literal["ready"] = "ready"
     snapshot_row_count: int
@@ -379,6 +380,7 @@ async def query_dataset_rows(
             rows=list(page.rows),
         ),
         meta=SnapshotRowsMetaResponse(
+            policy_revision=page.policy_revision,
             snapshot_id=page.snapshot_id,
             snapshot_row_count=page.snapshot_row_count,
             last_success_at=page.snapshot_activated_at,

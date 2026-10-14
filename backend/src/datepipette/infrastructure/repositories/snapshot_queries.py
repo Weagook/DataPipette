@@ -239,6 +239,7 @@ class SqlAlchemySnapshotQueryStore:
         *,
         context: ActiveSnapshotQueryContext,
         actor_id: UUID,
+        policy_revision: int,
         selected_field_count: int,
         filter_count: int,
         sort_count: int,
@@ -271,6 +272,7 @@ class SqlAlchemySnapshotQueryStore:
                     request_id=request_id,
                     details={
                         "snapshot_id": str(context.snapshot_id),
+                        "policy_revision": policy_revision,
                         "selected_field_count": selected_field_count,
                         "filter_count": filter_count,
                         "sort_count": sort_count,
