@@ -37,6 +37,10 @@ from datepipette.application.exports import DatasetExportService, ExportDownload
 from datepipette.application.health import ReadinessProbe
 from datepipette.application.refresh_runs import RefreshRunService
 from datepipette.application.schedules import RefreshScheduleService
+from datepipette.application.service_accounts import (
+    ApiTokenAuthenticationService,
+    ServiceAccountService,
+)
 from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
 from datepipette.application.user_administration import UserAdministrationService
 from datepipette.config import Settings, get_settings
@@ -69,6 +73,7 @@ from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetSt
 from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
 from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
 from datepipette.infrastructure.repositories.schedules import SqlAlchemyRefreshScheduleStore
+from datepipette.infrastructure.repositories.service_accounts import SqlAlchemyServiceAccountStore
 from datepipette.infrastructure.repositories.snapshot_queries import (
     SqlAlchemySnapshotQueryStore,
 )
@@ -101,6 +106,8 @@ def create_app(
     connection_grant_service: ConnectionGrantService | None = None,
     chart_service: ChartService | None = None,
     dashboard_service: DashboardService | None = None,
+    service_account_service: ServiceAccountService | None = None,
+    api_token_authentication_service: ApiTokenAuthenticationService | None = None,
 ) -> FastAPI:
     """Build an API application with optionally injected test dependencies."""
 
@@ -146,6 +153,10 @@ def create_app(
                 app.state.chart_service = chart_service
             if dashboard_service is not None:
                 app.state.dashboard_service = dashboard_service
+            if service_account_service is not None:
+                app.state.service_account_service = service_account_service
+            if api_token_authentication_service is not None:
+                app.state.api_token_authentication_service = api_token_authentication_service
             yield
             return
 
@@ -169,6 +180,13 @@ def create_app(
             or UserAdministrationService(
                 SqlAlchemyUserAdministrationStore(resources.session_factory)
             )
+        )
+        service_account_store = SqlAlchemyServiceAccountStore(resources.session_factory)
+        app.state.service_account_service = service_account_service or ServiceAccountService(
+            service_account_store
+        )
+        app.state.api_token_authentication_service = (
+            api_token_authentication_service or ApiTokenAuthenticationService(service_account_store)
         )
         connection_store = SqlAlchemyConnectionStore(resources.session_factory)
         connection_access_store = SqlAlchemyConnectionAccessStore(resources.session_factory)

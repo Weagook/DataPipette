@@ -28,6 +28,13 @@ class UserModel(Base):
         CheckConstraint("email = lower(email)", name="email_normalized"),
         CheckConstraint("role IN ('admin', 'analyst', 'viewer')", name="role_valid"),
         CheckConstraint("status IN ('active', 'disabled')", name="status_valid"),
+        CheckConstraint("account_type IN ('human', 'service')", name="account_type_valid"),
+        Index(
+            "uq_service_accounts_name_normalized",
+            text("lower(display_name)"),
+            unique=True,
+            postgresql_where=text("account_type = 'service'"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
@@ -39,6 +46,25 @@ class UserModel(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    account_type: Mapped[str] = mapped_column(String(20))
+
+
+class ApiTokenModel(Base):
+    __tablename__ = "api_tokens"
+    __table_args__ = (CheckConstraint("jsonb_typeof(scopes) = 'array'", name="scopes_array"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    service_account_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    scopes: Mapped[list[str]] = mapped_column(JSONB)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class BrowserSessionModel(Base):

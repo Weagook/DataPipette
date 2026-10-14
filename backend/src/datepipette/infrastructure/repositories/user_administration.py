@@ -16,7 +16,7 @@ from datepipette.application.user_administration import (
     UserUpdate,
 )
 from datepipette.domain.audit import AuditActorType, AuditOutcome
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.identity import AccountStatus, AccountType, SystemRole, User
 from datepipette.infrastructure.models import AuditEventModel, BrowserSessionModel, UserModel
 from datepipette.infrastructure.repositories.authentication import to_user
 
@@ -46,6 +46,7 @@ class SqlAlchemyUserAdministrationStore:
             last_login_at=None,
             created_at=occurred_at,
             updated_at=occurred_at,
+            account_type=AccountType.HUMAN.value,
         )
         try:
             async with self._session_factory() as session, session.begin():
@@ -76,7 +77,12 @@ class SqlAlchemyUserAdministrationStore:
         after_id: UUID | None,
         limit: int,
     ) -> list[User]:
-        statement = select(UserModel).order_by(UserModel.created_at, UserModel.id).limit(limit)
+        statement = (
+            select(UserModel)
+            .where(UserModel.account_type == AccountType.HUMAN.value)
+            .order_by(UserModel.created_at, UserModel.id)
+            .limit(limit)
+        )
         if after_created_at is not None and after_id is not None:
             statement = statement.where(
                 or_(
@@ -93,7 +99,12 @@ class SqlAlchemyUserAdministrationStore:
 
     async def get_user(self, user_id: UUID) -> User | None:
         async with self._session_factory() as session:
-            model = await session.get(UserModel, user_id)
+            model = await session.scalar(
+                select(UserModel).where(
+                    UserModel.id == user_id,
+                    UserModel.account_type == AccountType.HUMAN.value,
+                )
+            )
         return to_user(model) if model is not None else None
 
     async def update_user(
@@ -107,7 +118,12 @@ class SqlAlchemyUserAdministrationStore:
     ) -> User | None:
         async with self._session_factory() as session, session.begin():
             await session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
-            model = await session.get(UserModel, user_id)
+            model = await session.scalar(
+                select(UserModel).where(
+                    UserModel.id == user_id,
+                    UserModel.account_type == AccountType.HUMAN.value,
+                )
+            )
             if model is None:
                 return None
 
@@ -128,6 +144,7 @@ class SqlAlchemyUserAdministrationStore:
                     .where(
                         UserModel.role == SystemRole.ADMIN.value,
                         UserModel.status == AccountStatus.ACTIVE.value,
+                        UserModel.account_type == AccountType.HUMAN.value,
                     )
                 )
                 if active_admins is None or active_admins <= 1:
@@ -180,7 +197,15 @@ class SqlAlchemyUserAdministrationStore:
         request_id: str,
     ) -> int | None:
         async with self._session_factory() as session, session.begin():
-            if await session.get(UserModel, user_id) is None:
+            if (
+                await session.scalar(
+                    select(UserModel.id).where(
+                        UserModel.id == user_id,
+                        UserModel.account_type == AccountType.HUMAN.value,
+                    )
+                )
+                is None
+            ):
                 return None
             result = cast(
                 CursorResult[Any],

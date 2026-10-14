@@ -70,6 +70,7 @@ async def _seed(now: datetime) -> dict[str, Any]:
                     last_login_at=None,
                     created_at=now,
                     updated_at=now,
+                    account_type="human",
                 )
             )
             await session.flush()

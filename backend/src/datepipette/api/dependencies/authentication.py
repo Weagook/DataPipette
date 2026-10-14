@@ -3,7 +3,7 @@
 from typing import Annotated, cast
 
 from fastapi import Depends, Header, Request, Security, status
-from fastapi.security import APIKeyCookie
+from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
 
 from datepipette.api.problems import ApiProblem
 from datepipette.application.auth_service import (
@@ -11,12 +11,21 @@ from datepipette.application.auth_service import (
     InvalidCsrfError,
     InvalidSessionError,
 )
+from datepipette.application.service_accounts import (
+    ApiTokenAuthenticationService,
+    InvalidApiTokenError,
+)
 from datepipette.domain.identity import AuthenticatedSession, SystemRole
+from datepipette.domain.service_accounts import (
+    ApiTokenScope,
+    AuthenticatedApiToken,
+)
 from datepipette.logging import request_id_context
 
 SESSION_COOKIE_NAME = "datepipette_session"
 CSRF_COOKIE_NAME = "datepipette_csrf"
 session_cookie_scheme = APIKeyCookie(name=SESSION_COOKIE_NAME, auto_error=False)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def authentication_service(request: Request) -> AuthenticationService:
@@ -49,6 +58,56 @@ async def require_current_session(
 
 
 CurrentSession = Annotated[AuthenticatedSession, Depends(require_current_session)]
+
+AuthenticatedIdentity = AuthenticatedSession | AuthenticatedApiToken
+
+
+def api_token_authentication_service(request: Request) -> ApiTokenAuthenticationService:
+    return cast(
+        ApiTokenAuthenticationService,
+        request.app.state.api_token_authentication_service,
+    )
+
+
+async def require_dashboard_reader(
+    request: Request,
+    bearer: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_scheme)],
+    session_token: Annotated[str | None, Security(session_cookie_scheme)],
+) -> AuthenticatedIdentity:
+    """Accept a browser session or a dashboard-scoped service token."""
+
+    if bearer is not None:
+        try:
+            identity = await api_token_authentication_service(request).authenticate(
+                bearer.credentials
+            )
+        except InvalidApiTokenError as exc:
+            raise ApiProblem(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                code="authentication_required",
+                title="Authentication required",
+                detail="A valid browser session or API token is required.",
+            ) from exc
+        if ApiTokenScope.DASHBOARDS_READ not in identity.scopes:
+            raise ApiProblem(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="api_token_scope_required",
+                title="API token scope required",
+                detail="The API token does not permit dashboard reads.",
+            )
+        return identity
+    try:
+        return await authentication_service(request).authenticate(session_token)
+    except InvalidSessionError as exc:
+        raise ApiProblem(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="authentication_required",
+            title="Authentication required",
+            detail="A valid browser session or API token is required.",
+        ) from exc
+
+
+DashboardReader = Annotated[AuthenticatedIdentity, Depends(require_dashboard_reader)]
 
 
 async def require_csrf_session(

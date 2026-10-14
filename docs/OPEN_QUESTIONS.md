@@ -27,7 +27,7 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## API
 
-- Approve the exact scope vocabulary for API tokens.
+- Approve additional API-token scopes beyond the implemented `dashboards:read` scope.
 - Approve endpoint names and action conventions before publishing OpenAPI v1.
 - Define cursor encoding and invalidation behavior precisely.
 - Define rate-limit policy for humans, service accounts, queries, refresh, and export.

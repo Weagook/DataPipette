@@ -15,10 +15,15 @@ class SystemRole(StrEnum):
 
 
 class AccountStatus(StrEnum):
-    """Whether a human account may authenticate."""
+    """Whether an account may authenticate."""
 
     ACTIVE = "active"
     DISABLED = "disabled"
+
+
+class AccountType(StrEnum):
+    HUMAN = "human"
+    SERVICE = "service"
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +36,7 @@ class User:
     last_login_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    account_type: AccountType = AccountType.HUMAN
 
 
 @dataclass(frozen=True, slots=True)
