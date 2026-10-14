@@ -20,6 +20,7 @@ from datepipette.application.datasets import (
     DatasetStore,
     require_dataset_owner,
 )
+from datepipette.application.query_safety import QuerySafetyPolicyStore
 from datepipette.domain.connections import PostgresConnection
 from datepipette.domain.datasets import (
     DatasetDefinition,
@@ -42,6 +43,10 @@ class SourceDatasetPreviewUnavailableError(Exception):
     pass
 
 
+class PreviewPolicyLimitExceededError(Exception):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class SourcePreviewResult:
     rows: tuple[dict[str, Any], ...]
@@ -58,6 +63,7 @@ class SourceDatasetPreviewer(Protocol):
         definition: DatasetDefinition,
         limit: int,
         maximum_bytes: int,
+        statement_timeout_seconds: int,
     ) -> SourcePreviewResult: ...
 
 
@@ -69,12 +75,14 @@ class DatasetPreviewService:
         cipher: SecretCipher,
         source_previewer: SourceDatasetPreviewer,
         authorizer: ConnectionAccessAuthorizer,
+        policy_store: QuerySafetyPolicyStore,
     ) -> None:
         self._dataset_store = dataset_store
         self._connection_store = connection_store
         self._cipher = cipher
         self._source_previewer = source_previewer
         self._authorizer = authorizer
+        self._policy_store = policy_store
 
     async def preview(
         self,
@@ -85,9 +93,6 @@ class DatasetPreviewService:
         limit: int,
         request_id: str,
     ) -> DatasetPreview:
-        if not 1 <= limit <= MAX_PREVIEW_ROWS:
-            raise ValueError("Preview limit is outside the supported range")
-
         dataset = await self._dataset_store.get(dataset_id)
         draft = await self._dataset_store.get_draft(dataset_id)
         if dataset is None or draft is None:
@@ -123,6 +128,10 @@ class DatasetPreviewService:
         ):
             raise DatasetDraftNotValidatedError
 
+        policy = await self._policy_store.get()
+        if not 1 <= limit <= min(MAX_PREVIEW_ROWS, policy.policy.preview_max_rows):
+            raise PreviewPolicyLimitExceededError
+
         connection = await self._connection_store.get(dataset.connection_id)
         secrets = await self._connection_store.get_secrets(dataset.connection_id)
         if connection is None or secrets is None:
@@ -148,7 +157,8 @@ class DatasetPreviewService:
                 ca_certificate=ca_certificate,
                 definition=draft.definition,
                 limit=limit,
-                maximum_bytes=MAX_PREVIEW_BYTES,
+                maximum_bytes=min(MAX_PREVIEW_BYTES, policy.policy.preview_max_response_bytes),
+                statement_timeout_seconds=policy.policy.preview_statement_timeout_seconds,
             )
         except (ConnectionSecretUnavailableError, SourceDatasetPreviewUnavailableError) as exc:
             await self._dataset_store.record_preview_failure(
@@ -178,6 +188,7 @@ class DatasetPreviewService:
             raise DatasetNotFoundError
         return DatasetPreview(
             revision=draft.revision,
+            policy_revision=policy.revision,
             columns=validation.result_schema,
             rows=source_result.rows,
             requested_limit=limit,

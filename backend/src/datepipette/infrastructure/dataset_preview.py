@@ -61,6 +61,7 @@ class PsycopgSourceDatasetPreviewer:
         definition: DatasetDefinition,
         limit: int,
         maximum_bytes: int,
+        statement_timeout_seconds: int | None = None,
     ) -> SourcePreviewResult:
         try:
             async with open_read_only_source(
@@ -68,7 +69,7 @@ class PsycopgSourceDatasetPreviewer:
                 password=password,
                 ca_certificate=ca_certificate,
                 connect_timeout_seconds=self._connect_timeout,
-                statement_timeout_seconds=self._statement_timeout,
+                statement_timeout_seconds=(statement_timeout_seconds or self._statement_timeout),
             ) as source:
                 query = compile_bounded_select(definition)
                 cursor_name = f"datepipette_preview_{uuid4().hex}"

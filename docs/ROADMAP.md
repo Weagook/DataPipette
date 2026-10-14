@@ -45,7 +45,8 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Extend the initial non-executing PostgreSQL plan guard into a configurable Query Safety Advisor foundation
 - [x] Explainable warnings for large scans, absence of visible indexes, expensive joins/sorts, stale statistics, and oversized results
 - [x] Revisioned administrator planner policies for estimated rows, planner cost, and joins, with audited privileged overrides
-- Operation-specific runtime policies for timeout, result size, memory, and concurrency
+- [x] Source preview/refresh runtime policies for statement timeout and result-size bounds
+- Analytical DuckDB runtime policies for timeout, response size, memory, and shared concurrency
 - Read-only index/query recommendations and estimate-versus-actual execution metrics; DatePipette never applies source DDL
 - [x] Filtered, paginated administrator audit-event API
 - Administrator audit UI (frontend phase)

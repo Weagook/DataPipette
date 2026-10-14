@@ -1987,6 +1987,8 @@ export interface components {
         DatasetPreviewResponse: {
             /** Columns */
             columns: components["schemas"]["ValidatedFieldResponse"][];
+            /** Policy Revision */
+            policy_revision: number;
             /** Requested Limit */
             requested_limit: number;
             /** Returned Rows */
@@ -2513,6 +2515,16 @@ export interface components {
             join_count_block: number;
             /** Join Count Warning */
             join_count_warning: number;
+            /** Preview Max Response Bytes */
+            preview_max_response_bytes: number;
+            /** Preview Max Rows */
+            preview_max_rows: number;
+            /** Preview Statement Timeout Seconds */
+            preview_statement_timeout_seconds: number;
+            /** Refresh Max Rows */
+            refresh_max_rows: number;
+            /** Refresh Statement Timeout Seconds */
+            refresh_statement_timeout_seconds: number;
             /** Revision */
             revision: number;
             /** Sequential Scan Rows Warning */
@@ -2703,6 +2715,16 @@ export interface components {
             join_count_block: number;
             /** Join Count Warning */
             join_count_warning: number;
+            /** Preview Max Response Bytes */
+            preview_max_response_bytes: number;
+            /** Preview Max Rows */
+            preview_max_rows: number;
+            /** Preview Statement Timeout Seconds */
+            preview_statement_timeout_seconds: number;
+            /** Refresh Max Rows */
+            refresh_max_rows: number;
+            /** Refresh Statement Timeout Seconds */
+            refresh_statement_timeout_seconds: number;
             /** Sequential Scan Rows Warning */
             sequential_scan_rows_warning: number;
             /** Sort Rows Warning */

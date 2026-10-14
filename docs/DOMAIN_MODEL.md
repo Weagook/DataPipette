@@ -172,9 +172,9 @@ The administrator read projection preserves human-user, service-account, anonymo
 
 ### Query Safety policy
 
-The singleton installation-wide planner policy contains warning and block thresholds for estimated rows, planner cost, and join count plus advisory scan, sort, and statistics-age thresholds. Absence of a stored row means revision-zero installation defaults. Complete administrator replacement creates or increments the metadata revision under an ETag and produces an audit event.
+The singleton installation-wide policy contains warning and block thresholds for estimated rows, planner cost, and join count; advisory scan, sort, and statistics-age thresholds; preview statement-time, row, and response-byte budgets; and refresh statement-time and result-row budgets. Absence of a stored row means revision-zero installation defaults. Complete administrator replacement creates or increments the metadata revision under an ETag and produces an audit event.
 
-Each new dataset validation stores the exact policy revision used. A privileged override is embedded in that immutable validation artifact with actor, reason, occurrence time, and stable blocked finding codes; it is not a reusable permission or a global bypass.
+Each new dataset validation stores the exact policy revision used, and preview responses identify their applied revision. A refresh worker reads the current policy once at job start. A privileged planner override is embedded in that immutable validation artifact with actor, reason, occurrence time, and stable blocked finding codes; it is not a reusable permission, a global bypass, or permission to exceed runtime budgets.
 
 ## Relationships
 

@@ -108,6 +108,17 @@ def test_query_safety_thresholds_are_bounded_and_ordered() -> None:
     assert settings.query_safety_estimated_rows_block == 10_000_000
     assert settings.query_safety_total_cost_warning == 100_000
     assert settings.query_safety_join_count_block == 9
+    assert settings.preview_statement_timeout_seconds == 5
+    assert settings.preview_max_rows == 200
+    assert settings.preview_max_response_bytes == 1_048_576
+    assert settings.refresh_statement_timeout_seconds == 1800
+    assert settings.refresh_max_rows == 10_000_000
+    policy = settings.default_query_safety_policy()
+    assert policy.preview_statement_timeout_seconds == 5
+    assert policy.preview_max_rows == 200
+    assert policy.preview_max_response_bytes == 1_048_576
+    assert policy.refresh_statement_timeout_seconds == 1800
+    assert policy.refresh_max_rows == 10_000_000
     with pytest.raises(ValidationError, match="row warning"):
         Settings(
             query_safety_estimated_rows_warning=100,
@@ -120,3 +131,9 @@ def test_query_safety_thresholds_are_bounded_and_ordered() -> None:
         )
     with pytest.raises(ValidationError, match="join warning"):
         Settings(query_safety_join_count_warning=5, query_safety_join_count_block=5)
+    with pytest.raises(ValidationError):
+        Settings(preview_max_rows=201)
+    with pytest.raises(ValidationError):
+        Settings(preview_max_response_bytes=1_048_577)
+    with pytest.raises(ValidationError):
+        Settings(refresh_max_rows=0)

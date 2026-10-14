@@ -233,18 +233,41 @@ def test_preview_streams_bounded_json_safe_rows_and_audits_metadata_only() -> No
         validation = _validate(client, dataset_id, etag)
         asyncio.run(_replace_validation_artifact_text(dataset_id))
 
-        response = client.post(
+        current_policy = client.get("/api/v1/query-safety-policy")
+        replacement = {
+            key: value
+            for key, value in current_policy.json().items()
+            if key not in {"revision", "updated_at", "updated_by"}
+        }
+        replacement["preview_max_rows"] = 1
+        replaced_policy = client.put(
+            "/api/v1/query-safety-policy",
+            json=replacement,
+            headers={**_csrf(client), "If-Match": current_policy.headers["ETag"]},
+        )
+        assert replaced_policy.status_code == 200, replaced_policy.text
+
+        policy_blocked = client.post(
             f"/api/v1/datasets/{dataset_id}/draft/previews",
             json={"limit": 2},
+            headers={**_csrf(client), "If-Match": etag},
+        )
+        assert policy_blocked.status_code == 422
+        assert policy_blocked.json()["code"] == "preview_policy_limit_exceeded"
+
+        response = client.post(
+            f"/api/v1/datasets/{dataset_id}/draft/previews",
+            json={"limit": 1},
             headers={**_csrf(client), "If-Match": etag},
         )
         assert response.status_code == 200, response.text
         assert response.headers["etag"] == etag
         payload = response.json()
         assert payload["revision"] == 1
+        assert payload["policy_revision"] == 1
         assert payload["columns"] == validation["result_schema"]
-        assert payload["requested_limit"] == 2
-        assert payload["returned_rows"] == 2
+        assert payload["requested_limit"] == 1
+        assert payload["returned_rows"] == 1
         assert payload["truncated"] is True
         assert payload["truncation_reason"] == "row_limit"
 
@@ -286,8 +309,8 @@ def test_preview_streams_bounded_json_safe_rows_and_audits_metadata_only() -> No
     assert len(events) == 1
     assert events[0].details == {
         "revision": 1,
-        "requested_limit": 2,
-        "returned_rows": 2,
+        "requested_limit": 1,
+        "returned_rows": 1,
         "truncation_reason": "row_limit",
     }
     assert "alpha" not in repr(events)

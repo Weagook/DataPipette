@@ -91,3 +91,10 @@ def test_block_override_rejects_non_administrator_before_source_access() -> None
 def test_policy_rejects_non_positive_thresholds() -> None:
     with pytest.raises(ValueError, match="positive"):
         QuerySafetyPolicy(sort_rows_warning=0)
+
+
+def test_policy_cannot_expand_hard_preview_ceilings() -> None:
+    with pytest.raises(ValueError, match="row limit"):
+        QuerySafetyPolicy(preview_max_rows=201)
+    with pytest.raises(ValueError, match="byte limit"):
+        QuerySafetyPolicy(preview_max_response_bytes=1_048_577)

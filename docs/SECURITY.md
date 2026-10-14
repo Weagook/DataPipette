@@ -89,7 +89,7 @@ Dashboard-item queries accept only a dashboard ID and stable item ID; the backen
 ## PostgreSQL source safety
 
 - Administrators should configure a dedicated read-only PostgreSQL role.
-- Source operations use read-only transactions, statement timeouts, cancellation, and bounded fetch sizes.
+- Source operations use read-only transactions, statement timeouts, cancellation, and bounded fetch sizes. Preview and refresh obtain their current installation-wide runtime budgets from metadata PostgreSQL immediately before execution.
 - Refresh cancellation requires the same owner/administrator authorization and CSRF protection as refresh creation. Durable cancellation is checked again before publication; Celery revoke is not an authorization or correctness boundary.
 - Visual queries are generated only from validated structured definitions.
 - SQL values are parameterized; source identifiers are resolved from inspected and authorized metadata.
@@ -107,7 +107,8 @@ Dashboard-item queries accept only a dashboard ID and stable item ID; the backen
 - Validation runs plain `EXPLAIN (FORMAT JSON)` inside the bounded read-only source transaction. It never enables `ANALYZE`, returns source rows, or stores the raw plan.
 - Stored validation artifacts contain generated SQL and structural metadata but no credentials, values, or rows. Audit events contain only revision, outcome, counts, and stable finding codes.
 - Draft preview never executes stored SQL text: it recompiles the structured definition, binds the row limit separately, and runs inside the bounded read-only source transaction.
-- Preview uses a server-side cursor, returns at most 200 rows, and applies a one-MiB encoded-row budget. One individual source value can still be transferred before its encoded size is known; source permissions and statement timeout remain required defenses.
+- Preview uses a server-side cursor. Managed policy may narrow, but never expand, hard ceilings of 200 rows and one MiB of encoded rows. One individual source value can still be transferred before its encoded size is known; source permissions and the managed statement timeout remain required defenses.
+- Refresh checks its managed result-row budget before writing each streamed batch. Exceeding it is a permanent safe failure: the staging candidate is removed, no object or snapshot metadata is published, and any previous active snapshot remains readable.
 - Preview audit events contain revision, requested/returned counts, truncation reason, and a stable failure code only. SQL and business values are excluded.
 
 ## Connection secrets
@@ -157,7 +158,7 @@ Audit events are stored separately from application logs in an append-only appli
 
 Only active administrator browser sessions may query the installation-wide event history through `GET /api/v1/audit-events`; bearer service tokens and other roles are rejected. The API bounds each page, uses an opaque newest-first cursor, and permits only typed exact metadata filters plus a timezone-aware occurrence window. It returns producer-controlled redacted details and never expands them from credentials, request bodies, business rows, raw exceptions, or source SQL parameters. Audit reads are intentionally not audited because doing so would recursively create more events; application request IDs still correlate the read in operational logs.
 
-Query Safety planner thresholds are installation-wide metadata and may be read or replaced only by an active administrator browser session; replacement is CSRF- and ETag-protected and audited. A policy block remains the default execution boundary. An override requires a fresh validation, an administrator, and a 10–500 character governance reason. The artifact retains policy revision and override provenance, blocked findings become warnings, and a separate audit event records the safe reason and stable finding codes. Operators must not put credentials, SQL values, or business data in an override reason.
+Query Safety planner thresholds and source runtime budgets are installation-wide metadata and may be read or replaced only by an active administrator browser session; replacement is CSRF- and ETag-protected and audited. A policy block remains the default execution boundary. An override requires a fresh validation, an administrator, and a 10–500 character governance reason. The artifact retains policy revision and override provenance, blocked findings become warnings, and a separate audit event records the safe reason and stable finding codes. Operators must not put credentials, SQL values, or business data in an override reason. Overrides do not bypass preview or refresh runtime budgets.
 
 ## Network and deployment
 

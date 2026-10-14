@@ -18,6 +18,7 @@ from datepipette.application.dataset_preview import (
     MAX_PREVIEW_ROWS,
     DatasetDraftNotValidatedError,
     DatasetPreviewService,
+    PreviewPolicyLimitExceededError,
     SourceDatasetPreviewUnavailableError,
 )
 from datepipette.application.dataset_validation import (
@@ -267,6 +268,7 @@ class DatasetDraftResponse(BaseModel):
 
 class DatasetPreviewResponse(BaseModel):
     revision: int
+    policy_revision: int
     columns: list[ValidatedFieldResponse]
     rows: list[dict[str, Any]]
     requested_limit: int
@@ -578,6 +580,7 @@ def _validation_response(value: DatasetValidation) -> DatasetValidationResponse:
 def _preview_response(value: DatasetPreview) -> DatasetPreviewResponse:
     return DatasetPreviewResponse(
         revision=value.revision,
+        policy_revision=value.policy_revision,
         columns=[
             ValidatedFieldResponse(
                 field_id=field.field_id,
@@ -1025,6 +1028,13 @@ async def preview_dataset_draft(
             code="source_preview_unavailable",
             title="Source preview unavailable",
             detail="The PostgreSQL preview could not be completed safely.",
+        ) from exc
+    except PreviewPolicyLimitExceededError as exc:
+        raise ApiProblem(
+            status_code=422,
+            code="preview_policy_limit_exceeded",
+            title="Preview policy limit exceeded",
+            detail="The requested row limit exceeds the current preview policy.",
         ) from exc
     response.headers["ETag"] = draft_etag(preview.revision)
     return _preview_response(preview)

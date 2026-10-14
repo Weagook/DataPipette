@@ -1172,6 +1172,59 @@ def test_empty_source_publishes_typed_zero_row_parquet(tmp_path: Path) -> None:
         asyncio.run(engine.dispose())
 
 
+def test_refresh_row_policy_aborts_without_publishing_partial_snapshot(tmp_path: Path) -> None:
+    asyncio.run(_bootstrap_source())
+    engine = create_database_engine(TEST_SETTINGS)
+    session_factory = create_session_factory(engine)
+    store = SqlAlchemyRefreshRunStore(session_factory)
+    dispatcher = RecordingDispatcher()
+    connection_authorizer = ConnectionAccessAuthorizer(
+        SqlAlchemyConnectionAccessStore(session_factory)
+    )
+    executor = LocalParquetSnapshotExecutor(
+        session_factory,
+        AesGcmSecretCipher(TEST_SETTINGS.connection_encryption_key.get_secret_value()),
+        tmp_path,
+        connect_timeout_seconds=5,
+        statement_timeout_seconds=30,
+        batch_rows=1,
+        authorizer=connection_authorizer,
+        maximum_rows=1,
+    )
+    try:
+        with TestClient(
+            create_app(
+                settings=TEST_SETTINGS,
+                refresh_run_service=RefreshRunService(
+                    store,
+                    dispatcher,
+                    SqlAlchemyDatasetStore(session_factory),
+                    connection_authorizer,
+                ),
+            )
+        ) as client:
+            _login(client)
+            dataset_id, etag, _ = _create_and_validate(client, _connection(client))
+            refresh_url = f"/api/v1/datasets/{dataset_id}/refresh-runs"
+            requested = client.post(
+                refresh_url,
+                headers={
+                    **_csrf(client),
+                    "If-Match": etag,
+                    "Idempotency-Key": "row-policy-limit",
+                },
+            ).json()
+            worker = RefreshWorkerService(store, executor)
+            assert asyncio.run(worker.execute(UUID(requested["id"]))) is RefreshClaimOutcome.CLAIMED
+            completed = client.get(f"{refresh_url}/{requested['id']}").json()
+            assert completed["state"] == "failed"
+            assert completed["error_code"] == "result_row_limit_exceeded"
+            assert completed["snapshot_id"] is None
+            assert not list(tmp_path.rglob("*.parquet"))
+    finally:
+        asyncio.run(engine.dispose())
+
+
 async def _snapshot(snapshot_id: UUID) -> DatasetSnapshotModel:
     engine = create_database_engine(TEST_SETTINGS)
     try:

@@ -66,6 +66,10 @@ class RefreshCancelledError(Exception):
     pass
 
 
+class RefreshRowLimitExceededError(Exception):
+    pass
+
+
 def _raise_if_cancelled(cancellation: asyncio.Event) -> None:
     if cancellation.is_set():
         raise RefreshCancelledError
@@ -256,6 +260,7 @@ class ParquetSnapshotExecutor:
         statement_timeout_seconds: int,
         batch_rows: int,
         authorizer: ConnectionAccessAuthorizer,
+        maximum_rows: int = 10_000_000,
     ) -> None:
         self._session_factory = session_factory
         self._cipher = cipher
@@ -265,6 +270,7 @@ class ParquetSnapshotExecutor:
         self._statement_timeout = statement_timeout_seconds
         self._batch_rows = batch_rows
         self._authorizer = authorizer
+        self._maximum_rows = maximum_rows
 
     async def execute(
         self,
@@ -281,6 +287,8 @@ class ParquetSnapshotExecutor:
             return RefreshExecutionResult(True, snapshot=artifact)
         except RefreshCancelledError:
             return RefreshExecutionResult(False, cancelled=True)
+        except RefreshRowLimitExceededError:
+            return RefreshExecutionResult(False, "result_row_limit_exceeded")
         except UnsupportedSourceTypeError:
             return RefreshExecutionResult(False, "unsupported_source_type")
         except ConnectionSecretUnavailableError:
@@ -424,6 +432,8 @@ class ParquetSnapshotExecutor:
                             if any(len(array) != len(rows) for array in arrays):
                                 raise ValueError("Non-nullable source field returned null")
                             batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
+                            if row_count + batch.num_rows > self._maximum_rows:
+                                raise RefreshRowLimitExceededError
                             writer.write_batch(batch)
                             row_count += batch.num_rows
                 except psycopg.errors.QueryCanceled:
@@ -484,6 +494,7 @@ class LocalParquetSnapshotExecutor(ParquetSnapshotExecutor):
         statement_timeout_seconds: int,
         batch_rows: int,
         authorizer: ConnectionAccessAuthorizer,
+        maximum_rows: int = 10_000_000,
     ) -> None:
         super().__init__(
             session_factory,
@@ -494,4 +505,5 @@ class LocalParquetSnapshotExecutor(ParquetSnapshotExecutor):
             statement_timeout_seconds,
             batch_rows,
             authorizer,
+            maximum_rows,
         )

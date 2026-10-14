@@ -2489,6 +2489,10 @@
             "title": "Columns",
             "type": "array"
           },
+          "policy_revision": {
+            "title": "Policy Revision",
+            "type": "integer"
+          },
           "requested_limit": {
             "title": "Requested Limit",
             "type": "integer"
@@ -2526,6 +2530,7 @@
         },
         "required": [
           "revision",
+          "policy_revision",
           "columns",
           "rows",
           "requested_limit",
@@ -3752,6 +3757,26 @@
             "title": "Join Count Warning",
             "type": "integer"
           },
+          "preview_max_response_bytes": {
+            "title": "Preview Max Response Bytes",
+            "type": "integer"
+          },
+          "preview_max_rows": {
+            "title": "Preview Max Rows",
+            "type": "integer"
+          },
+          "preview_statement_timeout_seconds": {
+            "title": "Preview Statement Timeout Seconds",
+            "type": "integer"
+          },
+          "refresh_max_rows": {
+            "title": "Refresh Max Rows",
+            "type": "integer"
+          },
+          "refresh_statement_timeout_seconds": {
+            "title": "Refresh Statement Timeout Seconds",
+            "type": "integer"
+          },
           "revision": {
             "title": "Revision",
             "type": "integer"
@@ -3812,6 +3837,11 @@
           "sequential_scan_rows_warning",
           "sort_rows_warning",
           "stale_statistics_days",
+          "preview_statement_timeout_seconds",
+          "preview_max_rows",
+          "preview_max_response_bytes",
+          "refresh_statement_timeout_seconds",
+          "refresh_max_rows",
           "updated_at",
           "updated_by"
         ],
@@ -4290,6 +4320,36 @@
             "title": "Join Count Warning",
             "type": "integer"
           },
+          "preview_max_response_bytes": {
+            "maximum": 1048576.0,
+            "minimum": 65536.0,
+            "title": "Preview Max Response Bytes",
+            "type": "integer"
+          },
+          "preview_max_rows": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Preview Max Rows",
+            "type": "integer"
+          },
+          "preview_statement_timeout_seconds": {
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Preview Statement Timeout Seconds",
+            "type": "integer"
+          },
+          "refresh_max_rows": {
+            "maximum": 1000000000.0,
+            "minimum": 1.0,
+            "title": "Refresh Max Rows",
+            "type": "integer"
+          },
+          "refresh_statement_timeout_seconds": {
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Refresh Statement Timeout Seconds",
+            "type": "integer"
+          },
           "sequential_scan_rows_warning": {
             "maximum": 1000000000000.0,
             "minimum": 1.0,
@@ -4330,7 +4390,12 @@
           "join_count_block",
           "sequential_scan_rows_warning",
           "sort_rows_warning",
-          "stale_statistics_days"
+          "stale_statistics_days",
+          "preview_statement_timeout_seconds",
+          "preview_max_rows",
+          "preview_max_response_bytes",
+          "refresh_statement_timeout_seconds",
+          "refresh_max_rows"
         ],
         "title": "ReplaceQuerySafetyPolicyRequest",
         "type": "object"
