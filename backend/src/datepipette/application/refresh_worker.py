@@ -28,6 +28,7 @@ class RefreshWorkerStore(Protocol):
         occurred_at: datetime,
         lease_expires_at: datetime,
         max_attempts: int,
+        policy_revision: int,
     ) -> tuple[RefreshClaimOutcome, RefreshRun | None]: ...
 
     async def complete(
@@ -79,6 +80,7 @@ class RefreshWorkerService:
         retry_max_seconds: int = 300,
         cancellation_poll_seconds: float = 1.0,
         run_lease_seconds: int = 30,
+        policy_revision: int = 0,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._store = store
@@ -88,6 +90,7 @@ class RefreshWorkerService:
         self._retry_max_seconds = retry_max_seconds
         self._cancellation_poll_seconds = cancellation_poll_seconds
         self._run_lease_seconds = run_lease_seconds
+        self._policy_revision = policy_revision
         self._clock = clock or (lambda: datetime.now(UTC))
 
     async def execute(self, run_id: UUID) -> RefreshClaimOutcome:
@@ -97,6 +100,7 @@ class RefreshWorkerService:
             claimed_at,
             claimed_at + timedelta(seconds=self._run_lease_seconds),
             self._max_attempts,
+            self._policy_revision,
         )
         if outcome is not RefreshClaimOutcome.CLAIMED or run is None:
             return outcome

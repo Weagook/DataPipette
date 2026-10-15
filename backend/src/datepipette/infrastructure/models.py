@@ -146,6 +146,13 @@ class QuerySafetyPolicyModel(Base):
     interactive_query_concurrency: Mapped[int] = mapped_column(Integer)
     interactive_query_temp_limit_mb: Mapped[int] = mapped_column(Integer)
     interactive_query_max_response_bytes: Mapped[int] = mapped_column(BigInteger)
+    export_timeout_seconds: Mapped[int] = mapped_column(Integer)
+    export_memory_limit_mb: Mapped[int] = mapped_column(Integer)
+    export_threads: Mapped[int] = mapped_column(Integer)
+    export_temp_limit_mb: Mapped[int] = mapped_column(Integer)
+    export_max_rows: Mapped[int] = mapped_column(Integer)
+    export_max_bytes: Mapped[int] = mapped_column(BigInteger)
+    background_job_concurrency: Mapped[int] = mapped_column(Integer)
     updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -260,6 +267,10 @@ class DatasetRefreshRunModel(Base):
         CheckConstraint("dispatch_attempts >= 0", name="dispatch_attempts_nonnegative"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
         CheckConstraint(
+            "policy_revision IS NULL OR policy_revision >= 0",
+            name="policy_revision_nonnegative",
+        ),
+        CheckConstraint(
             "(state = 'cancelled') = (cancelled_at IS NOT NULL)",
             name="cancelled_timestamp_matches_state",
         ),
@@ -324,6 +335,7 @@ class DatasetRefreshRunModel(Base):
     dispatch_attempts: Mapped[int] = mapped_column(Integer)
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer)
+    policy_revision: Mapped[int | None] = mapped_column(Integer)
     error_code: Mapped[str | None] = mapped_column(String(50))
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -464,6 +476,10 @@ class DatasetExportModel(Base):
         CheckConstraint("jsonb_typeof(query_document) = 'object'", name="query_object"),
         CheckConstraint("dispatch_attempts >= 0", name="dispatch_attempts_nonnegative"),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        CheckConstraint(
+            "policy_revision IS NULL OR policy_revision >= 0",
+            name="policy_revision_nonnegative",
+        ),
         CheckConstraint("row_count IS NULL OR row_count >= 0", name="row_count_nonnegative"),
         CheckConstraint("byte_size IS NULL OR byte_size > 0", name="byte_size_positive"),
         CheckConstraint(
@@ -498,6 +514,7 @@ class DatasetExportModel(Base):
     dispatch_attempts: Mapped[int] = mapped_column(Integer)
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer)
+    policy_revision: Mapped[int | None] = mapped_column(Integer)
     object_key: Mapped[str | None] = mapped_column(String(1024), unique=True)
     storage_backend: Mapped[str | None] = mapped_column(String(20))
     row_count: Mapped[int | None] = mapped_column(Integer)

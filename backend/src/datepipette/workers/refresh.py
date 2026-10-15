@@ -9,6 +9,7 @@ from datepipette.application.connection_access import ConnectionAccessAuthorizer
 from datepipette.application.refresh_worker import RefreshWorkerService
 from datepipette.config import get_settings
 from datepipette.domain.refresh import RefreshClaimOutcome
+from datepipette.infrastructure.background_admission import PostgresBackgroundJobAdmission
 from datepipette.infrastructure.celery_app import celery_app
 from datepipette.infrastructure.crypto import AesGcmSecretCipher
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
@@ -34,26 +35,32 @@ async def _execute(run_id: UUID) -> RefreshClaimOutcome:
             session_factory,
             settings.default_query_safety_policy(),
         ).get()
-        service = RefreshWorkerService(
-            SqlAlchemyRefreshRunStore(session_factory),
-            ParquetSnapshotExecutor(
-                session_factory,
-                AesGcmSecretCipher(settings.connection_encryption_key.get_secret_value()),
-                object_storages.default,
-                settings.snapshot_storage_path,
-                settings.source_connect_timeout_seconds,
-                policy.policy.refresh_statement_timeout_seconds,
-                settings.refresh_batch_rows,
-                connection_authorizer,
-                maximum_rows=policy.policy.refresh_max_rows,
-            ),
-            max_attempts=settings.refresh_max_attempts,
-            retry_base_seconds=settings.refresh_retry_base_seconds,
-            retry_max_seconds=settings.refresh_retry_max_seconds,
-            cancellation_poll_seconds=settings.refresh_cancel_poll_seconds,
-            run_lease_seconds=settings.refresh_run_lease_seconds,
-        )
-        return await service.execute(run_id)
+        async with PostgresBackgroundJobAdmission(engine).slot(
+            policy.policy.background_job_concurrency
+        ) as admitted:
+            if not admitted:
+                return RefreshClaimOutcome.DEFERRED
+            service = RefreshWorkerService(
+                SqlAlchemyRefreshRunStore(session_factory),
+                ParquetSnapshotExecutor(
+                    session_factory,
+                    AesGcmSecretCipher(settings.connection_encryption_key.get_secret_value()),
+                    object_storages.default,
+                    settings.snapshot_storage_path,
+                    settings.source_connect_timeout_seconds,
+                    policy.policy.refresh_statement_timeout_seconds,
+                    settings.refresh_batch_rows,
+                    connection_authorizer,
+                    maximum_rows=policy.policy.refresh_max_rows,
+                ),
+                max_attempts=settings.refresh_max_attempts,
+                retry_base_seconds=settings.refresh_retry_base_seconds,
+                retry_max_seconds=settings.refresh_retry_max_seconds,
+                cancellation_poll_seconds=settings.refresh_cancel_poll_seconds,
+                run_lease_seconds=settings.refresh_run_lease_seconds,
+                policy_revision=policy.revision,
+            )
+            return await service.execute(run_id)
     finally:
         await engine.dispose()
 

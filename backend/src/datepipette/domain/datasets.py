@@ -570,6 +570,13 @@ class QuerySafetyPolicy:
     interactive_query_concurrency: int = 4
     interactive_query_temp_limit_mb: int = 512
     interactive_query_max_response_bytes: int = 2_097_152
+    export_timeout_seconds: int = 1800
+    export_memory_limit_mb: int = 512
+    export_threads: int = 2
+    export_temp_limit_mb: int = 2048
+    export_max_rows: int = 5_000_000
+    export_max_bytes: int = 1_073_741_824
+    background_job_concurrency: int = 2
 
     def __post_init__(self) -> None:
         numeric_values = (
@@ -593,6 +600,13 @@ class QuerySafetyPolicy:
             self.interactive_query_concurrency,
             self.interactive_query_temp_limit_mb,
             self.interactive_query_max_response_bytes,
+            self.export_timeout_seconds,
+            self.export_memory_limit_mb,
+            self.export_threads,
+            self.export_temp_limit_mb,
+            self.export_max_rows,
+            self.export_max_bytes,
+            self.background_job_concurrency,
         )
         if any(value <= 0 for value in numeric_values):
             raise ValueError("Query Safety thresholds must be positive")
@@ -623,6 +637,24 @@ class QuerySafetyPolicy:
             raise ValueError("Interactive query temporary disk limit must be at least 64 MiB")
         if self.interactive_query_max_response_bytes < 65_536:
             raise ValueError("Interactive query response limit must be at least 64 KiB")
+        export_bounds = (
+            (self.export_timeout_seconds, 86_400, "timeout"),
+            (self.export_memory_limit_mb, 4096, "memory"),
+            (self.export_threads, 16, "thread"),
+            (self.export_temp_limit_mb, 32_768, "temporary disk"),
+            (self.export_max_rows, 10_000_000, "row"),
+            (self.export_max_bytes, 10_737_418_240, "artifact byte"),
+            (self.background_job_concurrency, 64, "background concurrency"),
+        )
+        for value, maximum, label in export_bounds:
+            if value > maximum:
+                raise ValueError(f"Export {label} limit cannot exceed the hard ceiling")
+        if self.export_memory_limit_mb < 64:
+            raise ValueError("Export memory limit must be at least 64 MiB")
+        if self.export_temp_limit_mb < 64:
+            raise ValueError("Export temporary disk limit must be at least 64 MiB")
+        if self.export_max_bytes < 65_536:
+            raise ValueError("Export artifact limit must be at least 64 KiB")
 
 
 @dataclass(frozen=True, slots=True)

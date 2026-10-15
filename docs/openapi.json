@@ -3090,6 +3090,17 @@
             "title": "Id",
             "type": "string"
           },
+          "policy_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Revision"
+          },
           "requested_at": {
             "format": "date-time",
             "title": "Requested At",
@@ -3153,6 +3164,7 @@
           "sort_count",
           "dispatch_attempts",
           "attempt_count",
+          "policy_revision",
           "row_count",
           "byte_size",
           "checksum_sha256",
@@ -3751,12 +3763,40 @@
       },
       "QuerySafetyPolicyResponse": {
         "properties": {
+          "background_job_concurrency": {
+            "title": "Background Job Concurrency",
+            "type": "integer"
+          },
           "estimated_rows_block": {
             "title": "Estimated Rows Block",
             "type": "integer"
           },
           "estimated_rows_warning": {
             "title": "Estimated Rows Warning",
+            "type": "integer"
+          },
+          "export_max_bytes": {
+            "title": "Export Max Bytes",
+            "type": "integer"
+          },
+          "export_max_rows": {
+            "title": "Export Max Rows",
+            "type": "integer"
+          },
+          "export_memory_limit_mb": {
+            "title": "Export Memory Limit Mb",
+            "type": "integer"
+          },
+          "export_temp_limit_mb": {
+            "title": "Export Temp Limit Mb",
+            "type": "integer"
+          },
+          "export_threads": {
+            "title": "Export Threads",
+            "type": "integer"
+          },
+          "export_timeout_seconds": {
+            "title": "Export Timeout Seconds",
             "type": "integer"
           },
           "interactive_query_concurrency": {
@@ -3882,6 +3922,13 @@
           "interactive_query_concurrency",
           "interactive_query_temp_limit_mb",
           "interactive_query_max_response_bytes",
+          "export_timeout_seconds",
+          "export_memory_limit_mb",
+          "export_threads",
+          "export_temp_limit_mb",
+          "export_max_rows",
+          "export_max_bytes",
+          "background_job_concurrency",
           "updated_at",
           "updated_by"
         ],
@@ -4009,6 +4056,17 @@
             ],
             "title": "Next Attempt At"
           },
+          "policy_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Revision"
+          },
           "requested_at": {
             "format": "date-time",
             "title": "Requested At",
@@ -4083,6 +4141,7 @@
           "dispatch_attempts",
           "dispatched_at",
           "attempt_count",
+          "policy_revision",
           "error_code",
           "next_attempt_at",
           "cancel_requested_at",
@@ -4336,6 +4395,12 @@
       "ReplaceQuerySafetyPolicyRequest": {
         "additionalProperties": false,
         "properties": {
+          "background_job_concurrency": {
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Background Job Concurrency",
+            "type": "integer"
+          },
           "estimated_rows_block": {
             "maximum": 1000000000000.0,
             "minimum": 2.0,
@@ -4346,6 +4411,42 @@
             "maximum": 1000000000000.0,
             "minimum": 1.0,
             "title": "Estimated Rows Warning",
+            "type": "integer"
+          },
+          "export_max_bytes": {
+            "maximum": 10737418240.0,
+            "minimum": 65536.0,
+            "title": "Export Max Bytes",
+            "type": "integer"
+          },
+          "export_max_rows": {
+            "maximum": 10000000.0,
+            "minimum": 1.0,
+            "title": "Export Max Rows",
+            "type": "integer"
+          },
+          "export_memory_limit_mb": {
+            "maximum": 4096.0,
+            "minimum": 64.0,
+            "title": "Export Memory Limit Mb",
+            "type": "integer"
+          },
+          "export_temp_limit_mb": {
+            "maximum": 32768.0,
+            "minimum": 64.0,
+            "title": "Export Temp Limit Mb",
+            "type": "integer"
+          },
+          "export_threads": {
+            "maximum": 16.0,
+            "minimum": 1.0,
+            "title": "Export Threads",
+            "type": "integer"
+          },
+          "export_timeout_seconds": {
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Export Timeout Seconds",
             "type": "integer"
           },
           "interactive_query_concurrency": {
@@ -4477,7 +4578,14 @@
           "interactive_query_threads",
           "interactive_query_concurrency",
           "interactive_query_temp_limit_mb",
-          "interactive_query_max_response_bytes"
+          "interactive_query_max_response_bytes",
+          "export_timeout_seconds",
+          "export_memory_limit_mb",
+          "export_threads",
+          "export_temp_limit_mb",
+          "export_max_rows",
+          "export_max_bytes",
+          "background_job_concurrency"
         ],
         "title": "ReplaceQuerySafetyPolicyRequest",
         "type": "object"

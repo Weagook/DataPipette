@@ -388,7 +388,7 @@ def test_worker_defers_successor_and_can_complete_with_injected_writer() -> None
                 headers={**_csrf(client), "If-Match": etag, "Idempotency-Key": "two"},
             ).json()
             assert first["id"] != second["id"]
-            worker = RefreshWorkerService(store, SuccessfulExecutor())
+            worker = RefreshWorkerService(store, SuccessfulExecutor(), policy_revision=4)
             assert asyncio.run(worker.execute(UUID(second["id"]))) is RefreshClaimOutcome.DEFERRED
             asyncio.run(
                 store.complete(
@@ -400,6 +400,7 @@ def test_worker_defers_successor_and_can_complete_with_injected_writer() -> None
             assert asyncio.run(worker.execute(UUID(second["id"]))) is RefreshClaimOutcome.CLAIMED
             completed = client.get(f"{url}/{second['id']}").json()
             assert completed["state"] == RefreshRunState.SUCCEEDED.value
+            assert completed["policy_revision"] == 4
 
             third = client.post(
                 url,

@@ -107,3 +107,12 @@ def test_policy_enforces_interactive_query_resource_bounds() -> None:
         QuerySafetyPolicy(interactive_query_concurrency=65)
     with pytest.raises(ValueError, match="response limit"):
         QuerySafetyPolicy(interactive_query_max_response_bytes=65_535)
+
+
+def test_policy_enforces_export_and_background_resource_bounds() -> None:
+    with pytest.raises(ValueError, match="memory limit"):
+        QuerySafetyPolicy(export_memory_limit_mb=63)
+    with pytest.raises(ValueError, match="artifact limit"):
+        QuerySafetyPolicy(export_max_bytes=65_535)
+    with pytest.raises(ValueError, match="background concurrency"):
+        QuerySafetyPolicy(background_job_concurrency=65)

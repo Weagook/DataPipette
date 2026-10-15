@@ -22,6 +22,7 @@ class ExportState(StrEnum):
 
 class ExportClaimOutcome(StrEnum):
     CLAIMED = "claimed"
+    DEFERRED = "deferred"
     TERMINAL = "terminal"
     NOT_FOUND = "not_found"
 
@@ -50,6 +51,7 @@ class ExportJob:
     expires_at: datetime
     updated_at: datetime
     storage_backend: str | None = None
+    policy_revision: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

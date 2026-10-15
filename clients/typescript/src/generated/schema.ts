@@ -2218,6 +2218,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Policy Revision */
+            policy_revision: number | null;
             /**
              * Requested At
              * Format: date-time
@@ -2511,10 +2513,24 @@ export interface components {
         };
         /** QuerySafetyPolicyResponse */
         QuerySafetyPolicyResponse: {
+            /** Background Job Concurrency */
+            background_job_concurrency: number;
             /** Estimated Rows Block */
             estimated_rows_block: number;
             /** Estimated Rows Warning */
             estimated_rows_warning: number;
+            /** Export Max Bytes */
+            export_max_bytes: number;
+            /** Export Max Rows */
+            export_max_rows: number;
+            /** Export Memory Limit Mb */
+            export_memory_limit_mb: number;
+            /** Export Temp Limit Mb */
+            export_temp_limit_mb: number;
+            /** Export Threads */
+            export_threads: number;
+            /** Export Timeout Seconds */
+            export_timeout_seconds: number;
             /** Interactive Query Concurrency */
             interactive_query_concurrency: number;
             /** Interactive Query Max Response Bytes */
@@ -2603,6 +2619,8 @@ export interface components {
             id: string;
             /** Next Attempt At */
             next_attempt_at: string | null;
+            /** Policy Revision */
+            policy_revision: number | null;
             /**
              * Requested At
              * Format: date-time
@@ -2723,10 +2741,24 @@ export interface components {
         };
         /** ReplaceQuerySafetyPolicyRequest */
         ReplaceQuerySafetyPolicyRequest: {
+            /** Background Job Concurrency */
+            background_job_concurrency: number;
             /** Estimated Rows Block */
             estimated_rows_block: number;
             /** Estimated Rows Warning */
             estimated_rows_warning: number;
+            /** Export Max Bytes */
+            export_max_bytes: number;
+            /** Export Max Rows */
+            export_max_rows: number;
+            /** Export Memory Limit Mb */
+            export_memory_limit_mb: number;
+            /** Export Temp Limit Mb */
+            export_temp_limit_mb: number;
+            /** Export Threads */
+            export_threads: number;
+            /** Export Timeout Seconds */
+            export_timeout_seconds: number;
             /** Interactive Query Concurrency */
             interactive_query_concurrency: number;
             /** Interactive Query Max Response Bytes */

@@ -91,7 +91,7 @@ Immutable published/superseded versions are available through bounded owner-auth
 
 The first preview slice is also synchronous but strictly bounded: the API requires matching validation, recompiles the definition, binds a small `LIMIT`, streams from a server-side cursor, and returns JSON-safe rows under the current managed timeout, row, and encoded-byte budgets. It exposes the applied policy revision, persists only a redacted audit event, and never creates a snapshot.
 
-Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker transaction claims that row, rejects stale revisions, reloads the requesting user's effective relation scope and current managed runtime policy, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The executor recompiles either definition kind from its authoritative JSON document, streams named-cursor batches into typed Parquet under the captured statement-time and result-row budgets, validates the completed candidate, publishes it through the configured local or S3-compatible storage adapter, verifies the published object, and only then atomically activates snapshot metadata. Exceeding the row budget removes the candidate without publication.
+Refresh execution is asynchronous and durable. The API transaction records idempotent intent in metadata PostgreSQL before publishing a UUID-only Celery message. A worker captures the managed policy, acquires one installation-wide heavy-job advisory slot, then transactionally claims the row, rejects stale revisions, reloads the requesting user's effective relation scope, and enforces one running plus one queued successor per dataset. Redis is transport rather than authoritative job state. The executor recompiles either definition kind from its authoritative JSON document, streams named-cursor batches into typed Parquet under the captured statement-time and result-row budgets, validates the completed candidate, publishes it through the configured local or S3-compatible storage adapter, verifies the published object, and only then atomically activates snapshot metadata. Exceeding the row budget removes the candidate without publication.
 
 Scheduled refresh uses an independent database-polling process. Bounded `SKIP LOCKED` claims advance due interval/daily schedules, target only the active published version, and create or coalesce the same durable refresh-run resources used by manual requests. Every poll also republishes queued UUIDs whose prior Redis dispatch did not complete, so scheduler restart heals durable broker-publication gaps without replaying every missed cadence.
 
@@ -101,7 +101,7 @@ Source query execution, bounded streaming, local candidate creation, verified lo
 
 ### Query
 
-Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local and S3-backed snapshots. S3 objects are materialized into unique ephemeral files and verified against persisted size and SHA-256 before DuckDB reads them. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. An authorized exploration descriptor projects ordered saved display settings and type-compatible filter/sort capabilities from the active immutable version; row responses reuse that display contract and freshness projection. Saved chart specifications compile validated grouping, aggregation, typed filters, sorting, deterministic tie-breakers, and limits into DuckDB SQL. Table, chart, and dashboard-item requests resolve one managed runtime-policy revision and share per-process admission control; the captured timeout, response, memory, thread, and temporary-disk limits configure the complete request. Date and timestamp dimensions may use six validated `date_trunc` buckets; timezone-aware timestamps are converted to the installation IANA timezone first. Direct or ranged S3 reads, distributed concurrency controls, export policy, and production benchmarks remain future work.
+Typed snapshot table filters, projection, deterministic cursor pagination, bounded DuckDB execution, and result serialization are implemented for local and S3-backed snapshots. S3 objects are materialized into unique ephemeral files and verified against persisted size and SHA-256 before DuckDB reads them. A bounded metadata-only freshness projection reports unpublished, refreshing, ready, stale-fallback, and failed states without touching source PostgreSQL, DuckDB, or object storage. An authorized exploration descriptor projects ordered saved display settings and type-compatible filter/sort capabilities from the active immutable version; row responses reuse that display contract and freshness projection. Saved chart specifications compile validated grouping, aggregation, typed filters, sorting, deterministic tie-breakers, and limits into DuckDB SQL. Table, chart, and dashboard-item requests resolve one managed runtime-policy revision and share per-process admission control; the captured timeout, response, memory, thread, and temporary-disk limits configure the complete request. Date and timestamp dimensions may use six validated `date_trunc` buckets; timezone-aware timestamps are converted to the installation IANA timezone first. Direct or ranged S3 reads, distributed interactive concurrency controls, and production benchmarks remain future work.
 
 ### Visualization
 
@@ -109,7 +109,7 @@ Private versioned chart specifications, aggregate/type validation, timezone-awar
 
 ### Export
 
-Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, short-lived capability issuance, and automatic physical cleanup are implemented. The worker validates the stored typed query against the captured snapshot schema, streams bounded DuckDB batches into a local candidate file, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file or redirects to an equally short-lived presigned private-object URL. Cleanup removes the artifact after expiry plus a delivery grace while retaining job history.
+Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, short-lived capability issuance, and automatic physical cleanup are implemented. After shared heavy-job admission, the worker validates the stored typed query against the captured snapshot schema, streams DuckDB batches into a local candidate under the captured timeout, rows, bytes, memory, threads, and temporary-disk policy, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Refresh and export resources retain their applied policy revision. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file or redirects to an equally short-lived presigned private-object URL. Cleanup removes the artifact after expiry plus a delivery grace while retaining job history.
 
 ### Audit and operations
 
@@ -120,7 +120,7 @@ Audit events, structured logs, metrics, trace propagation, health checks, and ad
 | Store | Owns | Must not own |
 |---|---|---|
 | Metadata PostgreSQL | identities, ACLs, connections, dataset definitions, chart/dashboard config, jobs, audit events | snapshot rows, token plaintext, connection plaintext |
-| Redis | Celery transport, short-lived locks, coordination, ephemeral cache | authoritative job state, metadata, large tabular results |
+| Redis | Celery transport, login-rate counters, ephemeral coordination/cache | authoritative job state, durable capacity ownership, metadata, large tabular results |
 | S3-compatible storage | Parquet snapshots and temporary export files | authoritative ACLs or secrets |
 | Source PostgreSQL | company business data | DatePipette metadata |
 
@@ -159,8 +159,8 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 
 1. Authenticate, authorize direct dataset access, require CSRF and an idempotency key.
 2. Validate field UUIDs and typed filters/sorts against the active snapshot, then persist a job bound to that snapshot ID.
-3. Enqueue only the export UUID through Redis/Celery and atomically claim it in the worker.
-4. Materialize and verify the captured snapshot when it is remote, then stream the deterministic DuckDB result into a private CSV or XLSX candidate under row and resource limits.
+3. Enqueue only the export UUID through Redis/Celery. A worker captures the current policy, acquires a shared PostgreSQL advisory slot, and only then atomically claims the job; unavailable capacity causes redelivery while state remains queued.
+4. Materialize and verify the captured snapshot when it is remote, then stream the deterministic DuckDB result into a private CSV or XLSX candidate under the captured time, row, byte, memory, thread, and temporary-disk limits.
 5. Publish the candidate to local or S3-compatible storage, verify the stored object, atomically publish file metadata, retain it logically for 24 hours, and expose safe job history.
 6. Issue a reissuable encrypted five-minute download capability after dataset export authorization and export-job ownership checks; resolve it to a local response or a five-minute presigned S3 redirect.
 
@@ -179,7 +179,7 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 
 - API instances are stateless and horizontally scalable behind a load balancer.
 - Workers scale separately and may use queues for refresh, export, and maintenance workloads.
-- Concurrency limits and distributed locks protect source systems and snapshot publication.
+- Per-process limits protect interactive API work. Crash-safe PostgreSQL advisory slots enforce one installation-wide concurrency budget across refresh and export workers on every host.
 - PostgreSQL, Redis, and S3 are shared production dependencies.
 - Local filesystem storage is a development/test adapter only.
 - Kubernetes is deferred, but no production behavior may rely on container-local durability.

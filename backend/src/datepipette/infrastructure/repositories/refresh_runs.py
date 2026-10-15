@@ -52,6 +52,7 @@ def _to_run(
         dispatch_attempts=model.dispatch_attempts,
         dispatched_at=model.dispatched_at,
         attempt_count=model.attempt_count,
+        policy_revision=model.policy_revision,
         error_code=model.error_code,
         next_attempt_at=model.next_attempt_at,
         cancel_requested_at=model.cancel_requested_at,
@@ -180,6 +181,7 @@ class SqlAlchemyRefreshRunStore:
                 dispatch_attempts=0,
                 dispatched_at=None,
                 attempt_count=0,
+                policy_revision=None,
                 error_code=None,
                 next_attempt_at=None,
                 cancel_requested_at=None,
@@ -339,6 +341,7 @@ class SqlAlchemyRefreshRunStore:
         occurred_at: datetime,
         lease_expires_at: datetime | None = None,
         max_attempts: int = 3,
+        policy_revision: int = 0,
     ) -> tuple[RefreshClaimOutcome, RefreshRun | None]:
         async with self._session_factory() as session, session.begin():
             model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
@@ -427,6 +430,7 @@ class SqlAlchemyRefreshRunStore:
             model.next_attempt_at = None
             model.lease_expires_at = lease_expires_at or occurred_at + timedelta(seconds=30)
             model.attempt_count += 1
+            model.policy_revision = policy_revision
             model.updated_at = occurred_at
             session.add(
                 self._audit(
@@ -438,7 +442,10 @@ class SqlAlchemyRefreshRunStore:
                     run_id=model.id,
                     occurred_at=occurred_at,
                     request_id="worker",
-                    details={"attempt": model.attempt_count},
+                    details={
+                        "attempt": model.attempt_count,
+                        "policy_revision": model.policy_revision,
+                    },
                 )
             )
             await session.flush()
@@ -465,7 +472,10 @@ class SqlAlchemyRefreshRunStore:
                         run_id=model.id,
                         occurred_at=occurred_at,
                         request_id="worker",
-                        details={"attempt": model.attempt_count},
+                        details={
+                            "attempt": model.attempt_count,
+                            "policy_revision": model.policy_revision,
+                        },
                     )
                 )
                 return
@@ -509,6 +519,7 @@ class SqlAlchemyRefreshRunStore:
                                 "attempt": model.attempt_count,
                                 "error_code": error_code,
                                 "next_attempt_at": retry_at.isoformat(),
+                                "policy_revision": model.policy_revision,
                             },
                         )
                     )
@@ -538,6 +549,7 @@ class SqlAlchemyRefreshRunStore:
                             if result.succeeded and result.snapshot is not None
                             else None
                         ),
+                        "policy_revision": model.policy_revision,
                     },
                     outcome=(AuditOutcome.SUCCESS if result.succeeded else AuditOutcome.FAILURE),
                 )

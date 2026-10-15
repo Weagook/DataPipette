@@ -91,7 +91,10 @@ class Settings(BaseSettings):
     export_threads: int = Field(default=2, ge=1, le=16)
     export_temp_limit_mb: int = Field(default=2048, ge=64, le=32768)
     export_max_rows: int = Field(default=5_000_000, ge=1, le=10_000_000)
+    export_timeout_seconds: int = Field(default=1800, ge=1, le=86_400)
+    export_max_bytes: int = Field(default=1_073_741_824, ge=65_536, le=10_737_418_240)
     export_fetch_rows: int = Field(default=10_000, ge=100, le=100_000)
+    background_job_concurrency: int = Field(default=2, ge=1, le=64)
     connection_encryption_key: SecretStr = SecretStr(DEVELOPMENT_CONNECTION_ENCRYPTION_KEY)
     metadata_database_url: SecretStr = SecretStr(
         "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette"
@@ -183,6 +186,13 @@ class Settings(BaseSettings):
             interactive_query_concurrency=self.snapshot_query_concurrency,
             interactive_query_temp_limit_mb=self.snapshot_query_temp_limit_mb,
             interactive_query_max_response_bytes=self.snapshot_query_max_response_bytes,
+            export_timeout_seconds=self.export_timeout_seconds,
+            export_memory_limit_mb=self.export_memory_limit_mb,
+            export_threads=self.export_threads,
+            export_temp_limit_mb=self.export_temp_limit_mb,
+            export_max_rows=self.export_max_rows,
+            export_max_bytes=self.export_max_bytes,
+            background_job_concurrency=self.background_job_concurrency,
         )
 
 

@@ -266,6 +266,7 @@ class SqlAlchemyRefreshScheduleStore:
                         dispatch_attempts=0,
                         dispatched_at=None,
                         attempt_count=0,
+                        policy_revision=None,
                         error_code=None,
                         next_attempt_at=None,
                         cancel_requested_at=None,
