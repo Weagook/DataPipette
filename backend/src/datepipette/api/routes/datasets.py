@@ -51,6 +51,7 @@ from datepipette.domain.datasets import (
     DatasetDefinitionKind,
     DatasetDraft,
     DatasetPreview,
+    DatasetRecommendationCode,
     DatasetValidation,
     DatasetValidationState,
     DatasetVersion,
@@ -235,6 +236,14 @@ class RelationStatisticsResponse(BaseModel):
     statistics_updated_at: datetime | None
 
 
+class DatasetRecommendationResponse(BaseModel):
+    code: DatasetRecommendationCode
+    finding_code: ValidationFindingCode
+    relation_id: UUID | None
+    join_id: UUID | None
+    column_names: list[str]
+
+
 class QuerySafetyOverrideResponse(BaseModel):
     actor_id: UUID
     reason: str
@@ -251,6 +260,7 @@ class DatasetValidationResponse(BaseModel):
     plan: PlanSummaryResponse | None
     findings: list[ValidationFindingResponse]
     relation_statistics: list[RelationStatisticsResponse]
+    recommendations: list[DatasetRecommendationResponse]
     policy_revision: int
     query_safety_override: QuerySafetyOverrideResponse | None
 
@@ -562,6 +572,16 @@ def _validation_response(value: DatasetValidation) -> DatasetValidationResponse:
                 statistics_updated_at=item.statistics_updated_at,
             )
             for item in value.relation_statistics
+        ],
+        recommendations=[
+            DatasetRecommendationResponse(
+                code=item.code,
+                finding_code=item.finding_code,
+                relation_id=item.relation_id,
+                join_id=item.join_id,
+                column_names=list(item.column_names),
+            )
+            for item in value.recommendations
         ],
         policy_revision=value.policy_revision,
         query_safety_override=(

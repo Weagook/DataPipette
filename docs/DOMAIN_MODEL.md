@@ -83,7 +83,7 @@ Published and superseded versions form immutable, owner-visible history. The cur
 
 ### Draft validation
 
-An explicit, derived artifact bound to one draft revision. It records structural validity, PostgreSQL-formatted output types and nullability, safely compiled SQL, a compact planner estimate, stable findings, and validation time. SQL validation also requires declared output-field names to exactly match PostgreSQL result columns. It contains neither source rows nor a raw execution plan. Editing the definition invalidates the artifact. A missing relation or field is an ordinary invalid result; source connectivity failure is operational failure and does not overwrite the previous artifact.
+An explicit, derived artifact bound to one draft revision. It records structural validity, PostgreSQL-formatted output types and nullability, safely compiled SQL, a compact planner estimate, stable findings, typed review recommendations, and validation time. Recommendations are evidence-linked actions such as reducing result scope, reviewing a large scan or sort, refreshing statistics, or asking a database administrator to consider a visual join-column index. They contain no executable DDL and are not a claim that PostgreSQL should use an index. SQL validation also requires declared output-field names to exactly match PostgreSQL result columns. It contains neither source rows nor a raw execution plan. Editing the definition invalidates the artifact. A missing relation or field is an ordinary invalid result; source connectivity failure is operational failure and does not overwrite the previous artifact.
 
 ### Draft preview
 
@@ -115,7 +115,7 @@ Each manual request supplies an idempotency key. Metadata PostgreSQL stores its 
 
 Queued cancellation is immediate. Running cancellation records durable intent and becomes terminal cooperatively at safe execution boundaries or atomically before publication. Repeated cancellation of a cancelled run is idempotent. Success references the newly active snapshot; failure or cancellation preserves the previous active snapshot.
 
-Refresh runs record whether they were requested manually or by a schedule. A scheduled run references its originating schedule and always targets the active published version; it never executes the separately editable draft.
+Refresh runs record whether they were requested manually or by a schedule. A scheduled run references its originating schedule and always targets the active published version; it never executes the separately editable draft. Each attempt captures the validation-time root planner row estimate. A terminal attempt records worker executor duration and the actual candidate snapshot row count when available; the API derives an actual-to-estimated ratio without a second source query.
 
 ### Refresh schedule
 

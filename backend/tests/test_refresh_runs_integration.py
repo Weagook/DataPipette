@@ -233,7 +233,12 @@ async def _mark_valid(dataset_id: str, definition: dict[str, Any]) -> None:
                         "nullable": False,
                     }
                 ],
-                "plan": None,
+                "plan": {
+                    "node_type": "Seq Scan",
+                    "estimated_rows": 2,
+                    "startup_cost": 0.0,
+                    "total_cost": 1.0,
+                },
                 "findings": [],
             }
     finally:
@@ -401,6 +406,10 @@ def test_worker_defers_successor_and_can_complete_with_injected_writer() -> None
             completed = client.get(f"{url}/{second['id']}").json()
             assert completed["state"] == RefreshRunState.SUCCEEDED.value
             assert completed["policy_revision"] == 4
+            assert completed["planner_estimated_rows"] == 2
+            assert completed["actual_rows"] == 1
+            assert completed["execution_duration_ms"] >= 0
+            assert completed["row_estimate_ratio"] == 0.5
 
             third = client.post(
                 url,

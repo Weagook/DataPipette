@@ -58,6 +58,9 @@ class RefreshRun:
     finished_at: datetime | None
     updated_at: datetime
     policy_revision: int | None = None
+    planner_estimated_rows: int | None = None
+    actual_rows: int | None = None
+    execution_duration_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

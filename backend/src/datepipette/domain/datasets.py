@@ -60,6 +60,16 @@ class ValidationFindingCode(StrEnum):
     SQL_RESULT_SCHEMA_MISMATCH = "sql_result_schema_mismatch"
 
 
+class DatasetRecommendationCode(StrEnum):
+    REDUCE_RESULT_SIZE = "reduce_result_size"
+    REVIEW_QUERY_COST = "review_query_cost"
+    REDUCE_JOIN_COMPLEXITY = "reduce_join_complexity"
+    REVIEW_SEQUENTIAL_SCAN = "review_sequential_scan"
+    CONSIDER_JOIN_INDEX = "consider_join_index"
+    REVIEW_SORT = "review_sort"
+    REFRESH_STATISTICS = "refresh_statistics"
+
+
 class PreviewTruncationReason(StrEnum):
     ROW_LIMIT = "row_limit"
     BYTE_LIMIT = "byte_limit"
@@ -515,6 +525,75 @@ class DatasetValidationFinding:
 
 
 @dataclass(frozen=True, slots=True)
+class DatasetRecommendation:
+    code: DatasetRecommendationCode
+    finding_code: ValidationFindingCode
+    relation_id: UUID | None = None
+    join_id: UUID | None = None
+    column_names: tuple[str, ...] = ()
+
+
+def build_dataset_recommendations(
+    definition: DatasetDefinition,
+    findings: tuple[DatasetValidationFinding, ...],
+) -> tuple[DatasetRecommendation, ...]:
+    """Build deterministic review advice without generating executable source DDL."""
+
+    recommendations: list[DatasetRecommendation] = []
+    global_codes = {
+        ValidationFindingCode.LARGE_ESTIMATED_RESULT: DatasetRecommendationCode.REDUCE_RESULT_SIZE,
+        ValidationFindingCode.HIGH_PLANNER_COST: DatasetRecommendationCode.REVIEW_QUERY_COST,
+        ValidationFindingCode.TOO_MANY_JOINS: DatasetRecommendationCode.REDUCE_JOIN_COMPLEXITY,
+        ValidationFindingCode.LARGE_SORT: DatasetRecommendationCode.REVIEW_SORT,
+    }
+    seen_global: set[ValidationFindingCode] = set()
+    for finding in findings:
+        recommendation_code = global_codes.get(finding.code)
+        if recommendation_code is not None and finding.code not in seen_global:
+            recommendations.append(
+                DatasetRecommendation(
+                    code=recommendation_code,
+                    finding_code=finding.code,
+                )
+            )
+            seen_global.add(finding.code)
+        if finding.code is ValidationFindingCode.LARGE_SEQUENTIAL_SCAN:
+            recommendations.append(
+                DatasetRecommendation(
+                    code=DatasetRecommendationCode.REVIEW_SEQUENTIAL_SCAN,
+                    finding_code=finding.code,
+                    relation_id=finding.relation_id,
+                )
+            )
+            if isinstance(definition, VisualDatasetDefinition) and finding.relation_id is not None:
+                for join in definition.joins:
+                    columns: tuple[str, ...] = ()
+                    if join.left_relation_id == finding.relation_id:
+                        columns = tuple(condition.left_column for condition in join.conditions)
+                    elif join.right_relation_id == finding.relation_id:
+                        columns = tuple(condition.right_column for condition in join.conditions)
+                    if columns:
+                        recommendations.append(
+                            DatasetRecommendation(
+                                code=DatasetRecommendationCode.CONSIDER_JOIN_INDEX,
+                                finding_code=finding.code,
+                                relation_id=finding.relation_id,
+                                join_id=join.id,
+                                column_names=columns,
+                            )
+                        )
+        elif finding.code is ValidationFindingCode.STALE_RELATION_STATISTICS:
+            recommendations.append(
+                DatasetRecommendation(
+                    code=DatasetRecommendationCode.REFRESH_STATISTICS,
+                    finding_code=finding.code,
+                    relation_id=finding.relation_id,
+                )
+            )
+    return tuple(recommendations)
+
+
+@dataclass(frozen=True, slots=True)
 class ValidatedDatasetField:
     field_id: UUID
     name: str
@@ -677,6 +756,7 @@ class DatasetValidation:
     relation_statistics: tuple[DatasetRelationStatistics, ...] = ()
     policy_revision: int = 0
     query_safety_override: QuerySafetyOverride | None = None
+    recommendations: tuple[DatasetRecommendation, ...] = ()
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -737,6 +817,16 @@ class DatasetValidation:
                     ),
                 }
                 for item in self.relation_statistics
+            ],
+            "recommendations": [
+                {
+                    "code": item.code.value,
+                    "finding_code": item.finding_code.value,
+                    "relation_id": str(item.relation_id) if item.relation_id else None,
+                    "join_id": str(item.join_id) if item.join_id else None,
+                    "column_names": list(item.column_names),
+                }
+                for item in self.recommendations
             ],
             "policy_revision": self.policy_revision,
             "query_safety_override": (
@@ -830,6 +920,18 @@ class DatasetValidation:
                         ),
                     )
                     for item in document.get("relation_statistics", ())
+                ),
+                recommendations=tuple(
+                    DatasetRecommendation(
+                        code=DatasetRecommendationCode(item["code"]),
+                        finding_code=ValidationFindingCode(item["finding_code"]),
+                        relation_id=(
+                            UUID(item["relation_id"]) if item.get("relation_id") else None
+                        ),
+                        join_id=(UUID(item["join_id"]) if item.get("join_id") else None),
+                        column_names=tuple(item.get("column_names", ())),
+                    )
+                    for item in document.get("recommendations", ())
                 ),
                 policy_revision=int(document.get("policy_revision", 0)),
                 query_safety_override=(

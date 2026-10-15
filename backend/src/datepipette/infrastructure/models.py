@@ -271,6 +271,18 @@ class DatasetRefreshRunModel(Base):
             name="policy_revision_nonnegative",
         ),
         CheckConstraint(
+            "planner_estimated_rows IS NULL OR planner_estimated_rows >= 0",
+            name="planner_estimated_rows_nonnegative",
+        ),
+        CheckConstraint(
+            "actual_rows IS NULL OR actual_rows >= 0",
+            name="actual_rows_nonnegative",
+        ),
+        CheckConstraint(
+            "execution_duration_ms IS NULL OR execution_duration_ms >= 0",
+            name="execution_duration_ms_nonnegative",
+        ),
+        CheckConstraint(
             "(state = 'cancelled') = (cancelled_at IS NOT NULL)",
             name="cancelled_timestamp_matches_state",
         ),
@@ -336,6 +348,9 @@ class DatasetRefreshRunModel(Base):
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer)
     policy_revision: Mapped[int | None] = mapped_column(Integer)
+    planner_estimated_rows: Mapped[int | None] = mapped_column(BigInteger)
+    actual_rows: Mapped[int | None] = mapped_column(BigInteger)
+    execution_duration_ms: Mapped[int | None] = mapped_column(BigInteger)
     error_code: Mapped[str | None] = mapped_column(String(50))
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

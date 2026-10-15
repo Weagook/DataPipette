@@ -67,3 +67,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0037](0037-managed-source-runtime-budgets.md): Managed source preview and refresh runtime budgets
 - [ADR-0038](0038-managed-interactive-duckdb-budgets.md): Managed interactive DuckDB runtime budgets
 - [ADR-0039](0039-governed-background-analytical-work.md): Managed export budgets and distributed heavy-worker admission
+- [ADR-0040](0040-read-only-query-recommendations.md): Read-only query recommendations and refresh execution feedback

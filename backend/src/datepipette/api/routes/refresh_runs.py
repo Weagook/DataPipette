@@ -41,6 +41,10 @@ class RefreshRunResponse(BaseModel):
     dispatched_at: datetime | None
     attempt_count: int
     policy_revision: int | None
+    planner_estimated_rows: int | None
+    actual_rows: int | None
+    execution_duration_ms: int | None
+    row_estimate_ratio: float | None
     error_code: str | None
     next_attempt_at: datetime | None
     cancel_requested_at: datetime | None
@@ -57,7 +61,15 @@ def _service(request: Request) -> RefreshRunService:
 
 
 def _response(run: RefreshRun) -> RefreshRunResponse:
-    return RefreshRunResponse(**asdict(run))
+    value = asdict(run)
+    value["row_estimate_ratio"] = (
+        run.actual_rows / run.planner_estimated_rows
+        if run.actual_rows is not None
+        and run.planner_estimated_rows is not None
+        and run.planner_estimated_rows > 0
+        else None
+    )
+    return RefreshRunResponse(**value)
 
 
 _RESPONSES: dict[int | str, dict[str, Any]] = {
