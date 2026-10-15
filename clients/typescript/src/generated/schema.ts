@@ -4020,6 +4020,8 @@ export interface operations {
             /** @description Service Unavailable */
             503: {
                 headers: {
+                    /** @description Seconds to wait after interactive capacity exhaustion. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5855,6 +5857,8 @@ export interface operations {
             /** @description Service Unavailable */
             503: {
                 headers: {
+                    /** @description Seconds to wait after interactive capacity exhaustion. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7927,6 +7931,8 @@ export interface operations {
             /** @description Service Unavailable */
             503: {
                 headers: {
+                    /** @description Seconds to wait after interactive capacity exhaustion. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {

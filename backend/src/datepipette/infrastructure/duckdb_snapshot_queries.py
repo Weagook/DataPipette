@@ -14,6 +14,7 @@ import duckdb
 
 from datepipette.application.query_safety import InteractiveQueryRuntime
 from datepipette.application.snapshot_queries import (
+    DatasetSnapshotQueryCapacityExceededError,
     DatasetSnapshotQueryTimeoutError,
     DatasetSnapshotResultTooLargeError,
     DatasetSnapshotUnavailableError,
@@ -28,7 +29,11 @@ from datepipette.domain.snapshot_queries import (
     SnapshotQuerySort,
     SnapshotSortDirection,
 )
-from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
+from datepipette.infrastructure.duckdb_runtime import (
+    DuckDbQueryConcurrencyLimiter,
+    InteractiveQueryAdmissionUnavailableError,
+    InteractiveQueryCapacityExceededError,
+)
 from datepipette.infrastructure.object_storage import (
     LocalObjectStorage,
     ObjectStorageRegistry,
@@ -236,6 +241,10 @@ class DuckDbSnapshotQueryExecutor:
                 )
         except TimeoutError as exc:
             raise DatasetSnapshotQueryTimeoutError from exc
+        except InteractiveQueryCapacityExceededError as exc:
+            raise DatasetSnapshotQueryCapacityExceededError from exc
+        except InteractiveQueryAdmissionUnavailableError as exc:
+            raise DatasetSnapshotUnavailableError from exc
 
     async def _query_once(
         self,

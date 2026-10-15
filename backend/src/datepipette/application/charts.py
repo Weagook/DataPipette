@@ -63,6 +63,10 @@ class ChartQueryTimeoutError(Exception):
     pass
 
 
+class ChartQueryCapacityExceededError(Exception):
+    pass
+
+
 class ChartQueryUnavailableError(Exception):
     pass
 
@@ -403,7 +407,12 @@ class ChartService:
                 prepared=prepared,
                 runtime=runtime,
             )
-        except (ChartQueryTimeoutError, ChartQueryResultTooLargeError, ChartQueryUnavailableError):
+        except (
+            ChartQueryCapacityExceededError,
+            ChartQueryTimeoutError,
+            ChartQueryResultTooLargeError,
+            ChartQueryUnavailableError,
+        ) as exc:
             await self._record_query(
                 chart=chart,
                 context=context,
@@ -411,7 +420,11 @@ class ChartService:
                 policy_revision=managed_policy.revision,
                 returned_rows=0,
                 truncated_by_bytes=False,
-                error_code="execution_failed",
+                error_code=(
+                    "interactive_query_capacity_exceeded"
+                    if isinstance(exc, ChartQueryCapacityExceededError)
+                    else "execution_failed"
+                ),
                 request_id=request_id,
             )
             raise

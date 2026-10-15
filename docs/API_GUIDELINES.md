@@ -160,7 +160,7 @@ The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-
 - A blocked validation may be repeated with `{ "override_reason": "..." }` only by an administrator. The fresh plan must still contain a blocking finding. The resulting artifact is `valid_with_warnings`, records the policy revision, actor, reason, time, and overridden codes, and creates a separate audit event. Analysts cannot override.
 - The managed policy narrows synchronous preview by statement timeout, requested rows, and encoded response bytes. It bounds background refresh by statement timeout and source result rows. Preview resolves the policy after resource authorization on every request and returns the applied `policy_revision`; each Celery refresh job resolves it before opening the source. A change affects new operations without restarting API or worker processes, while an already-running operation retains the revision captured at its start.
 - The preview policy cannot expand the hard API ceilings of 200 rows or one MiB. A request over the current policy returns `422 preview_policy_limit_exceeded`.
-- The same managed policy bounds interactive DuckDB table, chart, and dashboard-item queries by timeout, encoded response bytes, memory, threads, temporary disk, and per-process concurrency. Each authorized request resolves one revision after active-snapshot lookup; the captured values govern queue admission and execution, and successful response metadata reports `policy_revision`. Row and chart work share one limiter inside an API process. Horizontal API instances have independent interactive limiters; distributed interactive admission remains future work.
+- The same managed policy bounds interactive DuckDB table, chart, and dashboard-item queries by timeout, encoded response bytes, memory, threads, temporary disk, and installation-wide concurrency. Each authorized request resolves one revision after active-snapshot lookup; the captured values govern admission and execution, and successful response metadata reports `policy_revision`. All API instances share metadata-PostgreSQL advisory slots. Exhausted capacity fails immediately with `503 interactive_query_capacity_exceeded` and `Retry-After: 1`; metadata-database admission failure uses the existing safe query-unavailable response.
 - The managed policy also bounds export candidate generation by timeout, artifact bytes, rows, memory, threads, and temporary disk. One `background_job_concurrency` value admits refresh and export attempts through shared metadata-PostgreSQL advisory slots across worker processes and hosts. Capacity deferral leaves the job queued and causes Celery redelivery; it does not consume an attempt. Refresh and export resources expose the revision captured when an attempt starts.
 - Replacing a definition clears its validation artifact. A concurrent edit during validation produces `409 dataset_revision_conflict` rather than attaching stale derived metadata.
 - `POST /api/v1/datasets/{dataset_id}/draft/previews` synchronously returns at most 200 rows from the exact current draft revision. It requires the current ETag, CSRF, and a `valid` or `valid_with_warnings` artifact for that revision.
@@ -288,7 +288,8 @@ Do not expose stack traces, SQL credentials, API token material, internal storag
 - `404` when a resource is absent or intentionally concealed from the principal.
 - `409` for state conflicts, including blocked breaking publication.
 - `422` for structured validation errors.
-- `429` for rate or concurrency limits.
+- `429` for caller-specific rate or quota limits.
+- `503` for temporary installation capacity exhaustion or a required unavailable dependency; retryable interactive capacity responses include `Retry-After`.
 
 ## Pagination and limits
 

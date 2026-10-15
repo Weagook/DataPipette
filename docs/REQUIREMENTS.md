@@ -52,6 +52,7 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **QSA-005:** Policy overrides shall require explicit permission and create a redacted audit event. A warning shall not be presented as certainty because PostgreSQL planner estimates can be inaccurate.
 - **QSA-006:** DatePipette may recommend an index or query change but shall never execute DDL or create an index in the source database.
 - **QSA-007:** Completed source executions shall capture bounded operational metrics so estimates can be compared with actual duration, result rows, transferred bytes, and snapshot size.
+- **QSA-008:** Table, chart, and dashboard-item queries shall share one crash-safe installation-wide concurrency budget; exhausted capacity shall fail immediately through a stable retryable API response.
 
 ### Refresh and snapshots
 

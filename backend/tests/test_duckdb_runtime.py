@@ -1,10 +1,16 @@
 """Shared dynamic admission control for interactive DuckDB queries."""
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import pytest
 
-from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
+from datepipette.infrastructure.duckdb_runtime import (
+    DuckDbQueryConcurrencyLimiter,
+    InteractiveQueryAdmissionUnavailableError,
+    InteractiveQueryCapacityExceededError,
+)
 
 
 def test_limiter_shares_capacity_and_applies_each_captured_limit() -> None:
@@ -32,5 +38,36 @@ def test_limiter_shares_capacity_and_applies_each_captured_limit() -> None:
         await first
         async with limiter.slot(1, 1):
             pass
+
+    asyncio.run(exercise())
+
+
+class FakeAdmission:
+    def __init__(self, *, admitted: bool = True, unavailable: bool = False) -> None:
+        self.admitted = admitted
+        self.unavailable = unavailable
+        self.limits: list[int] = []
+
+    @asynccontextmanager
+    async def slot(self, maximum_concurrent_queries: int) -> AsyncIterator[bool]:
+        self.limits.append(maximum_concurrent_queries)
+        if self.unavailable:
+            raise InteractiveQueryAdmissionUnavailableError
+        yield self.admitted
+
+
+def test_distributed_limiter_fails_fast_and_preserves_admission_failure() -> None:
+    async def exercise() -> None:
+        rejected = FakeAdmission(admitted=False)
+        limiter = DuckDbQueryConcurrencyLimiter(rejected)
+        with pytest.raises(InteractiveQueryCapacityExceededError):
+            async with limiter.slot(3, 60):
+                pytest.fail("A rejected distributed query entered execution")
+        assert rejected.limits == [3]
+
+        unavailable = DuckDbQueryConcurrencyLimiter(FakeAdmission(unavailable=True))
+        with pytest.raises(InteractiveQueryAdmissionUnavailableError):
+            async with unavailable.slot(2, 60):
+                pytest.fail("An unavailable admission authority entered execution")
 
     asyncio.run(exercise())

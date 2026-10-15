@@ -57,6 +57,7 @@ from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbSnapshotQue
 from datepipette.infrastructure.export_dispatch import CeleryExportDispatcher
 from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
 from datepipette.infrastructure.health import InfrastructureReadinessProbe
+from datepipette.infrastructure.interactive_admission import PostgresInteractiveQueryAdmission
 from datepipette.infrastructure.object_storage import (
     ObjectExportDownloadResolver,
     create_object_storage_registry,
@@ -291,7 +292,9 @@ def create_app(
             access_authorizer,
         )
         snapshot_query_store = SqlAlchemySnapshotQueryStore(resources.session_factory)
-        interactive_query_limiter = DuckDbQueryConcurrencyLimiter()
+        interactive_query_limiter = DuckDbQueryConcurrencyLimiter(
+            PostgresInteractiveQueryAdmission(resources.advisory_lock_engine)
+        )
         app.state.snapshot_query_service = snapshot_query_service or DatasetSnapshotQueryService(
             snapshot_query_store,
             DuckDbSnapshotQueryExecutor(

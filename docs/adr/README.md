@@ -68,3 +68,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0038](0038-managed-interactive-duckdb-budgets.md): Managed interactive DuckDB runtime budgets
 - [ADR-0039](0039-governed-background-analytical-work.md): Managed export budgets and distributed heavy-worker admission
 - [ADR-0040](0040-read-only-query-recommendations.md): Read-only query recommendations and refresh execution feedback
+- [ADR-0041](0041-distributed-interactive-query-admission.md): Installation-wide interactive query admission
