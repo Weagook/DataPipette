@@ -757,9 +757,16 @@
             "title": "Chart Id",
             "type": "string"
           },
+          "chart_name": {
+            "title": "Chart Name",
+            "type": "string"
+          },
           "chart_revision": {
             "title": "Chart Revision",
             "type": "integer"
+          },
+          "chart_type": {
+            "$ref": "#/components/schemas/ChartType"
           },
           "dataset_id": {
             "format": "uuid",
@@ -818,6 +825,8 @@
         "required": [
           "policy_revision",
           "chart_id",
+          "chart_name",
+          "chart_type",
           "chart_revision",
           "dataset_id",
           "snapshot_id",
@@ -1778,9 +1787,16 @@
             "title": "Chart Id",
             "type": "string"
           },
+          "chart_name": {
+            "title": "Chart Name",
+            "type": "string"
+          },
           "chart_revision": {
             "title": "Chart Revision",
             "type": "integer"
+          },
+          "chart_type": {
+            "$ref": "#/components/schemas/ChartType"
           },
           "dashboard_id": {
             "format": "uuid",
@@ -1853,6 +1869,8 @@
         "required": [
           "policy_revision",
           "chart_id",
+          "chart_name",
+          "chart_type",
           "chart_revision",
           "dataset_id",
           "snapshot_id",

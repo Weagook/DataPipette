@@ -30,6 +30,7 @@ from datepipette.domain.charts import (
     ChartQueryResult,
     ChartResultColumn,
     ChartResultColumnRole,
+    ChartType,
 )
 from datepipette.domain.snapshot_queries import SnapshotRefreshState
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
@@ -78,6 +79,8 @@ class StubChartQueryService:
         return ChartQueryResult(
             policy_revision=0,
             chart_id=chart_id,
+            chart_name="Accounts",
+            chart_type=ChartType.KPI,
             chart_revision=3,
             dataset_id=self.available_dataset_id,
             snapshot_id=uuid4(),
@@ -426,6 +429,8 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
         assert successful_item.json()["meta"]["dashboard_revision"] == 1
         assert successful_item.json()["meta"]["item_id"] == str(item_one_id)
         assert successful_item.json()["meta"]["chart_id"] == str(chart_one_id)
+        assert successful_item.json()["meta"]["chart_name"] == "Accounts"
+        assert successful_item.json()["meta"]["chart_type"] == "kpi"
         assert successful_item.json()["meta"]["dataset_id"] == str(dataset_one_id)
         assert successful_item.json()["meta"]["policy_revision"] == 0
 

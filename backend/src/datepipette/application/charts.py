@@ -441,6 +441,8 @@ class ChartService:
         return ChartQueryResult(
             policy_revision=managed_policy.revision,
             chart_id=chart.id,
+            chart_name=chart.name,
+            chart_type=chart.definition.chart_type,
             chart_revision=chart.revision,
             dataset_id=chart.dataset_id,
             snapshot_id=context.snapshot_id,

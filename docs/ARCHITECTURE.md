@@ -55,13 +55,14 @@ DatePipette/
 │   └── tests/
 ├── clients/
 │   └── typescript/
+├── frontend/
 ├── deploy/
 │   └── compose/
 ├── docs/
 └── pyproject.toml
 ```
 
-The current foundation creates directories only when they own working code. `frontend/` will be added with its first UI vertical slice rather than as empty scaffolding. The TypeScript client remains independently buildable so the future frontend and external integrations share one generated contract.
+The React frontend and TypeScript API client remain independently buildable. The frontend consumes the packaged client so the official application and external integrations share one generated contract.
 
 Dependencies point inward: infrastructure and API adapters may depend on application and domain interfaces; the domain must not depend on FastAPI, Celery, SQLAlchemy, Redis, S3, or DuckDB.
 

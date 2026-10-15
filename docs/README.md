@@ -9,14 +9,15 @@ This directory is the source of truth for DatePipette's product and technical de
 3. [REQUIREMENTS.md](REQUIREMENTS.md) — functional and non-functional requirements.
 4. [DOMAIN_MODEL.md](DOMAIN_MODEL.md) — the language and lifecycle of core objects.
 5. [ARCHITECTURE.md](ARCHITECTURE.md) — components, data flows, and scaling model.
-6. [API_GUIDELINES.md](API_GUIDELINES.md) — rules for the public API.
-7. [SECURITY.md](SECURITY.md) — trust boundaries, authentication, authorization, and data protection.
-8. [ROADMAP.md](ROADMAP.md) — incremental delivery sequence.
-9. [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — decisions intentionally left unresolved.
-10. [GIT_WORKFLOW.md](GIT_WORKFLOW.md) — branch, commit, review, and local planning conventions.
-11. [adr/](adr/README.md) — durable architecture decisions and their consequences.
-12. [openapi.json](openapi.json) — generated, reviewable API contract verified in CI.
-13. [TypeScript API client](../clients/typescript/README.md) — generated client, verification commands, and integration example.
+6. [FRONTEND.md](FRONTEND.md) — official UI principles, information architecture, and delivery slices.
+7. [API_GUIDELINES.md](API_GUIDELINES.md) — rules for the public API.
+8. [SECURITY.md](SECURITY.md) — trust boundaries, authentication, authorization, and data protection.
+9. [ROADMAP.md](ROADMAP.md) — incremental delivery sequence.
+10. [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — decisions intentionally left unresolved.
+11. [GIT_WORKFLOW.md](GIT_WORKFLOW.md) — branch, commit, review, and local planning conventions.
+12. [adr/](adr/README.md) — durable architecture decisions and their consequences.
+13. [openapi.json](openapi.json) — generated, reviewable API contract verified in CI.
+14. [TypeScript API client](../clients/typescript/README.md) — generated client, verification commands, and integration example.
 
 ## Documentation rules
 

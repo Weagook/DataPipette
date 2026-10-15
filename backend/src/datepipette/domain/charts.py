@@ -267,6 +267,8 @@ class ChartQueryExecution:
 class ChartQueryResult:
     policy_revision: int
     chart_id: UUID
+    chart_name: str
+    chart_type: ChartType
     chart_revision: int
     dataset_id: UUID
     snapshot_id: UUID

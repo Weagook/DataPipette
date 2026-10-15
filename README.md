@@ -4,7 +4,7 @@
 
 DatePipette is an API-first, snapshot-based business intelligence platform for PostgreSQL. It is designed to work both as a standalone analytics application and as a headless BI backend embedded into other products.
 
-> **Project status:** pre-alpha. The backend implements local human and service identities, scoped expiring/non-expiring API tokens, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, administrator-managed explainable query-safety validation with audited overrides plus source, interactive, and export runtime budgets, installation-wide interactive and background-work admission, version history and schema impact, preview, cancellable manual and scheduled Parquet refresh with bounded transient retries, shared S3-compatible snapshot/export storage with automatic lifecycle cleanup, published table exploration with typed snapshot queries, background exports, dataset ACLs, private aggregate charts, versioned dashboard layouts, user/group dashboard sharing, and constrained Viewer or service-account execution of saved aggregate items. A generated TypeScript client and service-token integration example cover the public OpenAPI contract.
+> **Project status:** pre-alpha. The backend implements local human and service identities, scoped expiring/non-expiring API tokens, encrypted PostgreSQL connections, scoped catalog discovery, private visual and advanced read-only SQL datasets, administrator-managed explainable query-safety validation with audited overrides plus source, interactive, and export runtime budgets, installation-wide interactive and background-work admission, version history and schema impact, preview, cancellable manual and scheduled Parquet refresh with bounded transient retries, shared S3-compatible snapshot/export storage with automatic lifecycle cleanup, published table exploration with typed snapshot queries, background exports, dataset ACLs, private aggregate charts, versioned dashboard layouts, user/group dashboard sharing, and constrained Viewer or service-account execution of saved aggregate items. The official React application now covers session authentication and responsive dashboard reading; a generated TypeScript client and service-token integration example cover the public OpenAPI contract.
 
 ## Why DatePipette?
 
@@ -67,6 +67,7 @@ Start with the [documentation index](docs/README.md).
 - [Requirements](docs/REQUIREMENTS.md)
 - [Domain model](docs/DOMAIN_MODEL.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Official frontend](docs/FRONTEND.md)
 - [API guidelines](docs/API_GUIDELINES.md)
 - [Security model](docs/SECURITY.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -74,7 +75,7 @@ Start with the [documentation index](docs/README.md).
 
 ## Repository direction
 
-DatePipette is a uv workspace. The independently packaged backend lives in `backend/`; the reusable generated TypeScript API client lives in [`clients/typescript`](clients/typescript/README.md); local PostgreSQL, Redis, and MinIO-compatible infrastructure lives in `deploy/compose/`. The frontend will be added as an independently buildable application when the first UI vertical slice begins.
+DatePipette is a uv workspace. The independently packaged backend lives in `backend/`; the official React application lives in `frontend/`; the reusable generated TypeScript API client lives in [`clients/typescript`](clients/typescript/README.md); local PostgreSQL, Redis, and MinIO-compatible infrastructure lives in `deploy/compose/`.
 
 To run the current backend foundation:
 

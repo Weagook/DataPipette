@@ -43,6 +43,17 @@ Start the development API:
 uv run --package datepipette datepipette
 ```
 
+Build the generated API client, install the official frontend, and start its development server in another terminal:
+
+```bash
+npm ci --prefix clients/typescript
+npm run build --prefix clients/typescript
+npm ci --prefix frontend
+npm run dev --prefix frontend
+```
+
+Open `http://127.0.0.1:5173`. The development server proxies same-origin `/api` requests to the API on port 8000 so secure browser-session behavior is exercised without enabling permissive CORS.
+
 Compose also starts a single-concurrency Celery worker on the `refresh` and `export` queues. To run a worker directly while developing:
 
 ```bash
@@ -93,6 +104,10 @@ npm run generate:check --prefix clients/typescript
 npm run typecheck --prefix clients/typescript
 npm test --prefix clients/typescript
 npm run build --prefix clients/typescript
+npm ci --prefix frontend
+npm run typecheck --prefix frontend
+npm test --prefix frontend
+npm run build --prefix frontend
 ```
 
 After an intentional API change, run `npm run generate --prefix clients/typescript` and commit the reviewed generated schema together with `docs/openapi.json`. See the [client README](clients/typescript/README.md) for browser and service-token usage and the executable dashboard example.
@@ -137,6 +152,10 @@ npm run generate:check --prefix clients/typescript
 npm run typecheck --prefix clients/typescript
 npm test --prefix clients/typescript
 npm run build --prefix clients/typescript
+npm ci --prefix frontend
+npm run typecheck --prefix frontend
+npm test --prefix frontend
+npm run build --prefix frontend
 ```
 
 To include the real MinIO round-trip tests, export the `DATEPIPETTE_TEST_S3_ENDPOINT`, `DATEPIPETTE_TEST_S3_BUCKET`, `DATEPIPETTE_TEST_S3_ACCESS_KEY_ID`, and `DATEPIPETTE_TEST_S3_SECRET_ACCESS_KEY` values for the running development service before invoking `pytest`.

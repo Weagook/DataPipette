@@ -18,7 +18,7 @@ from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.application.charts import ChartService
 from datepipette.config import Settings
-from datepipette.domain.charts import ChartQueryResult
+from datepipette.domain.charts import ChartQueryResult, ChartType
 from datepipette.domain.identity import AccountType
 from datepipette.domain.snapshot_queries import SnapshotRefreshState
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
@@ -54,6 +54,8 @@ class StubChartService:
         return ChartQueryResult(
             policy_revision=0,
             chart_id=self.chart_id,
+            chart_name="Accounts",
+            chart_type=ChartType.KPI,
             chart_revision=1,
             dataset_id=self.dataset_id,
             snapshot_id=uuid4(),
