@@ -2007,6 +2007,22 @@ export interface components {
             truncated: boolean;
             truncation_reason: components["schemas"]["PreviewTruncationReason"] | null;
         };
+        /**
+         * DatasetRecommendationCode
+         * @enum {string}
+         */
+        DatasetRecommendationCode: "reduce_result_size" | "review_query_cost" | "reduce_join_complexity" | "review_sequential_scan" | "consider_join_index" | "review_sort" | "refresh_statistics";
+        /** DatasetRecommendationResponse */
+        DatasetRecommendationResponse: {
+            code: components["schemas"]["DatasetRecommendationCode"];
+            /** Column Names */
+            column_names: string[];
+            finding_code: components["schemas"]["ValidationFindingCode"];
+            /** Join Id */
+            join_id: string | null;
+            /** Relation Id */
+            relation_id: string | null;
+        };
         /** DatasetResponse */
         DatasetResponse: {
             /** Active Snapshot Id */
@@ -2065,6 +2081,8 @@ export interface components {
             /** Policy Revision */
             policy_revision: number;
             query_safety_override: components["schemas"]["QuerySafetyOverrideResponse"] | null;
+            /** Recommendations */
+            recommendations: components["schemas"]["DatasetRecommendationResponse"][];
             /** Relation Statistics */
             relation_statistics: components["schemas"]["RelationStatisticsResponse"][];
             /** Result Schema */
@@ -2588,6 +2606,8 @@ export interface components {
         };
         /** RefreshRunResponse */
         RefreshRunResponse: {
+            /** Actual Rows */
+            actual_rows: number | null;
             /** Attempt Count */
             attempt_count: number;
             /** Cancel Requested At */
@@ -2610,6 +2630,8 @@ export interface components {
             dispatched_at: string | null;
             /** Error Code */
             error_code: string | null;
+            /** Execution Duration Ms */
+            execution_duration_ms: number | null;
             /** Finished At */
             finished_at: string | null;
             /**
@@ -2619,6 +2641,8 @@ export interface components {
             id: string;
             /** Next Attempt At */
             next_attempt_at: string | null;
+            /** Planner Estimated Rows */
+            planner_estimated_rows: number | null;
             /** Policy Revision */
             policy_revision: number | null;
             /**
@@ -2633,6 +2657,8 @@ export interface components {
             requested_by: string;
             /** Requested Revision */
             requested_revision: number;
+            /** Row Estimate Ratio */
+            row_estimate_ratio: number | null;
             /** Schedule Id */
             schedule_id: string | null;
             /** Snapshot Id */

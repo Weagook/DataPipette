@@ -49,7 +49,7 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Interactive DuckDB runtime policies for timeout, response size, memory, temporary disk, threads, and shared per-process concurrency
 - [x] Background export runtime policy and cross-instance heavy refresh/export admission control
 - Cross-instance interactive-query admission control
-- Read-only index/query recommendations and estimate-versus-actual execution metrics; DatePipette never applies source DDL
+- [x] Read-only index/query recommendations and estimate-versus-actual execution metrics; DatePipette never applies source DDL
 - [x] Filtered, paginated administrator audit-event API
 - Administrator audit UI (frontend phase)
 - Performance benchmark at the approved baseline

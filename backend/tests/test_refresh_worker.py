@@ -98,11 +98,13 @@ class CooperativeExecutor:
 def test_worker_propagates_durable_cancellation_to_executor() -> None:
     now = datetime(2026, 10, 11, tzinfo=UTC)
     store = CancellingStore(_run(now))
+    monotonic_values = iter((10.0, 10.125))
     worker = RefreshWorkerService(
         store,
         CooperativeExecutor(),
         cancellation_poll_seconds=0.001,
         clock=lambda: now,
+        monotonic_clock=lambda: next(monotonic_values),
     )
 
     outcome = asyncio.run(worker.execute(store.run.id))
@@ -112,4 +114,5 @@ def test_worker_propagates_durable_cancellation_to_executor() -> None:
     assert store.completed is not None
     result, retry_at = store.completed
     assert result.cancelled is True
+    assert result.execution_duration_ms == 125
     assert retry_at is None

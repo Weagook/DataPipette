@@ -205,6 +205,7 @@ def test_validation_compiles_quoted_select_persists_types_and_is_invalidated() -
         assert result["plan"]["node_count"] == 1
         assert result["plan"]["max_sequential_scan_rows"] >= 0
         assert result["findings"] == []
+        assert result["recommendations"] == []
         assert len(result["relation_statistics"]) == 1
         assert (
             result["relation_statistics"][0]["relation_id"]

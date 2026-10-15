@@ -2551,6 +2551,69 @@
         "title": "DatasetPreviewResponse",
         "type": "object"
       },
+      "DatasetRecommendationCode": {
+        "enum": [
+          "reduce_result_size",
+          "review_query_cost",
+          "reduce_join_complexity",
+          "review_sequential_scan",
+          "consider_join_index",
+          "review_sort",
+          "refresh_statistics"
+        ],
+        "title": "DatasetRecommendationCode",
+        "type": "string"
+      },
+      "DatasetRecommendationResponse": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/DatasetRecommendationCode"
+          },
+          "column_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Column Names",
+            "type": "array"
+          },
+          "finding_code": {
+            "$ref": "#/components/schemas/ValidationFindingCode"
+          },
+          "join_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join Id"
+          },
+          "relation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation Id"
+          }
+        },
+        "required": [
+          "code",
+          "finding_code",
+          "relation_id",
+          "join_id",
+          "column_names"
+        ],
+        "title": "DatasetRecommendationResponse",
+        "type": "object"
+      },
       "DatasetResponse": {
         "properties": {
           "active_snapshot_id": {
@@ -2713,6 +2776,13 @@
               }
             ]
           },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetRecommendationResponse"
+            },
+            "title": "Recommendations",
+            "type": "array"
+          },
           "relation_statistics": {
             "items": {
               "$ref": "#/components/schemas/RelationStatisticsResponse"
@@ -2749,6 +2819,7 @@
           "plan",
           "findings",
           "relation_statistics",
+          "recommendations",
           "policy_revision",
           "query_safety_override"
         ],
@@ -3962,6 +4033,17 @@
       },
       "RefreshRunResponse": {
         "properties": {
+          "actual_rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Rows"
+          },
           "attempt_count": {
             "title": "Attempt Count",
             "type": "integer"
@@ -4027,6 +4109,17 @@
             ],
             "title": "Error Code"
           },
+          "execution_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Duration Ms"
+          },
           "finished_at": {
             "anyOf": [
               {
@@ -4056,6 +4149,17 @@
             ],
             "title": "Next Attempt At"
           },
+          "planner_estimated_rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planner Estimated Rows"
+          },
           "policy_revision": {
             "anyOf": [
               {
@@ -4080,6 +4184,17 @@
           "requested_revision": {
             "title": "Requested Revision",
             "type": "integer"
+          },
+          "row_estimate_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Estimate Ratio"
           },
           "schedule_id": {
             "anyOf": [
@@ -4142,6 +4257,10 @@
           "dispatched_at",
           "attempt_count",
           "policy_revision",
+          "planner_estimated_rows",
+          "actual_rows",
+          "execution_duration_ms",
+          "row_estimate_ratio",
           "error_code",
           "next_attempt_at",
           "cancel_requested_at",

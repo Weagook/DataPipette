@@ -7,6 +7,7 @@ import pytest
 
 from datepipette.domain.datasets import (
     DatasetPlanSummary,
+    DatasetRecommendationCode,
     DatasetRelationStatistics,
     DatasetValidation,
     DatasetValidationFinding,
@@ -23,6 +24,7 @@ from datepipette.domain.datasets import (
     VisualJoinCondition,
     VisualJoinType,
     VisualRelation,
+    build_dataset_recommendations,
 )
 from datepipette.infrastructure.dataset_sql import compile_visual_select
 
@@ -218,6 +220,81 @@ def test_joined_definition_round_trips_and_compiles_identifier_safe_sql() -> Non
     assert 'ON "customers"."id" OR true' not in hostile_sql
 
 
+def test_recommendations_identify_visual_join_columns_without_generating_ddl() -> None:
+    definition = _joined_definition()
+    join = definition.joins[0]
+    orders_id = definition.relations[1].id
+    findings = (
+        DatasetValidationFinding(
+            code=ValidationFindingCode.LARGE_SEQUENTIAL_SCAN,
+            severity=ValidationSeverity.WARNING,
+            relation_id=orders_id,
+        ),
+        DatasetValidationFinding(
+            code=ValidationFindingCode.STALE_RELATION_STATISTICS,
+            severity=ValidationSeverity.WARNING,
+            relation_id=orders_id,
+        ),
+    )
+
+    recommendations = build_dataset_recommendations(definition, findings)
+
+    assert [item.code for item in recommendations] == [
+        DatasetRecommendationCode.REVIEW_SEQUENTIAL_SCAN,
+        DatasetRecommendationCode.CONSIDER_JOIN_INDEX,
+        DatasetRecommendationCode.REFRESH_STATISTICS,
+    ]
+    candidate = recommendations[1]
+    assert candidate.relation_id == orders_id
+    assert candidate.join_id == join.id
+    assert candidate.column_names == ("customer_id",)
+    assert "CREATE INDEX" not in repr(recommendations)
+
+
+def test_recommendations_cover_global_findings_and_the_left_join_side_once() -> None:
+    definition = _joined_definition()
+    customers_id = definition.relations[0].id
+    findings = (
+        DatasetValidationFinding(
+            code=ValidationFindingCode.LARGE_ESTIMATED_RESULT,
+            severity=ValidationSeverity.WARNING,
+        ),
+        DatasetValidationFinding(
+            code=ValidationFindingCode.HIGH_PLANNER_COST,
+            severity=ValidationSeverity.WARNING,
+        ),
+        DatasetValidationFinding(
+            code=ValidationFindingCode.TOO_MANY_JOINS,
+            severity=ValidationSeverity.WARNING,
+        ),
+        DatasetValidationFinding(
+            code=ValidationFindingCode.LARGE_SORT,
+            severity=ValidationSeverity.WARNING,
+        ),
+        DatasetValidationFinding(
+            code=ValidationFindingCode.LARGE_SORT,
+            severity=ValidationSeverity.WARNING,
+        ),
+        DatasetValidationFinding(
+            code=ValidationFindingCode.LARGE_SEQUENTIAL_SCAN,
+            severity=ValidationSeverity.WARNING,
+            relation_id=customers_id,
+        ),
+    )
+
+    recommendations = build_dataset_recommendations(definition, findings)
+
+    assert [item.code for item in recommendations] == [
+        DatasetRecommendationCode.REDUCE_RESULT_SIZE,
+        DatasetRecommendationCode.REVIEW_QUERY_COST,
+        DatasetRecommendationCode.REDUCE_JOIN_COMPLEXITY,
+        DatasetRecommendationCode.REVIEW_SORT,
+        DatasetRecommendationCode.REVIEW_SEQUENTIAL_SCAN,
+        DatasetRecommendationCode.CONSIDER_JOIN_INDEX,
+    ]
+    assert recommendations[-1].column_names == ("id",)
+
+
 @pytest.mark.parametrize(
     "change, message",
     [
@@ -303,6 +380,17 @@ def test_joined_definition_rejects_ambiguous_or_disconnected_graphs(
 
 
 def test_dataset_validation_round_trips_as_revision_bound_json() -> None:
+    definition = _joined_definition()
+    recommendations = build_dataset_recommendations(
+        definition,
+        (
+            DatasetValidationFinding(
+                code=ValidationFindingCode.LARGE_SEQUENTIAL_SCAN,
+                severity=ValidationSeverity.WARNING,
+                relation_id=definition.relations[1].id,
+            ),
+        ),
+    )
     validation = DatasetValidation(
         state=DatasetValidationState.VALID_WITH_WARNINGS,
         validated_revision=3,
@@ -342,16 +430,19 @@ def test_dataset_validation_round_trips_as_revision_bound_json() -> None:
                 statistics_updated_at=datetime(2026, 10, 8, 8, 0, tzinfo=UTC),
             ),
         ),
+        recommendations=recommendations,
     )
 
     document = validation.to_document()
 
     assert document["validated_revision"] == 3
     assert document["findings"][0]["code"] == "large_estimated_result"
+    assert document["recommendations"][1]["column_names"] == ["customer_id"]
     assert DatasetValidation.from_document(document) == validation
 
     legacy_document = validation.to_document()
     legacy_document.pop("relation_statistics")
+    legacy_document.pop("recommendations")
     assert legacy_document["plan"] is not None
     for key in (
         "node_count",
@@ -366,6 +457,7 @@ def test_dataset_validation_round_trips_as_revision_bound_json() -> None:
     legacy_document["findings"][0].pop("threshold_value")
     restored_legacy = DatasetValidation.from_document(legacy_document)
     assert restored_legacy.relation_statistics == ()
+    assert restored_legacy.recommendations == ()
     assert restored_legacy.plan is not None
     assert restored_legacy.plan.max_plan_rows == 1_000_000
     assert restored_legacy.findings[0].observed_value is None

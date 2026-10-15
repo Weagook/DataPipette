@@ -37,6 +37,7 @@ from datepipette.domain.datasets import (
     QuerySafetyPolicy,
     ValidatedDatasetField,
     ValidationSeverity,
+    build_dataset_recommendations,
     definition_relations,
 )
 from datepipette.domain.identity import User
@@ -191,6 +192,7 @@ class DatasetValidationService:
             relation_statistics=source_result.relation_statistics,
             policy_revision=managed_policy.revision,
             query_safety_override=override,
+            recommendations=build_dataset_recommendations(draft.definition, findings),
         )
         stored = await self._dataset_store.record_validation(
             dataset_id=dataset.id,

@@ -53,6 +53,9 @@ def _to_run(
         dispatched_at=model.dispatched_at,
         attempt_count=model.attempt_count,
         policy_revision=model.policy_revision,
+        planner_estimated_rows=model.planner_estimated_rows,
+        actual_rows=model.actual_rows,
+        execution_duration_ms=model.execution_duration_ms,
         error_code=model.error_code,
         next_attempt_at=model.next_attempt_at,
         cancel_requested_at=model.cancel_requested_at,
@@ -182,6 +185,9 @@ class SqlAlchemyRefreshRunStore:
                 dispatched_at=None,
                 attempt_count=0,
                 policy_revision=None,
+                planner_estimated_rows=None,
+                actual_rows=None,
+                execution_duration_ms=None,
                 error_code=None,
                 next_attempt_at=None,
                 cancel_requested_at=None,
@@ -431,6 +437,12 @@ class SqlAlchemyRefreshRunStore:
             model.lease_expires_at = lease_expires_at or occurred_at + timedelta(seconds=30)
             model.attempt_count += 1
             model.policy_revision = policy_revision
+            validation = DatasetValidation.from_document(draft.validation or {})
+            model.planner_estimated_rows = (
+                validation.plan.estimated_rows if validation.plan is not None else None
+            )
+            model.actual_rows = None
+            model.execution_duration_ms = None
             model.updated_at = occurred_at
             session.add(
                 self._audit(
@@ -462,6 +474,8 @@ class SqlAlchemyRefreshRunStore:
             model = await session.get(DatasetRefreshRunModel, run_id, with_for_update=True)
             if model is None or model.state != RefreshRunState.RUNNING.value:
                 return
+            model.execution_duration_ms = result.execution_duration_ms
+            model.actual_rows = result.snapshot.row_count if result.snapshot is not None else None
             if model.cancel_requested_at is not None or result.cancelled:
                 self._cancel(model, occurred_at)
                 session.add(
@@ -487,9 +501,17 @@ class SqlAlchemyRefreshRunStore:
                     occurred_at,
                 )
                 if not published:
-                    result = RefreshExecutionResult(False, "draft_changed")
+                    result = RefreshExecutionResult(
+                        False,
+                        "draft_changed",
+                        execution_duration_ms=result.execution_duration_ms,
+                    )
             elif result.succeeded:
-                result = RefreshExecutionResult(False, "snapshot_write_failed")
+                result = RefreshExecutionResult(
+                    False,
+                    "snapshot_write_failed",
+                    execution_duration_ms=result.execution_duration_ms,
+                )
             if not result.succeeded:
                 error_code = result.error_code or "refresh_execution_failed"
                 successor = await session.scalar(
@@ -550,6 +572,9 @@ class SqlAlchemyRefreshRunStore:
                             else None
                         ),
                         "policy_revision": model.policy_revision,
+                        "planner_estimated_rows": model.planner_estimated_rows,
+                        "actual_rows": model.actual_rows,
+                        "execution_duration_ms": model.execution_duration_ms,
                     },
                     outcome=(AuditOutcome.SUCCESS if result.succeeded else AuditOutcome.FAILURE),
                 )

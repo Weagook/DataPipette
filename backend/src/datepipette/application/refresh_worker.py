@@ -3,8 +3,9 @@
 import asyncio
 from collections.abc import Callable
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from time import monotonic
 from typing import Protocol
 from uuid import UUID
 
@@ -19,6 +20,7 @@ class RefreshExecutionResult:
     snapshot: SnapshotArtifact | None = None
     retryable: bool = False
     cancelled: bool = False
+    execution_duration_ms: int | None = None
 
 
 class RefreshWorkerStore(Protocol):
@@ -82,6 +84,7 @@ class RefreshWorkerService:
         run_lease_seconds: int = 30,
         policy_revision: int = 0,
         clock: Callable[[], datetime] | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
     ) -> None:
         self._store = store
         self._executor = executor
@@ -92,6 +95,7 @@ class RefreshWorkerService:
         self._run_lease_seconds = run_lease_seconds
         self._policy_revision = policy_revision
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._monotonic_clock = monotonic_clock or monotonic
 
     async def execute(self, run_id: UUID) -> RefreshClaimOutcome:
         claimed_at = self._clock()
@@ -108,6 +112,7 @@ class RefreshWorkerService:
         if await self._cancellation_requested(run_id):
             cancellation.set()
         monitor = asyncio.create_task(self._monitor_cancellation(run_id, cancellation))
+        execution_started = self._monotonic_clock()
         try:
             result = await self._executor.execute(run, cancellation)
         except Exception:
@@ -119,6 +124,13 @@ class RefreshWorkerService:
             monitor.cancel()
             with suppress(asyncio.CancelledError):
                 await monitor
+        result = replace(
+            result,
+            execution_duration_ms=max(
+                0,
+                round((self._monotonic_clock() - execution_started) * 1000),
+            ),
+        )
         completed_at = self._clock()
         retry_at = None
         if result.retryable and not result.cancelled and run.attempt_count < self._max_attempts:
