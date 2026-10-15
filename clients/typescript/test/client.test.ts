@@ -53,7 +53,10 @@ describe("DatePipette TypeScript client", () => {
         title: "Authentication required",
         detail: "A valid browser session or API token is required.",
       },
-      { status: 401, headers: { "X-Request-ID": "req-123" } },
+      {
+        status: 401,
+        headers: { "X-Request-ID": "req-123", "Retry-After": "3" },
+      },
     );
 
     assert.throws(
@@ -71,6 +74,7 @@ describe("DatePipette TypeScript client", () => {
         assert.equal(error.status, 401);
         assert.equal(error.code, "authentication_required");
         assert.equal(error.requestId, "req-123");
+        assert.equal(error.retryAfterSeconds, 3);
         return true;
       },
     );

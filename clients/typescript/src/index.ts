@@ -26,6 +26,7 @@ export class DatePipetteApiError extends Error {
   readonly title: string;
   readonly detail: string;
   readonly requestId: string | null;
+  readonly retryAfterSeconds: number | null;
   readonly problem: ProblemDetails | null;
 
   constructor(response: Response, error: unknown) {
@@ -39,8 +40,17 @@ export class DatePipetteApiError extends Error {
     this.title = title;
     this.detail = detail;
     this.requestId = response.headers.get("x-request-id");
+    this.retryAfterSeconds = parseRetryAfter(response.headers.get("retry-after"));
     this.problem = problem;
   }
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value)) {
+    return null;
+  }
+  const seconds = Number(value);
+  return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : null;
 }
 
 export function createBrowserClient(options: ClientOptions): DatePipetteClient {

@@ -428,6 +428,8 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
         assert [row[columns[1]["key"]] for row in rows] == ["25.00", "25.00"]
         assert queried.json()["meta"]["snapshot_id"]
         assert queried.json()["meta"]["policy_revision"] == 1
+        assert queried.json()["meta"]["chart_name"] == "Revenue by region"
+        assert queried.json()["meta"]["chart_type"] == "bar"
 
         async def query_while_at_capacity() -> Any:
             admission_engine = create_database_engine(chart_settings)

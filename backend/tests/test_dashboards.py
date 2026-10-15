@@ -18,7 +18,7 @@ from datepipette.application.dashboards import (
     InvalidDashboardDefinitionError,
 )
 from datepipette.domain.access_control import GrantPrincipalType
-from datepipette.domain.charts import ChartQueryResult
+from datepipette.domain.charts import ChartQueryResult, ChartType
 from datepipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardItem
 from datepipette.domain.identity import AccountStatus, SystemRole, User
 from datepipette.domain.snapshot_queries import SnapshotRefreshState
@@ -157,6 +157,8 @@ class FakeChartQueries:
         return ChartQueryResult(
             policy_revision=0,
             chart_id=values["chart_id"],
+            chart_name="Accounts",
+            chart_type=ChartType.KPI,
             chart_revision=1,
             dataset_id=DATASET_ID,
             snapshot_id=SNAPSHOT_ID,

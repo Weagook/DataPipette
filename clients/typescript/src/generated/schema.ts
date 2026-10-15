@@ -1279,8 +1279,11 @@ export interface components {
              * Format: uuid
              */
             chart_id: string;
+            /** Chart Name */
+            chart_name: string;
             /** Chart Revision */
             chart_revision: number;
+            chart_type: components["schemas"]["ChartType"];
             /**
              * Dataset Id
              * Format: uuid
@@ -1700,8 +1703,11 @@ export interface components {
              * Format: uuid
              */
             chart_id: string;
+            /** Chart Name */
+            chart_name: string;
             /** Chart Revision */
             chart_revision: number;
+            chart_type: components["schemas"]["ChartType"];
             /**
              * Dashboard Id
              * Format: uuid

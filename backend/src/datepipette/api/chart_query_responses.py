@@ -10,6 +10,7 @@ from datepipette.domain.charts import (
     ChartQueryResult,
     ChartResultColumnRole,
     ChartTimeBucket,
+    ChartType,
 )
 from datepipette.domain.snapshot_queries import SnapshotRefreshState
 
@@ -33,6 +34,8 @@ class ChartQueryDataResponse(BaseModel):
 class ChartQueryMetaResponse(BaseModel):
     policy_revision: int
     chart_id: UUID
+    chart_name: str
+    chart_type: ChartType
     chart_revision: int
     dataset_id: UUID
     snapshot_id: UUID
@@ -72,6 +75,8 @@ def chart_query_meta_response(result: ChartQueryResult) -> ChartQueryMetaRespons
     return ChartQueryMetaResponse(
         policy_revision=result.policy_revision,
         chart_id=result.chart_id,
+        chart_name=result.chart_name,
+        chart_type=result.chart_type,
         chart_revision=result.chart_revision,
         dataset_id=result.dataset_id,
         snapshot_id=result.snapshot_id,
