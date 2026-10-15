@@ -22,6 +22,9 @@ from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.config import Settings
 from datepipette.infrastructure.database import create_database_engine, create_session_factory
+from datepipette.infrastructure.interactive_admission import (
+    PostgresInteractiveQueryAdmission,
+)
 from datepipette.infrastructure.models import (
     AuditEventModel,
     ChartFieldDependencyModel,
@@ -426,6 +429,24 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
         assert queried.json()["meta"]["snapshot_id"]
         assert queried.json()["meta"]["policy_revision"] == 1
 
+        async def query_while_at_capacity() -> Any:
+            admission_engine = create_database_engine(chart_settings)
+            try:
+                admission = PostgresInteractiveQueryAdmission(admission_engine)
+                async with admission.slot(1) as admitted:
+                    assert admitted
+                    return await asyncio.to_thread(
+                        client.post,
+                        f"/api/v1/charts/{chart_id}/data:query",
+                    )
+            finally:
+                await admission_engine.dispose()
+
+        at_capacity = asyncio.run(query_while_at_capacity())
+        assert at_capacity.status_code == 503
+        assert at_capacity.json()["code"] == "interactive_query_capacity_exceeded"
+        assert at_capacity.headers["retry-after"] == "1"
+
         bucket_measure_id = uuid4()
         bucket_payload = {
             "name": "Daily revenue",
@@ -522,15 +543,18 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
                         )
                     )
                 )
-                actions = list(
+                events = list(
                     await session.scalars(
-                        select(AuditEventModel.action).where(
-                            AuditEventModel.resource_id == UUID(chart_id)
-                        )
+                        select(AuditEventModel).where(AuditEventModel.resource_id == UUID(chart_id))
                     )
                 )
             assert {item.field_id for item in dependencies} == {region_id, amount_id}
+            actions = [event.action for event in events]
             assert {"chart.created", "chart.updated", "chart.queried"}.issubset(actions)
+            assert any(
+                event.details.get("error_code") == "interactive_query_capacity_exceeded"
+                for event in events
+            )
         finally:
             await engine.dispose()
 

@@ -18,6 +18,7 @@ from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datepipette.application.auth_service import bootstrap_first_admin
 from datepipette.application.charts import (
     ChartDatasetNotAvailableError,
+    ChartQueryCapacityExceededError,
     ChartQueryResultTooLargeError,
     ChartQueryTimeoutError,
     ChartQueryUnavailableError,
@@ -442,6 +443,11 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
                 "dashboard_item_result_row_too_large",
             ),
             (ChartQueryUnavailableError(), 503, "dashboard_item_query_unavailable"),
+            (
+                ChartQueryCapacityExceededError(),
+                503,
+                "interactive_query_capacity_exceeded",
+            ),
             (ChartQueryTimeoutError(), 504, "dashboard_item_query_timeout"),
         )
         for error, expected_status, expected_code in failure_cases:
@@ -451,6 +457,8 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
             )
             assert item_failure.status_code == expected_status
             assert item_failure.json()["code"] == expected_code
+            if expected_code == "interactive_query_capacity_exceeded":
+                assert item_failure.headers["retry-after"] == "1"
 
         successful_retry = client.post(
             f"/api/v1/dashboards/{dashboard_id}/items/{item_one_id}/data:query"
@@ -458,7 +466,7 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
         assert successful_retry.status_code == 200
         assert chart_queries.calls[0] == chart_one_id
         assert chart_queries.calls[-1] == chart_one_id
-        assert chart_queries.calls.count(chart_two_id) == 5
+        assert chart_queries.calls.count(chart_two_id) == 6
 
         missing_item = client.post(f"/api/v1/dashboards/{dashboard_id}/items/{uuid4()}/data:query")
         assert missing_item.status_code == 404

@@ -1,6 +1,8 @@
 """Typed snapshot query service, cursor, and local DuckDB adapter tests."""
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
@@ -19,6 +21,7 @@ from datepipette.application.query_safety import (
 )
 from datepipette.application.snapshot_queries import (
     DatasetSnapshotNotFoundError,
+    DatasetSnapshotQueryCapacityExceededError,
     DatasetSnapshotQueryService,
     DatasetSnapshotQueryTimeoutError,
     DatasetSnapshotResultTooLargeError,
@@ -43,6 +46,10 @@ from datepipette.domain.snapshot_queries import (
     SnapshotQuerySort,
     SnapshotRefreshState,
     SnapshotSortDirection,
+)
+from datepipette.infrastructure.duckdb_runtime import (
+    DuckDbQueryConcurrencyLimiter,
+    InteractiveQueryAdmissionUnavailableError,
 )
 from datepipette.infrastructure.duckdb_snapshot_queries import (
     DuckDbLocalSnapshotQueryExecutor,
@@ -439,6 +446,21 @@ def test_service_audits_safe_executor_failures(error: Exception, code: str) -> N
     assert "filter" not in store.audit[0]
 
 
+def test_service_audits_capacity_rejection() -> None:
+    error = DatasetSnapshotQueryCapacityExceededError()
+    service, store, _ = _service(executor=FakeExecutor(error))
+    with pytest.raises(DatasetSnapshotQueryCapacityExceededError):
+        asyncio.run(
+            service.query(
+                actor=_admin(),
+                dataset_id=DATASET_ID,
+                value=_query(),
+                request_id="request",
+            )
+        )
+    assert store.audit[0]["error_code"] == "interactive_query_capacity_exceeded"
+
+
 def test_cursor_is_encrypted_typed_and_tamper_evident() -> None:
     codec = EncryptedSnapshotCursorCodec("installation-secret")
     token = codec.encode(
@@ -500,6 +522,48 @@ def _write_fixture(path: Path) -> None:
 def _executor(root: Path, timeout: float = 5) -> DuckDbLocalSnapshotQueryExecutor:
     del timeout
     return DuckDbLocalSnapshotQueryExecutor(root)
+
+
+class StaticAdmission:
+    def __init__(self, *, admitted: bool = True, unavailable: bool = False) -> None:
+        self.admitted = admitted
+        self.unavailable = unavailable
+
+    @asynccontextmanager
+    async def slot(self, _maximum_concurrent_queries: int) -> AsyncIterator[bool]:
+        if self.unavailable:
+            raise InteractiveQueryAdmissionUnavailableError
+        yield self.admitted
+
+
+@pytest.mark.parametrize(
+    ("admission", "error"),
+    [
+        (StaticAdmission(admitted=False), DatasetSnapshotQueryCapacityExceededError),
+        (StaticAdmission(unavailable=True), DatasetSnapshotUnavailableError),
+    ],
+)
+def test_duckdb_executor_maps_distributed_admission_failures(
+    tmp_path: Path,
+    admission: StaticAdmission,
+    error: type[Exception],
+) -> None:
+    executor = DuckDbLocalSnapshotQueryExecutor(
+        tmp_path,
+        limiter=DuckDbQueryConcurrencyLimiter(admission),
+    )
+    with pytest.raises(error):
+        asyncio.run(
+            executor.query(
+                context=_context(),
+                selected_fields=(FIELDS[1],),
+                filters=(),
+                sorts=(),
+                position=None,
+                page_size=1,
+                runtime=RUNTIME,
+            )
+        )
 
 
 def test_duckdb_executor_normalizes_rows_and_pages_null_sort_keys(tmp_path: Path) -> None:

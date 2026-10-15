@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 from datepipette.application.charts import (
+    ChartQueryCapacityExceededError,
     ChartQueryResultTooLargeError,
     ChartQueryTimeoutError,
     ChartQueryUnavailableError,
@@ -25,7 +26,11 @@ from datepipette.domain.charts import (
     ChartTimeBucket,
 )
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
-from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
+from datepipette.infrastructure.duckdb_runtime import (
+    DuckDbQueryConcurrencyLimiter,
+    InteractiveQueryAdmissionUnavailableError,
+    InteractiveQueryCapacityExceededError,
+)
 from datepipette.infrastructure.duckdb_snapshot_queries import (
     compile_snapshot_filters,
     quote_identifier,
@@ -238,6 +243,10 @@ class DuckDbChartQueryExecutor:
                 )
         except TimeoutError as exc:
             raise ChartQueryTimeoutError from exc
+        except InteractiveQueryCapacityExceededError as exc:
+            raise ChartQueryCapacityExceededError from exc
+        except InteractiveQueryAdmissionUnavailableError as exc:
+            raise ChartQueryUnavailableError from exc
 
     async def _query_once(
         self,

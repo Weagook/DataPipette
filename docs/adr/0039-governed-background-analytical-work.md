@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-10-15
 
+Interactive admission is subsequently defined by [ADR-0041](0041-distributed-interactive-query-admission.md); background admission remains independent.
+
 ## Context
 
 CSV/XLSX workers already bounded DuckDB memory, threads, temporary disk, fetch size, and rows through deployment settings, but an administrator replacement did not affect them. Export generation had no time or artifact-size ceiling and no policy provenance. Celery process concurrency limited one worker only; scaling workers across hosts could allow refresh and export jobs together to exceed the intended heavy-work capacity.

@@ -16,6 +16,7 @@ from datepipette.application.charts import (
     ChartCreate,
     ChartDatasetNotAvailableError,
     ChartNotFoundError,
+    ChartQueryCapacityExceededError,
     ChartQueryResultTooLargeError,
     ChartQueryTimeoutError,
     ChartQueryUnavailableError,
@@ -237,6 +238,18 @@ _COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
     503: {"model": ProblemDetails},
     504: {"model": ProblemDetails},
 }
+_QUERY_RESPONSES = {
+    **_COMMON_RESPONSES,
+    503: {
+        "model": ProblemDetails,
+        "headers": {
+            "Retry-After": {
+                "description": "Seconds to wait after interactive capacity exhaustion.",
+                "schema": {"type": "integer", "minimum": 1},
+            }
+        },
+    },
+}
 
 
 @router.post(
@@ -365,7 +378,7 @@ async def update_chart(
 @router.post(
     "/{chart_id}/data:query",
     response_model=ChartQueryResponse,
-    responses=_COMMON_RESPONSES,
+    responses=_QUERY_RESPONSES,
 )
 async def query_chart_data(
     chart_id: UUID,
@@ -393,6 +406,14 @@ async def query_chart_data(
             code="chart_result_row_too_large",
             title="Chart result row too large",
             detail="One chart result row exceeds the response-size limit.",
+        ) from exc
+    except ChartQueryCapacityExceededError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="interactive_query_capacity_exceeded",
+            title="Interactive query capacity exceeded",
+            detail="All interactive query slots are busy. Retry shortly.",
+            headers={"Retry-After": "1"},
         ) from exc
     except ChartQueryTimeoutError as exc:
         raise ApiProblem(

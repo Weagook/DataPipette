@@ -64,6 +64,10 @@ class DatasetSnapshotQueryTimeoutError(Exception):
     pass
 
 
+class DatasetSnapshotQueryCapacityExceededError(Exception):
+    pass
+
+
 class DatasetSnapshotResultTooLargeError(Exception):
     pass
 
@@ -521,6 +525,7 @@ class DatasetSnapshotQueryService:
                 runtime=runtime,
             )
         except (
+            DatasetSnapshotQueryCapacityExceededError,
             DatasetSnapshotQueryTimeoutError,
             DatasetSnapshotResultTooLargeError,
             DatasetSnapshotUnavailableError,
@@ -536,7 +541,9 @@ class DatasetSnapshotQueryService:
                 returned_rows=0,
                 truncated_by_bytes=False,
                 error_code=(
-                    "snapshot_query_timeout"
+                    "interactive_query_capacity_exceeded"
+                    if isinstance(exc, DatasetSnapshotQueryCapacityExceededError)
+                    else "snapshot_query_timeout"
                     if isinstance(exc, DatasetSnapshotQueryTimeoutError)
                     else "snapshot_result_too_large"
                     if isinstance(exc, DatasetSnapshotResultTooLargeError)

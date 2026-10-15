@@ -18,6 +18,7 @@ from datepipette.application.snapshot_queries import (
     MAX_QUERY_SORTS,
     DatasetSnapshotNotFoundError,
     DatasetSnapshotNotPublishedError,
+    DatasetSnapshotQueryCapacityExceededError,
     DatasetSnapshotQueryService,
     DatasetSnapshotQueryTimeoutError,
     DatasetSnapshotResultTooLargeError,
@@ -155,7 +156,15 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     409: {"model": ProblemDetails},
     413: {"model": ProblemDetails},
     422: {"model": ProblemDetails},
-    503: {"model": ProblemDetails},
+    503: {
+        "model": ProblemDetails,
+        "headers": {
+            "Retry-After": {
+                "description": "Seconds to wait after interactive capacity exhaustion.",
+                "schema": {"type": "integer", "minimum": 1},
+            }
+        },
+    },
     504: {"model": ProblemDetails},
 }
 
@@ -347,6 +356,14 @@ async def query_dataset_rows(
             code="snapshot_row_too_large",
             title="Snapshot row too large",
             detail="One result row exceeds the configured response-size limit.",
+        ) from exc
+    except DatasetSnapshotQueryCapacityExceededError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="interactive_query_capacity_exceeded",
+            title="Interactive query capacity exceeded",
+            detail="All interactive query slots are busy. Retry shortly.",
+            headers={"Retry-After": "1"},
         ) from exc
     except DatasetSnapshotQueryTimeoutError as exc:
         raise ApiProblem(

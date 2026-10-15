@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-10-15
 
+Installation-wide admission now follows [ADR-0041](0041-distributed-interactive-query-admission.md); this record preserves the earlier process-local decision and runtime-budget rationale.
+
 ## Context
 
 Dataset-table, saved-chart, and dashboard-item requests all execute synchronously over immutable Parquet snapshots through embedded DuckDB. They already used deployment-level timeout, response-byte, memory, thread, temporary-disk, and concurrency settings, but long-lived API processes could not observe administrator changes and row/chart executors had separate semaphores. The latter allowed aggregate concurrency to exceed the nominal setting.

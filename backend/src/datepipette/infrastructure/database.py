@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from datepipette.config import Settings
 
@@ -35,6 +36,15 @@ def create_database_engine(settings: Settings) -> AsyncEngine:
     return create_async_engine(
         settings.metadata_database_url.get_secret_value(),
         pool_pre_ping=True,
+    )
+
+
+def create_advisory_lock_engine(settings: Settings) -> AsyncEngine:
+    """Create isolated sessions whose lifetime owns distributed advisory locks."""
+
+    return create_async_engine(
+        settings.metadata_database_url.get_secret_value(),
+        poolclass=NullPool,
     )
 
 
