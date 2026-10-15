@@ -10,12 +10,18 @@ from contextlib import suppress
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from pathlib import Path
+from threading import Event, Timer
+from time import monotonic
 from typing import Any
 
 import duckdb
 from openpyxl import Workbook  # type: ignore[import-untyped]
 
-from datepipette.application.exports import export_query_from_document
+from datepipette.application.exports import (
+    ExportGenerationTimeoutError,
+    ExportLimitExceededError,
+    export_query_from_document,
+)
 from datepipette.application.snapshot_queries import prepare_snapshot_query
 from datepipette.domain.exports import ExportArtifact, ExportFormat, ExportJob
 from datepipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
@@ -85,6 +91,8 @@ class DatasetExportExecutor:
         temporary_directory_limit_mb: int,
         maximum_rows: int,
         fetch_rows: int,
+        maximum_bytes: int = 1_073_741_824,
+        timeout_seconds: int = 1800,
     ) -> None:
         self._storages = storages
         self._storage = storages.default
@@ -93,6 +101,8 @@ class DatasetExportExecutor:
         self._threads = threads
         self._temporary_directory_limit_mb = temporary_directory_limit_mb
         self._maximum_rows = maximum_rows
+        self._maximum_bytes = maximum_bytes
+        self._timeout_seconds = timeout_seconds
         self._fetch_rows = fetch_rows
 
     async def execute(self, job: ExportJob, context: ActiveSnapshotQueryContext) -> ExportArtifact:
@@ -134,12 +144,24 @@ class DatasetExportExecutor:
                 "autoload_known_extensions": "false",
             },
         )
+        timed_out = Event()
+
+        def interrupt() -> None:
+            timed_out.set()
+            with suppress(Exception):
+                connection.interrupt()
+
+        deadline = monotonic() + self._timeout_seconds
+        timer = Timer(self._timeout_seconds, interrupt)
+        timer.daemon = True
+        timer.start()
         try:
             with self._storages.require(context.storage_backend).materialize(
                 context.object_key,
                 expected_byte_size=context.byte_size,
                 expected_checksum_sha256=context.checksum_sha256,
             ) as source:
+                self._raise_if_timed_out(deadline, timed_out)
                 statement, parameters = self._statement(
                     context, prepared.selected_fields, prepared.filters, prepared.sorts
                 )
@@ -147,20 +169,39 @@ class DatasetExportExecutor:
                     statement, [str(source), *parameters, self._maximum_rows + 1]
                 )
                 if job.format is ExportFormat.CSV:
-                    row_count = self._write_csv(candidate, cursor, prepared.selected_fields)
+                    row_count = self._write_csv(
+                        candidate,
+                        cursor,
+                        prepared.selected_fields,
+                        deadline,
+                        timed_out,
+                    )
                     content_type = "text/csv; charset=utf-8"
                 else:
-                    row_count = self._write_xlsx(candidate, cursor, prepared.selected_fields)
+                    row_count = self._write_xlsx(
+                        candidate,
+                        cursor,
+                        prepared.selected_fields,
+                        deadline,
+                        timed_out,
+                    )
                     content_type = (
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-        except Exception:
+                self._raise_if_timed_out(deadline, timed_out)
+        except Exception as exc:
             candidate.unlink(missing_ok=True)
+            if timed_out.is_set() and not isinstance(exc, ExportGenerationTimeoutError):
+                raise ExportGenerationTimeoutError from exc
             raise
         finally:
+            timer.cancel()
             connection.close()
         try:
+            self._raise_if_timed_out(deadline, timed_out)
             byte_size = candidate.stat().st_size
+            if byte_size > self._maximum_bytes:
+                raise ExportLimitExceededError("Export artifact byte limit exceeded")
             checksum = self._checksum(candidate)
             self._storage.publish_candidate(
                 candidate,
@@ -206,23 +247,37 @@ class DatasetExportExecutor:
         )
         return statement, parameters
 
-    def _batches(self, cursor: duckdb.DuckDBPyConnection) -> Iterator[tuple[Any, ...]]:
+    def _batches(
+        self,
+        cursor: duckdb.DuckDBPyConnection,
+        deadline: float,
+        timed_out: Event,
+    ) -> Iterator[tuple[Any, ...]]:
         total = 0
-        while rows := cursor.fetchmany(self._fetch_rows):
+        while True:
+            self._raise_if_timed_out(deadline, timed_out)
+            rows = cursor.fetchmany(self._fetch_rows)
+            if not rows:
+                break
             for row in rows:
                 total += 1
                 if total > self._maximum_rows:
-                    raise ValueError("Export row limit exceeded")
+                    raise ExportLimitExceededError("Export row limit exceeded")
                 yield row
 
     def _write_csv(
-        self, path: Path, cursor: duckdb.DuckDBPyConnection, fields: tuple[SnapshotQueryField, ...]
+        self,
+        path: Path,
+        cursor: duckdb.DuckDBPyConnection,
+        fields: tuple[SnapshotQueryField, ...],
+        deadline: float,
+        timed_out: Event,
     ) -> int:
         count = 0
         with path.open("w", encoding="utf-8-sig", newline="") as stream:
             writer = csv.writer(stream, lineterminator="\n")
             writer.writerow([_safe_string(field.name) for field in fields])
-            for record in self._batches(cursor):
+            for record in self._batches(cursor, deadline, timed_out):
                 writer.writerow(
                     [
                         _export_value(field, record[index], csv_mode=True)
@@ -233,16 +288,21 @@ class DatasetExportExecutor:
         return count
 
     def _write_xlsx(
-        self, path: Path, cursor: duckdb.DuckDBPyConnection, fields: tuple[SnapshotQueryField, ...]
+        self,
+        path: Path,
+        cursor: duckdb.DuckDBPyConnection,
+        fields: tuple[SnapshotQueryField, ...],
+        deadline: float,
+        timed_out: Event,
     ) -> int:
         workbook = Workbook(write_only=True)
         sheet = workbook.create_sheet("Data")
         sheet.append([_safe_string(field.name) for field in fields])
         count = 0
         try:
-            for record in self._batches(cursor):
+            for record in self._batches(cursor, deadline, timed_out):
                 if count >= _XLSX_MAX_DATA_ROWS:
-                    raise ValueError("XLSX row limit exceeded")
+                    raise ExportLimitExceededError("XLSX row limit exceeded")
                 sheet.append(
                     [
                         _export_value(field, record[index], csv_mode=False)
@@ -251,9 +311,16 @@ class DatasetExportExecutor:
                 )
                 count += 1
             workbook.save(path)
+            self._raise_if_timed_out(deadline, timed_out)
         finally:
             workbook.close()
         return count
+
+    @staticmethod
+    def _raise_if_timed_out(deadline: float, timed_out: Event) -> None:
+        if timed_out.is_set() or monotonic() >= deadline:
+            timed_out.set()
+            raise ExportGenerationTimeoutError
 
     @staticmethod
     def _checksum(path: Path) -> str:
@@ -276,6 +343,8 @@ class LocalDatasetExportExecutor(DatasetExportExecutor):
         temporary_directory_limit_mb: int,
         maximum_rows: int,
         fetch_rows: int,
+        maximum_bytes: int = 1_073_741_824,
+        timeout_seconds: int = 1800,
     ) -> None:
         local = LocalObjectStorage(storage_root)
         super().__init__(
@@ -285,5 +354,7 @@ class LocalDatasetExportExecutor(DatasetExportExecutor):
             threads=threads,
             temporary_directory_limit_mb=temporary_directory_limit_mb,
             maximum_rows=maximum_rows,
+            maximum_bytes=maximum_bytes,
+            timeout_seconds=timeout_seconds,
             fetch_rows=fetch_rows,
         )

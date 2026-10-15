@@ -79,6 +79,7 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **EXP-006:** Snapshot row cursors shall be opaque, tamper-evident, and invalidated when the snapshot or normalized query shape changes.
 - **EXP-007:** Interactive snapshot reads shall enforce server-side limits for fields, filters, set values, sorting, page rows, response bytes, execution time, memory, CPU threads, and temporary disk.
 - **EXP-003:** CSV and XLSX exports shall be background jobs and shall apply the current temporary filters.
+- **EXP-010:** Export attempts shall capture revisioned time, row, artifact, memory, thread, and temporary-disk budgets and share installation-wide admission with refresh attempts.
 - **EXP-004:** Export files shall be private, retained for 24 hours, and downloaded through five-minute signed URLs.
 - **EXP-005:** A new signed URL may be issued while an export file exists; regeneration after expiry shall use the current snapshot.
 - **EXP-008:** Physical cleanup shall retain metadata history, protect active or referenced snapshots, purge expired artifacts after configurable grace periods, and reconcile old unreferenced generated objects in bounded batches.

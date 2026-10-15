@@ -67,6 +67,7 @@ class ExportResponse(BaseModel):
     sort_count: int
     dispatch_attempts: int
     attempt_count: int
+    policy_revision: int | None
     row_count: int | None
     byte_size: int | None
     checksum_sha256: str | None

@@ -40,6 +40,7 @@ class RefreshRunResponse(BaseModel):
     dispatch_attempts: int
     dispatched_at: datetime | None
     attempt_count: int
+    policy_revision: int | None
     error_code: str | None
     next_attempt_at: datetime | None
     cancel_requested_at: datetime | None

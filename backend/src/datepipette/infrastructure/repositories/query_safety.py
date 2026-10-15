@@ -37,6 +37,13 @@ def _policy(model: QuerySafetyPolicyModel) -> QuerySafetyPolicy:
         interactive_query_concurrency=model.interactive_query_concurrency,
         interactive_query_temp_limit_mb=model.interactive_query_temp_limit_mb,
         interactive_query_max_response_bytes=model.interactive_query_max_response_bytes,
+        export_timeout_seconds=model.export_timeout_seconds,
+        export_memory_limit_mb=model.export_memory_limit_mb,
+        export_threads=model.export_threads,
+        export_temp_limit_mb=model.export_temp_limit_mb,
+        export_max_rows=model.export_max_rows,
+        export_max_bytes=model.export_max_bytes,
+        background_job_concurrency=model.background_job_concurrency,
     )
 
 
@@ -103,6 +110,13 @@ class SqlAlchemyQuerySafetyPolicyStore:
                 "interactive_query_max_response_bytes": (
                     policy.interactive_query_max_response_bytes
                 ),
+                "export_timeout_seconds": policy.export_timeout_seconds,
+                "export_memory_limit_mb": policy.export_memory_limit_mb,
+                "export_threads": policy.export_threads,
+                "export_temp_limit_mb": policy.export_temp_limit_mb,
+                "export_max_rows": policy.export_max_rows,
+                "export_max_bytes": policy.export_max_bytes,
+                "background_job_concurrency": policy.background_job_concurrency,
             }
             if model is None:
                 model = QuerySafetyPolicyModel(

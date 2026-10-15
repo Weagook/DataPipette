@@ -28,6 +28,7 @@ Filtered dataset results can contain millions of rows and cannot be built safely
 - Logical expiry is enforced immediately by the API. Physical deletion is intentionally deferred to the cleanup workflow, so expired local files may remain inaccessible on disk until cleanup runs.
 - The deferred physical cleanup workflow was subsequently implemented by [ADR-0023](0023-analytical-object-lifecycle-cleanup.md).
 - XLSX cannot exceed its worksheet row limit; the configured export limit also bounds CSV.
+- [ADR-0039](0039-governed-background-analytical-work.md) subsequently makes export budgets revisioned administrator policy and shares distributed admission with refresh attempts.
 
 ## Alternatives considered
 

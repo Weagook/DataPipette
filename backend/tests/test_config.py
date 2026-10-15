@@ -125,6 +125,13 @@ def test_query_safety_thresholds_are_bounded_and_ordered() -> None:
     assert policy.interactive_query_concurrency == 4
     assert policy.interactive_query_temp_limit_mb == 512
     assert policy.interactive_query_max_response_bytes == 2_097_152
+    assert policy.export_timeout_seconds == 1800
+    assert policy.export_memory_limit_mb == 512
+    assert policy.export_threads == 2
+    assert policy.export_temp_limit_mb == 2048
+    assert policy.export_max_rows == 5_000_000
+    assert policy.export_max_bytes == 1_073_741_824
+    assert policy.background_job_concurrency == 2
     with pytest.raises(ValidationError, match="row warning"):
         Settings(
             query_safety_estimated_rows_warning=100,
@@ -147,3 +154,7 @@ def test_query_safety_thresholds_are_bounded_and_ordered() -> None:
         Settings(snapshot_query_concurrency=65)
     with pytest.raises(ValidationError):
         Settings(snapshot_query_memory_limit_mb=63)
+    with pytest.raises(ValidationError):
+        Settings(export_max_bytes=65_535)
+    with pytest.raises(ValidationError):
+        Settings(background_job_concurrency=65)

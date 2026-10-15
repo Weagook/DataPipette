@@ -328,6 +328,9 @@ def test_managed_query_safety_policy_blocks_and_admin_override_is_audited() -> N
         initial_policy = client.get("/api/v1/query-safety-policy")
         assert initial_policy.status_code == 200
         assert initial_policy.json()["revision"] == 0
+        assert initial_policy.json()["export_timeout_seconds"] == 1800
+        assert initial_policy.json()["export_max_bytes"] == 1_073_741_824
+        assert initial_policy.json()["background_job_concurrency"] == 2
         assert initial_policy.headers["ETag"] == '"query-safety-policy-0"'
         replacement = {
             **{
@@ -357,6 +360,8 @@ def test_managed_query_safety_policy_blocks_and_admin_override_is_audited() -> N
         )
         assert policy.status_code == 200, policy.text
         assert policy.json()["revision"] == 1
+        assert policy.json()["export_timeout_seconds"] == 1800
+        assert policy.json()["background_job_concurrency"] == 2
         assert policy.headers["ETag"] == '"query-safety-policy-1"'
         stale_policy = client.put(
             "/api/v1/query-safety-policy",

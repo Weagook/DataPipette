@@ -66,3 +66,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0036](0036-managed-query-safety-policy.md): Managed Query Safety planner policy and audited overrides
 - [ADR-0037](0037-managed-source-runtime-budgets.md): Managed source preview and refresh runtime budgets
 - [ADR-0038](0038-managed-interactive-duckdb-budgets.md): Managed interactive DuckDB runtime budgets
+- [ADR-0039](0039-governed-background-analytical-work.md): Managed export budgets and distributed heavy-worker admission

@@ -57,6 +57,7 @@ class RefreshRun:
     started_at: datetime | None
     finished_at: datetime | None
     updated_at: datetime
+    policy_revision: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

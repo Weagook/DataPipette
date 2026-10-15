@@ -49,6 +49,13 @@ class ReplaceQuerySafetyPolicyRequest(BaseModel):
     interactive_query_concurrency: int = Field(ge=1, le=64)
     interactive_query_temp_limit_mb: int = Field(ge=64, le=8192)
     interactive_query_max_response_bytes: int = Field(ge=65_536, le=16_777_216)
+    export_timeout_seconds: int = Field(ge=1, le=86_400)
+    export_memory_limit_mb: int = Field(ge=64, le=4096)
+    export_threads: int = Field(ge=1, le=16)
+    export_temp_limit_mb: int = Field(ge=64, le=32_768)
+    export_max_rows: int = Field(ge=1, le=10_000_000)
+    export_max_bytes: int = Field(ge=65_536, le=10_737_418_240)
+    background_job_concurrency: int = Field(ge=1, le=64)
 
     @model_validator(mode="after")
     def validate_threshold_order(self) -> "ReplaceQuerySafetyPolicyRequest":
@@ -83,6 +90,13 @@ class QuerySafetyPolicyResponse(BaseModel):
     interactive_query_concurrency: int
     interactive_query_temp_limit_mb: int
     interactive_query_max_response_bytes: int
+    export_timeout_seconds: int
+    export_memory_limit_mb: int
+    export_threads: int
+    export_temp_limit_mb: int
+    export_max_rows: int
+    export_max_bytes: int
+    background_job_concurrency: int
     updated_at: datetime | None
     updated_by: UUID | None
 

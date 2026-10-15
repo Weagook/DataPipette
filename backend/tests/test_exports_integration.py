@@ -308,6 +308,7 @@ def test_export_api_worker_history_and_reissued_download(tmp_path: Path) -> None
                     maximum_rows=100,
                     fetch_rows=10,
                 ),
+                policy_revision=3,
             )
             assert asyncio.run(worker.execute(uuid4())) is ExportClaimOutcome.NOT_FOUND
             assert asyncio.run(worker.execute(UUID(body["id"]))) is ExportClaimOutcome.CLAIMED
@@ -315,6 +316,7 @@ def test_export_api_worker_history_and_reissued_download(tmp_path: Path) -> None
             assert completed.status_code == 200
             assert completed.json()["state"] == "succeeded"
             assert completed.json()["row_count"] == 2
+            assert completed.json()["policy_revision"] == 3
             history = client.get(url)
             assert history.status_code == 200
             assert history.json()["data"][0]["id"] == body["id"]
@@ -348,6 +350,13 @@ def test_export_api_worker_history_and_reissued_download(tmp_path: Path) -> None
             "dataset.export_started",
             "dataset.export_succeeded",
         }
+        governed = [
+            event
+            for event in events
+            if event.action in {"dataset.export_started", "dataset.export_succeeded"}
+        ]
+        assert governed
+        assert all(event.details["policy_revision"] == 3 for event in governed)
         assert "export-once" not in repr(events)
     finally:
         asyncio.run(engine.dispose())

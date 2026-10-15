@@ -64,6 +64,14 @@ class ExportFileUnavailableError(Exception):
     pass
 
 
+class ExportGenerationTimeoutError(TimeoutError):
+    pass
+
+
+class ExportLimitExceededError(ValueError):
+    pass
+
+
 class ExportStore(Protocol):
     async def get_active_context(self, dataset_id: UUID) -> ActiveSnapshotQueryContext | None: ...
     async def request(
@@ -88,7 +96,7 @@ class ExportStore(Protocol):
     async def record_dispatch_attempt(self, export_id: UUID, occurred_at: datetime) -> None: ...
     async def mark_dispatched(self, export_id: UUID, occurred_at: datetime) -> None: ...
     async def claim(
-        self, export_id: UUID, occurred_at: datetime
+        self, export_id: UUID, occurred_at: datetime, policy_revision: int
     ) -> tuple[ExportClaimOutcome, ExportJob | None]: ...
     async def complete(
         self, export_id: UUID, result: "ExportExecutionResult", occurred_at: datetime
@@ -276,12 +284,23 @@ class DatasetExportService:
 
 
 class ExportWorkerService:
-    def __init__(self, store: ExportStore, executor: ExportExecutor) -> None:
+    def __init__(
+        self,
+        store: ExportStore,
+        executor: ExportExecutor,
+        *,
+        policy_revision: int,
+    ) -> None:
         self._store = store
         self._executor = executor
+        self._policy_revision = policy_revision
 
     async def execute(self, export_id: UUID) -> ExportClaimOutcome:
-        outcome, job = await self._store.claim(export_id, datetime.now(UTC))
+        outcome, job = await self._store.claim(
+            export_id,
+            datetime.now(UTC),
+            self._policy_revision,
+        )
         if outcome is not ExportClaimOutcome.CLAIMED or job is None:
             return outcome
         try:
@@ -291,6 +310,10 @@ class ExportWorkerService:
             else:
                 artifact = await self._executor.execute(job, context)
                 result = ExportExecutionResult(True, artifact=artifact)
+        except ExportGenerationTimeoutError:
+            result = ExportExecutionResult(False, error_code="export_timeout")
+        except ExportLimitExceededError:
+            result = ExportExecutionResult(False, error_code="export_limit_exceeded")
         except Exception:
             result = ExportExecutionResult(False, error_code="export_generation_failed")
         await self._store.complete(export_id, result, datetime.now(UTC))

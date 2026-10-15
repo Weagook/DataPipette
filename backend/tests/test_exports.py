@@ -21,6 +21,8 @@ from datepipette.application.exports import (
     ExportExecutionResult,
     ExportExpiredError,
     ExportFileUnavailableError,
+    ExportGenerationTimeoutError,
+    ExportLimitExceededError,
     ExportNotFoundError,
     ExportNotReadyError,
     ExportWorkerService,
@@ -196,10 +198,11 @@ class FakeStore:
         self.job = replace(self.job, dispatched_at=occurred_at, updated_at=occurred_at)
 
     async def claim(
-        self, export_id: UUID, occurred_at: datetime
+        self, export_id: UUID, occurred_at: datetime, policy_revision: int
     ) -> tuple[ExportClaimOutcome, ExportJob | None]:
         if self.job is None or self.job.id != export_id:
             return ExportClaimOutcome.NOT_FOUND, None
+        self.job = replace(self.job, policy_revision=policy_revision)
         return self.claim_outcome, self.job
 
     async def complete(
@@ -213,12 +216,12 @@ class FakeStore:
 
 
 class FakeExecutor:
-    def __init__(self, fail: bool = False) -> None:
-        self.fail = fail
+    def __init__(self, failure: Exception | None = None) -> None:
+        self.failure = failure
 
     async def execute(self, job: ExportJob, context: ActiveSnapshotQueryContext) -> ExportArtifact:
-        if self.fail:
-            raise RuntimeError("filesystem secret")
+        if self.failure is not None:
+            raise self.failure
         assert job.snapshot_id == context.snapshot_id
         return ExportArtifact("exports/result.csv", 2, 20, "0" * 64, "text/csv")
 
@@ -296,15 +299,40 @@ def test_export_dispatch_and_worker_failures_are_safe() -> None:
             )
         )
     assert store.job is not None
-    worker = ExportWorkerService(store, FakeExecutor())
+    worker = ExportWorkerService(store, FakeExecutor(), policy_revision=7)
     assert asyncio.run(worker.execute(store.job.id)) is ExportClaimOutcome.CLAIMED
     assert store.result and store.result.succeeded
+    assert store.job.policy_revision == 7
     store.result = None
     assert (
-        asyncio.run(ExportWorkerService(store, FakeExecutor(True)).execute(store.job.id))
+        asyncio.run(
+            ExportWorkerService(
+                store,
+                FakeExecutor(RuntimeError("filesystem secret")),
+                policy_revision=8,
+            ).execute(store.job.id)
+        )
         is ExportClaimOutcome.CLAIMED
     )
     assert store.result and store.result.error_code == "export_generation_failed"
+    store.result = None
+    asyncio.run(
+        ExportWorkerService(
+            store,
+            FakeExecutor(ExportGenerationTimeoutError()),
+            policy_revision=9,
+        ).execute(store.job.id)
+    )
+    assert store.result and store.result.error_code == "export_timeout"
+    store.result = None
+    asyncio.run(
+        ExportWorkerService(
+            store,
+            FakeExecutor(ExportLimitExceededError()),
+            policy_revision=10,
+        ).execute(store.job.id)
+    )
+    assert store.result and store.result.error_code == "export_limit_exceeded"
     store.claim_outcome = ExportClaimOutcome.TERMINAL
     assert asyncio.run(worker.execute(store.job.id)) is ExportClaimOutcome.TERMINAL
 
@@ -383,6 +411,30 @@ def test_local_export_limits_and_storage_paths(tmp_path: Path) -> None:
         LocalExportStorage(tmp_path).resolve("missing.csv")
     with pytest.raises(ValueError):
         asyncio.run(executor.execute(job, replace(_context(), object_key="../snapshot.parquet")))
+
+    byte_limited = LocalDatasetExportExecutor(
+        tmp_path,
+        memory_limit_mb=64,
+        threads=1,
+        temporary_directory_limit_mb=64,
+        maximum_rows=10,
+        maximum_bytes=1,
+        fetch_rows=2,
+    )
+    with pytest.raises(ExportLimitExceededError, match="artifact byte limit"):
+        asyncio.run(byte_limited.execute(job, _context()))
+
+    timed_out = LocalDatasetExportExecutor(
+        tmp_path,
+        memory_limit_mb=64,
+        threads=1,
+        temporary_directory_limit_mb=64,
+        maximum_rows=10,
+        timeout_seconds=0,
+        fetch_rows=2,
+    )
+    with pytest.raises(ExportGenerationTimeoutError):
+        asyncio.run(timed_out.execute(job, _context()))
 
 
 def test_download_tokens_and_service_are_reissuable_and_bounded(tmp_path: Path) -> None:

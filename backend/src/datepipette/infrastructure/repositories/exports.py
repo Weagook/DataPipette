@@ -47,6 +47,7 @@ def _to_job(model: DatasetExportModel) -> ExportJob:
         dispatch_attempts=model.dispatch_attempts,
         dispatched_at=model.dispatched_at,
         attempt_count=model.attempt_count,
+        policy_revision=model.policy_revision,
         object_key=model.object_key,
         storage_backend=model.storage_backend,
         row_count=model.row_count,
@@ -120,6 +121,7 @@ class SqlAlchemyExportStore:
                 dispatch_attempts=0,
                 dispatched_at=None,
                 attempt_count=0,
+                policy_revision=None,
                 object_key=None,
                 storage_backend=None,
                 row_count=None,
@@ -213,7 +215,7 @@ class SqlAlchemyExportStore:
                 model.updated_at = occurred_at
 
     async def claim(
-        self, export_id: UUID, occurred_at: datetime
+        self, export_id: UUID, occurred_at: datetime, policy_revision: int
     ) -> tuple[ExportClaimOutcome, ExportJob | None]:
         async with self._session_factory() as session, session.begin():
             model = await session.get(DatasetExportModel, export_id, with_for_update=True)
@@ -227,6 +229,7 @@ class SqlAlchemyExportStore:
             model.state = ExportState.RUNNING.value
             model.started_at = occurred_at
             model.attempt_count += 1
+            model.policy_revision = policy_revision
             model.updated_at = occurred_at
             session.add(
                 self._audit(
@@ -236,7 +239,10 @@ class SqlAlchemyExportStore:
                     export_id=model.id,
                     occurred_at=occurred_at,
                     request_id=model.request_id,
-                    details={"attempt": model.attempt_count},
+                    details={
+                        "attempt": model.attempt_count,
+                        "policy_revision": policy_revision,
+                    },
                 )
             )
             await session.flush()
@@ -281,6 +287,7 @@ class SqlAlchemyExportStore:
                         "row_count": model.row_count,
                         "byte_size": model.byte_size,
                         "error_code": model.error_code,
+                        "policy_revision": model.policy_revision,
                     },
                     outcome=(
                         AuditOutcome.SUCCESS

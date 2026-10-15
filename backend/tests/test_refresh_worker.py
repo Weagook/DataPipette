@@ -54,8 +54,9 @@ class CancellingStore:
         occurred_at: datetime,
         lease_expires_at: datetime,
         max_attempts: int,
+        policy_revision: int,
     ) -> tuple[RefreshClaimOutcome, RefreshRun | None]:
-        del run_id, occurred_at, lease_expires_at, max_attempts
+        del run_id, occurred_at, lease_expires_at, max_attempts, policy_revision
         return RefreshClaimOutcome.CLAIMED, self.run
 
     async def is_cancel_requested(self, run_id: UUID) -> bool:
