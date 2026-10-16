@@ -52,4 +52,9 @@ export const queryKeys = {
   datasetRows: (id: string, query: unknown) =>
     ["dataset", id, "rows", query] as const,
   datasetExports: (id: string) => ["dataset", id, "exports"] as const,
+  charts: ["charts", "infinite"] as const,
+  chartDatasets: ["charts", "datasets"] as const,
+  chart: (id: string) => ["chart", id] as const,
+  chartPreview: (id: string, revision: number) =>
+    ["chart", id, "preview", revision] as const,
 };

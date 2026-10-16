@@ -46,6 +46,10 @@ export type SnapshotSort = ApiSchemas["SnapshotSortPayload"];
 export type ExportFormat = ApiSchemas["ExportFormat"];
 export type ExportJob = ApiSchemas["ExportResponse"];
 export type ExportCollection = ApiSchemas["ExportCollectionResponse"];
+export type Chart = ApiSchemas["ChartResponse"];
+export type ChartPage = ApiSchemas["ChartCollectionResponse"];
+export type ChartDefinition = ApiSchemas["ChartDefinitionPayload"];
+export type ChartQueryResult = ApiSchemas["ChartQueryResponse"];
 
 export { DatePipetteApiError };
 
@@ -107,6 +111,72 @@ export async function listDatasets(cursor?: string): Promise<DatasetPage> {
   return unwrap(
     await api.GET("/api/v1/datasets", {
       params: { query: { limit: 50, cursor } },
+    }),
+  );
+}
+
+export async function listCharts(cursor?: string): Promise<ChartPage> {
+  return unwrap(
+    await api.GET("/api/v1/charts", {
+      params: { query: { limit: 50, cursor } },
+    }),
+  );
+}
+
+export async function getChart(
+  chartId: string,
+): Promise<{ chart: Chart; etag: string }> {
+  const result = await api.GET("/api/v1/charts/{chart_id}", {
+    params: { path: { chart_id: chartId } },
+  });
+  const chart = unwrap(result);
+  return {
+    chart,
+    etag: result.response.headers.get("etag") ?? `"chart-${chart.revision}"`,
+  };
+}
+
+export async function createChart(
+  name: string,
+  datasetId: string,
+  definition: ChartDefinition,
+): Promise<{ chart: Chart; etag: string }> {
+  const result = await api.POST("/api/v1/charts", {
+    headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    body: { name, dataset_id: datasetId, definition },
+  });
+  const chart = unwrap(result);
+  return {
+    chart,
+    etag: result.response.headers.get("etag") ?? `"chart-${chart.revision}"`,
+  };
+}
+
+export async function replaceChart(
+  chartId: string,
+  name: string,
+  definition: ChartDefinition,
+  etag: string,
+): Promise<{ chart: Chart; etag: string }> {
+  const result = await api.PUT("/api/v1/charts/{chart_id}", {
+    params: { path: { chart_id: chartId } },
+    headers: {
+      "X-CSRF-Token": readCookie("datepipette_csrf"),
+      "If-Match": etag,
+    },
+    body: { name, definition },
+  });
+  const chart = unwrap(result);
+  return {
+    chart,
+    etag: result.response.headers.get("etag") ?? `"chart-${chart.revision}"`,
+  };
+}
+
+export async function queryChart(chartId: string): Promise<ChartQueryResult> {
+  return unwrap(
+    await api.POST("/api/v1/charts/{chart_id}/data:query", {
+      params: { path: { chart_id: chartId } },
     }),
   );
 }

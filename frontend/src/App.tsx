@@ -31,6 +31,16 @@ const DatasetStudioPage = lazy(() =>
     default: module.DatasetStudioPage,
   })),
 );
+const ChartsPage = lazy(() =>
+  import("./pages/ChartsPage").then((module) => ({
+    default: module.ChartsPage,
+  })),
+);
+const ChartStudioPage = lazy(() =>
+  import("./pages/ChartStudioPage").then((module) => ({
+    default: module.ChartStudioPage,
+  })),
+);
 const LoginPage = lazy(() =>
   import("./pages/LoginPage").then((module) => ({ default: module.LoginPage })),
 );
@@ -64,6 +74,9 @@ export function App() {
             path="/datasets/:datasetId/table"
             element={<DatasetTablePage />}
           />
+          <Route path="/charts" element={<ChartsPage />} />
+          <Route path="/charts/new" element={<ChartStudioPage />} />
+          <Route path="/charts/:chartId" element={<ChartStudioPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/overview" replace />} />
       </Routes>

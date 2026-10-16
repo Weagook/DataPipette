@@ -9,13 +9,25 @@ import {
   type TooltipComponentOption,
 } from "echarts/components";
 import * as echarts from "echarts/core";
-import type { BarSeriesOption, LineSeriesOption, PieSeriesOption } from "echarts/charts";
+import type {
+  BarSeriesOption,
+  LineSeriesOption,
+  PieSeriesOption,
+} from "echarts/charts";
 import { CanvasRenderer } from "echarts/renderers";
 
-import type { DashboardItemResult } from "../lib/api";
+import type { ChartQueryResult, DashboardItemResult } from "../lib/api";
 import { formatMetric } from "../lib/format";
 
-echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([
+  BarChart,
+  LineChart,
+  PieChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  CanvasRenderer,
+]);
 
 type ChartOption = echarts.ComposeOption<
   | BarSeriesOption
@@ -28,30 +40,57 @@ type ChartOption = echarts.ComposeOption<
 
 const palette = ["#4f67f6", "#18a999", "#8f66d8", "#e69f37", "#4b91c8"];
 
-export function ChartView({ result }: { result: DashboardItemResult }) {
+type RenderableChartResult = DashboardItemResult | ChartQueryResult;
+
+export function ChartView({ result }: { result: RenderableChartResult }) {
   const type = result.meta.chart_type;
-  const measure = result.data.columns.find((column) => column.role === "measure");
+  const measure = result.data.columns.find(
+    (column) => column.role === "measure",
+  );
   const firstRow = result.data.rows[0];
 
   if (type === "kpi") {
     return (
       <div className="kpi-view">
         <span>{measure?.label ?? "Value"}</span>
-        <strong>{formatMetric(measure && firstRow ? firstRow[measure.key] : null)}</strong>
-        <small>{result.data.rows.length === 0 ? "No result for the saved filters" : "Current snapshot result"}</small>
+        <strong>
+          {formatMetric(measure && firstRow ? firstRow[measure.key] : null)}
+        </strong>
+        <small>
+          {result.data.rows.length === 0
+            ? "No result for the saved filters"
+            : "Current snapshot result"}
+        </small>
       </div>
     );
   }
 
   return (
     <>
-      <EChart option={buildChartOption(result)} label={`${result.meta.chart_name} ${type} chart`} />
+      <EChart
+        option={buildChartOption(result)}
+        label={`${result.meta.chart_name} ${type} chart`}
+      />
       <details className="chart-data">
         <summary>View accessible data</summary>
         <div className="table-scroll">
           <table>
-            <thead><tr>{result.data.columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
-            <tbody>{result.data.rows.map((row, index) => <tr key={index}>{result.data.columns.map((column) => <td key={column.key}>{formatMetric(row[column.key])}</td>)}</tr>)}</tbody>
+            <thead>
+              <tr>
+                {result.data.columns.map((column) => (
+                  <th key={column.key}>{column.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {result.data.rows.map((row, index) => (
+                <tr key={index}>
+                  {result.data.columns.map((column) => (
+                    <td key={column.key}>{formatMetric(row[column.key])}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       </details>
@@ -65,7 +104,9 @@ function EChart({ option, label }: { option: ChartOption; label: string }) {
 
   useEffect(() => {
     if (!element.current) return;
-    const chart = echarts.init(element.current, undefined, { renderer: "canvas" });
+    const chart = echarts.init(element.current, undefined, {
+      renderer: "canvas",
+    });
     chart.setOption(stableOption);
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(element.current);
@@ -75,19 +116,28 @@ function EChart({ option, label }: { option: ChartOption; label: string }) {
     };
   }, [stableOption]);
 
-  return <div className="chart-canvas" ref={element} role="img" aria-label={label} />;
+  return (
+    <div className="chart-canvas" ref={element} role="img" aria-label={label} />
+  );
 }
 
-export function buildChartOption(result: DashboardItemResult): ChartOption {
-  const dimension = result.data.columns.find((column) => column.role === "dimension");
-  const measures = result.data.columns.filter((column) => column.role === "measure");
+export function buildChartOption(result: RenderableChartResult): ChartOption {
+  const dimension = result.data.columns.find(
+    (column) => column.role === "dimension",
+  );
+  const measures = result.data.columns.filter(
+    (column) => column.role === "measure",
+  );
   const labels = dimension
     ? result.data.rows.map((row) => formatDimension(row[dimension.key]))
     : [];
   const common: ChartOption = {
     animationDuration: 420,
     color: palette,
-    textStyle: { fontFamily: "Inter, ui-sans-serif, system-ui", color: "#4c5260" },
+    textStyle: {
+      fontFamily: "Inter, ui-sans-serif, system-ui",
+      color: "#4c5260",
+    },
     tooltip: { trigger: "axis", confine: true },
   };
 
@@ -100,10 +150,15 @@ export function buildChartOption(result: DashboardItemResult): ChartOption {
       series: [
         {
           type: "pie",
-          radius: result.meta.chart_type === "donut" ? ["48%", "72%"] : ["0%", "72%"],
+          radius:
+            result.meta.chart_type === "donut" ? ["48%", "72%"] : ["0%", "72%"],
           center: ["50%", "43%"],
           avoidLabelOverlap: true,
-          itemStyle: { borderColor: "#ffffff", borderWidth: 2, borderRadius: 5 },
+          itemStyle: {
+            borderColor: "#ffffff",
+            borderWidth: 2,
+            borderRadius: 5,
+          },
           label: { show: result.data.rows.length <= 8, formatter: "{b}" },
           data: result.data.rows.map((row, index) => ({
             name: labels[index] ?? `Row ${index + 1}`,
@@ -117,8 +172,16 @@ export function buildChartOption(result: DashboardItemResult): ChartOption {
   const isLine = result.meta.chart_type === "line";
   return {
     ...common,
-    grid: { left: 12, right: 14, top: 24, bottom: 20, containLabel: true },
-    legend: measures.length > 1 ? { top: 0, right: 0, icon: "roundRect" } : undefined,
+    grid: {
+      left: 12,
+      right: 14,
+      top: 24,
+      bottom: 20,
+      outerBoundsMode: "same",
+      outerBoundsContain: "axisLabel",
+    },
+    legend:
+      measures.length > 1 ? { top: 0, right: 0, icon: "roundRect" } : undefined,
     xAxis: {
       type: "category",
       data: labels,
@@ -136,7 +199,12 @@ export function buildChartOption(result: DashboardItemResult): ChartOption {
       name: measure.label,
       data: result.data.rows.map((row) => numericValue(row[measure.key])),
       ...(isLine
-        ? { smooth: 0.25, symbolSize: 7, lineStyle: { width: 3 }, areaStyle: { opacity: 0.06 } }
+        ? {
+            smooth: 0.25,
+            symbolSize: 7,
+            lineStyle: { width: 3 },
+            areaStyle: { opacity: 0.06 },
+          }
         : { barMaxWidth: 36, itemStyle: { borderRadius: [5, 5, 0, 0] } }),
     })) as BarSeriesOption[] | LineSeriesOption[],
   };
@@ -151,7 +219,9 @@ function formatDimension(value: unknown): string {
   if (typeof value !== "string") return formatMetric(value);
   const timestamp = Date.parse(value);
   if (!Number.isNaN(timestamp) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(timestamp);
+    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
+      timestamp,
+    );
   }
   return value;
 }
