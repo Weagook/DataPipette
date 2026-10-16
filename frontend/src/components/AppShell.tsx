@@ -24,7 +24,6 @@ interface AppShellProps {
 }
 
 const futureAdminAreas = [
-  { icon: Gauge, label: "Connections" },
   { icon: Users, label: "Access" },
   { icon: ShieldCheck, label: "Governance" },
 ];
@@ -98,6 +97,10 @@ export function AppShell({ user, children }: AppShellProps) {
           {isAdmin && (
             <div className="nav-group" aria-label="Administration roadmap">
               <span className="nav-group-label">Administration</span>
+              <NavLink to="/connections" onClick={() => setMobileOpen(false)}>
+                <Gauge size={18} />
+                Connections
+              </NavLink>
               {futureAdminAreas.map(({ icon: Icon, label }) => (
                 <span
                   className="future-nav"

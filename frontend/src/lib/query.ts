@@ -42,6 +42,8 @@ export const queryKeys = {
     ["dashboard", dashboardId, "item", itemId] as const,
   datasets: ["datasets", "infinite"] as const,
   connections: ["connections"] as const,
+  connection: (id: string) => ["connection", id] as const,
+  connectionGrants: (id: string) => ["connection", id, "grants"] as const,
   catalogSchemas: (connectionId: string) =>
     ["catalog", connectionId, "schemas"] as const,
   catalogRelations: (connectionId: string, schema: string) =>

@@ -35,6 +35,13 @@ export type DatasetPreview = ApiSchemas["DatasetPreviewResponse"];
 export type DatasetImpact = ApiSchemas["DatasetImpactResponse"];
 export type Connection = ApiSchemas["ConnectionResponse"];
 export type ConnectionPage = ApiSchemas["ConnectionCollectionResponse"];
+export type ConnectionCreate = ApiSchemas["CreateConnectionRequest"];
+export type ConnectionUpdate = ApiSchemas["UpdateConnectionRequest"];
+export type ConnectionTest = ApiSchemas["ConnectionTestResponse"];
+export type ConnectionGrant = ApiSchemas["ConnectionGrantResponse"];
+export type ConnectionGrantCreate = ApiSchemas["ConnectionGrantCreateRequest"];
+export type ConnectionScopeType = ApiSchemas["ConnectionScopeType"];
+export type PostgresSslMode = ApiSchemas["PostgresSslMode"];
 export type CatalogSchemaPage = ApiSchemas["CatalogSchemaCollectionResponse"];
 export type CatalogRelationPage =
   ApiSchemas["CatalogRelationCollectionResponse"];
@@ -309,6 +316,90 @@ export async function listConnections(
     await api.GET("/api/v1/connections", {
       params: { query: { limit: 100, cursor } },
     }),
+  );
+}
+
+export async function getConnection(connectionId: string): Promise<Connection> {
+  return unwrap(
+    await api.GET("/api/v1/connections/{connection_id}", {
+      params: { path: { connection_id: connectionId } },
+    }),
+  );
+}
+
+export async function createConnection(
+  input: ConnectionCreate,
+): Promise<Connection> {
+  return unwrap(
+    await api.POST("/api/v1/connections", {
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: input,
+    }),
+  );
+}
+
+export async function updateConnection(
+  connectionId: string,
+  input: ConnectionUpdate,
+): Promise<Connection> {
+  return unwrap(
+    await api.PATCH("/api/v1/connections/{connection_id}", {
+      params: { path: { connection_id: connectionId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: input,
+    }),
+  );
+}
+
+export async function testConnection(
+  connectionId: string,
+): Promise<ConnectionTest> {
+  return unwrap(
+    await api.POST("/api/v1/connections/{connection_id}/tests", {
+      params: { path: { connection_id: connectionId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    }),
+  );
+}
+
+export async function listConnectionGrants(
+  connectionId: string,
+): Promise<ConnectionGrant[]> {
+  const value = unwrap(
+    await api.GET("/api/v1/connections/{connection_id}/grants", {
+      params: { path: { connection_id: connectionId } },
+    }),
+  );
+  return value.data;
+}
+
+export async function createConnectionGrant(
+  connectionId: string,
+  input: ConnectionGrantCreate,
+): Promise<ConnectionGrant> {
+  return unwrap(
+    await api.POST("/api/v1/connections/{connection_id}/grants", {
+      params: { path: { connection_id: connectionId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: input,
+    }),
+  );
+}
+
+export async function revokeConnectionGrant(
+  connectionId: string,
+  grantId: string,
+): Promise<void> {
+  unwrap(
+    await api.DELETE(
+      "/api/v1/connections/{connection_id}/grants/{grant_id}",
+      {
+        params: {
+          path: { connection_id: connectionId, grant_id: grantId },
+        },
+        headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      },
+    ),
   );
 }
 
