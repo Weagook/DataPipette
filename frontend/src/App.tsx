@@ -54,6 +54,16 @@ const OverviewPage = lazy(() =>
     default: module.OverviewPage,
   })),
 );
+const ConnectionsPage = lazy(() =>
+  import("./pages/ConnectionsPage").then((module) => ({
+    default: module.ConnectionsPage,
+  })),
+);
+const ConnectionDetailPage = lazy(() =>
+  import("./pages/ConnectionDetailPage").then((module) => ({
+    default: module.ConnectionDetailPage,
+  })),
+);
 
 export function App() {
   return (
@@ -87,6 +97,12 @@ export function App() {
           <Route path="/charts" element={<ChartsPage />} />
           <Route path="/charts/new" element={<ChartStudioPage />} />
           <Route path="/charts/:chartId" element={<ChartStudioPage />} />
+          <Route path="/connections" element={<ConnectionsPage />} />
+          <Route path="/connections/new" element={<ConnectionDetailPage />} />
+          <Route
+            path="/connections/:connectionId"
+            element={<ConnectionDetailPage />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/overview" replace />} />
       </Routes>
