@@ -30,7 +30,13 @@ export function FullPageStatus({
   );
 }
 
-export function InlineError({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function InlineError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
   return (
     <div className="inline-state error-state" role="alert">
       <AlertCircle size={22} />
@@ -38,9 +44,16 @@ export function InlineError({ message, onRetry }: { message: string; onRetry: ()
         <strong>Could not load this view</strong>
         <p>{message}</p>
       </div>
-      <button className="icon-button" onClick={onRetry} type="button" aria-label="Retry">
-        <RotateCcw size={17} />
-      </button>
+      {onRetry && (
+        <button
+          className="icon-button"
+          onClick={onRetry}
+          type="button"
+          aria-label="Retry"
+        >
+          <RotateCcw size={17} />
+        </button>
+      )}
     </div>
   );
 }
