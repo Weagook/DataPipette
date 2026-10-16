@@ -436,6 +436,9 @@ def test_refresh_streams_parquet_publishes_and_preserves_previous_snapshot(
             assert exploration.status_code == 200, exploration.text
             exploration_payload = exploration.json()
             assert exploration_payload["dataset_id"] == str(dataset_id)
+            assert exploration_payload["dataset_name"] == "Snapshot records"
+            assert exploration_payload["can_export"] is True
+            assert exploration_payload["installation_timezone"] == "UTC"
             assert exploration_payload["snapshot_id"] == str(first_snapshot_id)
             assert exploration_payload["snapshot_row_count"] == 2
             exploration_columns = {field["name"]: field for field in exploration_payload["columns"]}

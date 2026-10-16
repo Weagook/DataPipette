@@ -1858,6 +1858,8 @@ export interface components {
         };
         /** DatasetExplorationResponse */
         DatasetExplorationResponse: {
+            /** Can Export */
+            can_export: boolean;
             /** Columns */
             columns: components["schemas"]["DatasetExplorationColumnResponse"][];
             /**
@@ -1865,8 +1867,12 @@ export interface components {
              * Format: uuid
              */
             dataset_id: string;
+            /** Dataset Name */
+            dataset_name: string;
             /** Default Field Ids */
             default_field_ids: string[];
+            /** Installation Timezone */
+            installation_timezone: string;
             /** Is Stale */
             is_stale: boolean;
             /** Last Refresh Error */

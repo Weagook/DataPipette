@@ -390,6 +390,7 @@ def test_minio_snapshot_query_export_and_private_download(tmp_path: Path) -> Non
     )
     context = ActiveSnapshotQueryContext(
         dataset_id,
+        "Orders",
         snapshot_id,
         "s3",
         snapshot_key,

@@ -94,6 +94,9 @@ class DatasetExplorationColumnResponse(BaseModel):
 
 class DatasetExplorationResponse(BaseModel):
     dataset_id: UUID
+    dataset_name: str
+    can_export: bool
+    installation_timezone: str
     snapshot_id: UUID
     snapshot_row_count: int
     snapshot_activated_at: datetime
@@ -263,6 +266,9 @@ async def read_dataset_exploration(
         ) from exc
     return DatasetExplorationResponse(
         dataset_id=value.dataset_id,
+        dataset_name=value.dataset_name,
+        can_export=value.can_export,
+        installation_timezone=value.installation_timezone,
         snapshot_id=value.snapshot_id,
         snapshot_row_count=value.snapshot_row_count,
         snapshot_activated_at=value.snapshot_activated_at,

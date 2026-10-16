@@ -66,6 +66,8 @@ Viewer navigation deliberately omits detailed datasets, charts, source connectio
 
 Each slice must end in a usable workflow backed only by documented API operations. Placeholder controls must not perform simulated production behavior.
 
+Slices 1 and 2 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
+
 ## Visual direction
 
 The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal data accents, restrained borders, and compact typography. Cards are used only to group meaningful state. Charts share one accessible categorical palette and reserve amber/red for freshness or failure, never decoration. The DatePipette pipette/flow mark is reused from the repository artwork rather than introducing a second identity.
@@ -78,3 +80,4 @@ The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal
 - Capacity exhaustion respects `Retry-After`; automatic retry remains bounded and visible.
 - Stale snapshot data remains renderable with a persistent warning and safe refresh-error metadata.
 - Mutations requiring CSRF read the non-HttpOnly CSRF cookie immediately before the request. Tokens and passwords are never persisted by the frontend.
+- Dataset exploration metadata includes only the safe display name, installation timezone, and effective export capability needed to render a reloadable direct link accurately; backend authorization remains authoritative for every row query and export action.

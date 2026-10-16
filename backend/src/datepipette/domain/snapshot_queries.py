@@ -97,6 +97,7 @@ class SnapshotQuery:
 @dataclass(frozen=True, slots=True)
 class ActiveSnapshotQueryContext:
     dataset_id: UUID
+    dataset_name: str
     snapshot_id: UUID
     storage_backend: str
     object_key: str
@@ -156,6 +157,9 @@ class DatasetExplorationColumn:
 @dataclass(frozen=True, slots=True)
 class DatasetExploration:
     dataset_id: UUID
+    dataset_name: str
+    can_export: bool
+    installation_timezone: str
     snapshot_id: UUID
     snapshot_row_count: int
     snapshot_activated_at: datetime

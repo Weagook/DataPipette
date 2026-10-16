@@ -32,4 +32,8 @@ export const queryKeys = {
   dashboard: (id: string) => ["dashboard", id] as const,
   dashboardItem: (dashboardId: string, itemId: string) =>
     ["dashboard", dashboardId, "item", itemId] as const,
+  datasets: ["datasets", "infinite"] as const,
+  datasetExploration: (id: string) => ["dataset", id, "exploration"] as const,
+  datasetRows: (id: string, query: unknown) => ["dataset", id, "rows", query] as const,
+  datasetExports: (id: string) => ["dataset", id, "exports"] as const,
 };

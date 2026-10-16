@@ -129,7 +129,7 @@ A read-only projection derived from the active snapshot and bounded refresh-run 
 
 The official UI representation of detailed rows in the active snapshot. It is not a separate `Report` entity. Temporary filters, pagination, and sorting apply to the current request. Exports may reuse them.
 
-The implemented exploration descriptor exposes the active published field order, labels, visibility, formats, type-compatible filter operators, and visible default projection to callers with `view_rows`. The query contract selects fields by stable UUID, applies typed temporary predicates, and uses an encrypted cursor tied to one immutable snapshot and query shape. Multiple values from an Excel-like UI become an explicit `in` list. Changing filters, sorting, projection, or the active snapshot invalidates the cursor rather than mixing pages from different result sets. Draft display edits do not affect readers until successful publication.
+The implemented exploration descriptor exposes the safe dataset display name, current export capability, installation timezone, active published field order, labels, visibility, formats, type-compatible filter operators, and visible default projection to callers with `view_rows`. The query contract selects fields by stable UUID, applies typed temporary predicates, and uses an encrypted cursor tied to one immutable snapshot and query shape. Multiple values from an Excel-like UI become an explicit `in` list. Changing filters, sorting, projection, or the active snapshot invalidates the cursor rather than mixing pages from different result sets. Draft display edits do not affect readers until successful publication.
 
 ### Chart
 

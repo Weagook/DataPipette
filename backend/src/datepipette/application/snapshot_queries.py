@@ -408,12 +408,14 @@ class DatasetSnapshotQueryService:
         cursor_codec: SnapshotCursorCodec,
         authorizer: DatasetAccessAuthorizer,
         policy_store: QuerySafetyPolicyReader,
+        installation_timezone: str = "UTC",
     ) -> None:
         self._store = store
         self._executor = executor
         self._cursor_codec = cursor_codec
         self._authorizer = authorizer
         self._policy_store = policy_store
+        self._installation_timezone = installation_timezone
 
     async def freshness(self, *, actor: User, dataset_id: UUID) -> DatasetFreshness:
         try:
@@ -431,7 +433,7 @@ class DatasetSnapshotQueryService:
 
     async def exploration(self, *, actor: User, dataset_id: UUID) -> DatasetExploration:
         try:
-            await self._authorizer.require(
+            access = await self._authorizer.require(
                 actor=actor,
                 dataset_id=dataset_id,
                 permissions=frozenset({DatasetPermission.VIEW_ROWS}),
@@ -457,6 +459,9 @@ class DatasetSnapshotQueryService:
         )
         return DatasetExploration(
             dataset_id=context.dataset_id,
+            dataset_name=context.dataset_name,
+            can_export=DatasetPermission.EXPORT in access.permissions,
+            installation_timezone=self._installation_timezone,
             snapshot_id=context.snapshot_id,
             snapshot_row_count=context.snapshot_row_count,
             snapshot_activated_at=context.activated_at,

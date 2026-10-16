@@ -23,10 +23,7 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-const futureAnalystAreas = [
-  { icon: Database, label: "Datasets" },
-  { icon: BarChart3, label: "Charts" },
-];
+const futureAnalystAreas = [{ icon: BarChart3, label: "Charts" }];
 
 const futureAdminAreas = [
   { icon: Gauge, label: "Connections" },
@@ -79,6 +76,10 @@ export function AppShell({ user, children }: AppShellProps) {
           {canAuthor && (
             <div className="nav-group" aria-label="Authoring roadmap">
               <span className="nav-group-label">Authoring</span>
+              <NavLink to="/datasets" onClick={() => setMobileOpen(false)}>
+                <Database size={18} />
+                Datasets
+              </NavLink>
               {futureAnalystAreas.map(({ icon: Icon, label }) => (
                 <span className="future-nav" key={label} title={`${label} arrives in the next frontend slices`}>
                   <Icon size={18} />
