@@ -24,6 +24,13 @@ export type DashboardGrant = ApiSchemas["DashboardGrantResponse"];
 export type GrantPrincipalType = ApiSchemas["GrantPrincipalType"];
 export type UserAdmin = ApiSchemas["UserAdminResponse"];
 export type Group = ApiSchemas["GroupResponse"];
+export type SystemRole = ApiSchemas["SystemRole"];
+export type AccountStatus = ApiSchemas["AccountStatus"];
+export type Membership = ApiSchemas["MembershipResponse"];
+export type ServiceAccount = ApiSchemas["ServiceAccountResponse"];
+export type ApiToken = ApiSchemas["ApiTokenResponse"];
+export type IssuedApiToken = ApiSchemas["IssuedApiTokenResponse"];
+export type ApiTokenScope = ApiSchemas["ApiTokenScope"];
 export type Dataset = ApiSchemas["DatasetResponse"];
 export type DatasetPage = ApiSchemas["DatasetCollectionResponse"];
 export type DatasetDefinition =
@@ -211,6 +218,149 @@ export async function listGroups(): Promise<Group[]> {
     }),
   );
   return value.data;
+}
+
+export async function createUser(input: ApiSchemas["CreateUserRequest"]): Promise<UserAdmin> {
+  return unwrap(
+    await api.POST("/api/v1/users", {
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: input,
+    }),
+  );
+}
+
+export async function updateUser(
+  userId: string,
+  input: ApiSchemas["UpdateUserRequest"],
+): Promise<UserAdmin> {
+  return unwrap(
+    await api.PATCH("/api/v1/users/{user_id}", {
+      params: { path: { user_id: userId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: input,
+    }),
+  );
+}
+
+export async function revokeUserSessions(userId: string): Promise<number> {
+  const value = unwrap(
+    await api.DELETE("/api/v1/users/{user_id}/sessions", {
+      params: { path: { user_id: userId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    }),
+  );
+  return value.revoked_count;
+}
+
+export async function createGroup(name: string): Promise<Group> {
+  return unwrap(
+    await api.POST("/api/v1/groups", {
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: { name },
+    }),
+  );
+}
+
+export async function renameGroup(groupId: string, name: string): Promise<Group> {
+  return unwrap(
+    await api.PATCH("/api/v1/groups/{group_id}", {
+      params: { path: { group_id: groupId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: { name },
+    }),
+  );
+}
+
+export async function listGroupMembers(groupId: string): Promise<Membership[]> {
+  const value = unwrap(
+    await api.GET("/api/v1/groups/{group_id}/members", {
+      params: { path: { group_id: groupId } },
+    }),
+  );
+  return value.data;
+}
+
+export async function addGroupMember(groupId: string, userId: string): Promise<Membership> {
+  return unwrap(
+    await api.PUT("/api/v1/groups/{group_id}/members/{user_id}", {
+      params: { path: { group_id: groupId, user_id: userId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    }),
+  );
+}
+
+export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
+  unwrap(
+    await api.DELETE("/api/v1/groups/{group_id}/members/{user_id}", {
+      params: { path: { group_id: groupId, user_id: userId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    }),
+  );
+}
+
+export async function listServiceAccounts(): Promise<ServiceAccount[]> {
+  const value = unwrap(
+    await api.GET("/api/v1/service-accounts", {
+      params: { query: { limit: 100 } },
+    }),
+  );
+  return value.data;
+}
+
+export async function createServiceAccount(
+  name: string,
+  role: Exclude<SystemRole, "admin">,
+): Promise<ServiceAccount> {
+  return unwrap(
+    await api.POST("/api/v1/service-accounts", {
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: { name, role },
+    }),
+  );
+}
+
+export async function updateServiceAccount(
+  accountId: string,
+  input: ApiSchemas["UpdateServiceAccountRequest"],
+): Promise<ServiceAccount> {
+  return unwrap(
+    await api.PATCH("/api/v1/service-accounts/{account_id}", {
+      params: { path: { account_id: accountId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: input,
+    }),
+  );
+}
+
+export async function listApiTokens(accountId: string): Promise<ApiToken[]> {
+  const value = unwrap(
+    await api.GET("/api/v1/service-accounts/{account_id}/tokens", {
+      params: { path: { account_id: accountId } },
+    }),
+  );
+  return value.data;
+}
+
+export async function createApiToken(
+  accountId: string,
+  input: ApiSchemas["CreateApiTokenRequest"],
+): Promise<IssuedApiToken> {
+  return unwrap(
+    await api.POST("/api/v1/service-accounts/{account_id}/tokens", {
+      params: { path: { account_id: accountId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: input,
+    }),
+  );
+}
+
+export async function revokeApiToken(accountId: string, tokenId: string): Promise<void> {
+  unwrap(
+    await api.DELETE("/api/v1/service-accounts/{account_id}/tokens/{token_id}", {
+      params: { path: { account_id: accountId, token_id: tokenId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    }),
+  );
 }
 
 export async function queryDashboardItem(
