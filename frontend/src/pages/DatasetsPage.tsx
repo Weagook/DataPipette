@@ -4,11 +4,7 @@ import { useMemo, useState } from "react";
 import { Link, Navigate, useOutletContext } from "react-router-dom";
 
 import { InlineError } from "../components/Status";
-import {
-  listDatasets,
-  problemMessage,
-  type CurrentUser,
-} from "../lib/api";
+import { listDatasets, problemMessage, type CurrentUser } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { queryKeys } from "../lib/query";
 
@@ -40,18 +36,13 @@ export function DatasetsPage() {
           <span className="eyebrow">Reusable data models</span>
           <h1>Datasets</h1>
           <p>
-            Open a published snapshot, shape the table for your question, and export
-            exactly the rows you can see.
+            Open a published snapshot, shape the table for your question, and
+            export exactly the rows you can see.
           </p>
         </div>
-        <button
-          className="button primary"
-          disabled
-          title="Dataset creation arrives in Dataset Studio"
-          type="button"
-        >
+        <Link className="button primary" to="/datasets/new">
           <Plus size={17} /> New dataset
-        </button>
+        </Link>
       </header>
       <div className="collection-toolbar">
         <label className="search-field">
@@ -81,7 +72,9 @@ export function DatasetsPage() {
           const content = (
             <>
               <div className="dataset-card-top">
-                <span className="dataset-icon"><Database size={20} /></span>
+                <span className="dataset-icon">
+                  <Database size={20} />
+                </span>
                 <span className={`state-pill ${published ? "ready" : "draft"}`}>
                   {published ? "Snapshot ready" : "Draft only"}
                 </span>
@@ -98,22 +91,28 @@ export function DatasetsPage() {
               </footer>
             </>
           );
-          return published ? (
-            <Link className="dataset-card" key={dataset.id} to={`/datasets/${dataset.id}/table`}>
+          return (
+            <Link
+              className="dataset-card"
+              key={dataset.id}
+              to={`/datasets/${dataset.id}/draft`}
+            >
               {content}
             </Link>
-          ) : (
-            <article className="dataset-card unavailable" key={dataset.id}>
-              {content}
-            </article>
           );
         })}
       </section>
       {!datasets.isPending && values.length === 0 && (
         <div className="empty-state">
           <Database />
-          <strong>{search ? "No matching datasets" : "No authorable datasets yet"}</strong>
-          <p>{search ? "Try a different name." : "Published datasets will appear here."}</p>
+          <strong>
+            {search ? "No matching datasets" : "No authorable datasets yet"}
+          </strong>
+          <p>
+            {search
+              ? "Try a different name."
+              : "Published datasets will appear here."}
+          </p>
         </div>
       )}
       {datasets.hasNextPage && (

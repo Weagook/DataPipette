@@ -66,7 +66,9 @@ Viewer navigation deliberately omits detailed datasets, charts, source connectio
 
 Each slice must end in a usable workflow backed only by documented API operations. Placeholder controls must not perform simulated production behavior.
 
-Slices 1 and 2 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
+Slices 1 through 3 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
+
+Dataset Studio persists the same structured JSON document exposed by the public API. Visual authoring starts from live scoped catalog metadata, admits additional relations only through an explicit visible foreign-key suggestion, and preserves stable relation, join, and field identifiers across edits. Advanced SQL authoring keeps the read-only statement and its declared stable output fields together. Optimistic draft saves invalidate earlier checks; validation, preview, impact analysis, and publication are enabled only for the exact current revision. Publication monitors the durable refresh run, keeps the last-known-good snapshot readable on failure, and exposes the installation-timezone refresh schedule after first publication.
 
 ## Visual direction
 

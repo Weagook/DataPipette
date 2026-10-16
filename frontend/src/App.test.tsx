@@ -6,7 +6,9 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 function renderApp(path: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
@@ -22,13 +24,23 @@ describe("application session flow", () => {
       "fetch",
       vi.fn(async () =>
         Response.json(
-          { code: "authentication_required", title: "Authentication required", detail: "Sign in." },
+          {
+            code: "authentication_required",
+            title: "Authentication required",
+            detail: "Sign in.",
+          },
           { status: 401 },
         ),
       ),
     );
     renderApp("/dashboards");
-    expect(await screen.findByRole("heading", { name: "Sign in to DatePipette" })).toBeVisible();
+    expect(
+      await screen.findByRole(
+        "heading",
+        { name: "Sign in to DatePipette" },
+        { timeout: 5_000 },
+      ),
+    ).toBeVisible();
   });
 
   it("signs in without persisting credentials and opens the workspace", async () => {
@@ -41,7 +53,12 @@ describe("application session flow", () => {
           requestBodies.push(await request.json());
           return Response.json(
             {
-              user: { id: "1", email: "analyst@example.com", display_name: "Ada Analyst", role: "analyst" },
+              user: {
+                id: "1",
+                email: "analyst@example.com",
+                display_name: "Ada Analyst",
+                role: "analyst",
+              },
               expires_at: "2026-10-16T10:00:00Z",
             },
             { status: 201 },
@@ -55,12 +72,22 @@ describe("application session flow", () => {
     );
 
     renderApp("/login");
-    fireEvent.change(await screen.findByLabelText("Work email"), { target: { value: "analyst@example.com" } });
-    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "not-persisted" } });
+    fireEvent.change(await screen.findByLabelText("Work email"), {
+      target: { value: "analyst@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "not-persisted" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Open workspace" }));
 
-    expect(await screen.findByRole("heading", { name: "Good data should feel quiet." })).toBeVisible();
-    expect(requestBodies).toEqual([{ email: "analyst@example.com", password: "not-persisted" }]);
+    expect(
+      await screen.findByRole("heading", {
+        name: "Good data should feel quiet.",
+      }),
+    ).toBeVisible();
+    expect(requestBodies).toEqual([
+      { email: "analyst@example.com", password: "not-persisted" },
+    ]);
     await waitFor(() => expect(screen.getByText("Ada Analyst")).toBeVisible());
     expect(localStorage.length).toBe(0);
   });

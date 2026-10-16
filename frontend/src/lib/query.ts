@@ -15,7 +15,10 @@ export const queryClient = new QueryClient({
         return status >= 500 && failureCount < 2;
       },
       retryDelay(attempt, error) {
-        if (error instanceof DatePipetteApiError && error.retryAfterSeconds !== null) {
+        if (
+          error instanceof DatePipetteApiError &&
+          error.retryAfterSeconds !== null
+        ) {
           return error.retryAfterSeconds * 1_000;
         }
         return Math.min(500 * 2 ** attempt, 3_000);
@@ -33,7 +36,20 @@ export const queryKeys = {
   dashboardItem: (dashboardId: string, itemId: string) =>
     ["dashboard", dashboardId, "item", itemId] as const,
   datasets: ["datasets", "infinite"] as const,
+  connections: ["connections"] as const,
+  catalogSchemas: (connectionId: string) =>
+    ["catalog", connectionId, "schemas"] as const,
+  catalogRelations: (connectionId: string, schema: string) =>
+    ["catalog", connectionId, schema, "relations"] as const,
+  catalogRelation: (connectionId: string, schema: string, relation: string) =>
+    ["catalog", connectionId, schema, relation] as const,
+  dataset: (id: string) => ["dataset", id] as const,
+  datasetDraft: (id: string) => ["dataset", id, "draft"] as const,
+  refreshRun: (datasetId: string, runId: string) =>
+    ["dataset", datasetId, "refresh", runId] as const,
+  refreshSchedule: (id: string) => ["dataset", id, "schedule"] as const,
   datasetExploration: (id: string) => ["dataset", id, "exploration"] as const,
-  datasetRows: (id: string, query: unknown) => ["dataset", id, "rows", query] as const,
+  datasetRows: (id: string, query: unknown) =>
+    ["dataset", id, "rows", query] as const,
   datasetExports: (id: string) => ["dataset", id, "exports"] as const,
 };
