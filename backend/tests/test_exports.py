@@ -79,6 +79,7 @@ def _admin(role: SystemRole = SystemRole.ADMIN) -> User:
 def _context() -> ActiveSnapshotQueryContext:
     return ActiveSnapshotQueryContext(
         DATASET_ID,
+        "Orders",
         SNAPSHOT_ID,
         "local",
         "snapshot.parquet",

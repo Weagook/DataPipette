@@ -115,6 +115,7 @@ FIELDS = (
 def _context(object_key: str = "snapshot.parquet") -> ActiveSnapshotQueryContext:
     return ActiveSnapshotQueryContext(
         dataset_id=DATASET_ID,
+        dataset_name="Orders",
         snapshot_id=SNAPSHOT_ID,
         storage_backend="local",
         object_key=object_key,
@@ -133,8 +134,13 @@ def _admin(role: SystemRole = SystemRole.ADMIN) -> User:
 
 
 class FakeStore:
-    def __init__(self, context: ActiveSnapshotQueryContext | None = None) -> None:
+    def __init__(
+        self,
+        context: ActiveSnapshotQueryContext | None = None,
+        permissions: frozenset[DatasetPermission] = frozenset(DatasetPermission),
+    ) -> None:
         self.context = context
+        self.permissions = permissions
         self.freshness = (
             DatasetFreshness(
                 dataset_id=context.dataset_id,
@@ -164,7 +170,7 @@ class FakeStore:
     async def get_dataset_access(self, *, actor_id: UUID, dataset_id: UUID) -> DatasetAccess | None:
         if dataset_id != DATASET_ID:
             return None
-        return DatasetAccess(dataset_id, False, frozenset(DatasetPermission))
+        return DatasetAccess(dataset_id, False, self.permissions)
 
     async def record_query(self, **values: Any) -> None:
         self.audit.append(values)
@@ -235,6 +241,9 @@ def test_exploration_returns_published_display_and_filter_capabilities() -> None
 
     result = asyncio.run(service.exploration(actor=_admin(), dataset_id=DATASET_ID))
 
+    assert result.dataset_name == "Orders"
+    assert result.can_export is True
+    assert result.installation_timezone == "UTC"
     assert result.snapshot_id == SNAPSHOT_ID
     assert result.default_field_ids == tuple(field.field_id for field in FIELDS if field.visible)
     date_column = next(column for column in result.columns if column.field_id == DATE_ID)
@@ -281,6 +290,17 @@ def test_exploration_default_projection_respects_query_field_limit() -> None:
 
     assert len(result.columns) == 101
     assert result.default_field_ids == tuple(field.field_id for field in fields[:100])
+
+
+def test_exploration_reports_effective_export_capability() -> None:
+    store = FakeStore(_context(), frozenset({DatasetPermission.VIEW_ROWS}))
+    service, _, _ = _service(store)
+
+    result = asyncio.run(
+        service.exploration(actor=_admin(SystemRole.ANALYST), dataset_id=DATASET_ID)
+    )
+
+    assert result.can_export is False
 
 
 def test_service_normalizes_typed_filters_and_round_trips_cursor() -> None:

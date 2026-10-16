@@ -89,6 +89,7 @@ FIELDS = (
 def _context(object_key: str = "snapshot.parquet") -> ActiveSnapshotQueryContext:
     return ActiveSnapshotQueryContext(
         dataset_id=DATASET_ID,
+        dataset_name="Orders",
         snapshot_id=SNAPSHOT_ID,
         storage_backend="local",
         object_key=object_key,

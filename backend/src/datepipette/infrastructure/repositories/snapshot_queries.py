@@ -120,6 +120,7 @@ class SqlAlchemySnapshotQueryStore:
         fields = query_fields_from_models(version, snapshot)
         return ActiveSnapshotQueryContext(
             dataset_id=dataset.id,
+            dataset_name=dataset.name,
             snapshot_id=snapshot.id,
             storage_backend=snapshot.storage_backend,
             object_key=snapshot.object_key,

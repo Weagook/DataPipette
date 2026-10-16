@@ -17,6 +17,17 @@ export type CurrentUser = ApiSchemas["UserResponse"];
 export type Dashboard = ApiSchemas["DashboardResponse"];
 export type DashboardPage = ApiSchemas["DashboardCollectionResponse"];
 export type DashboardItemResult = ApiSchemas["DashboardItemQueryResponse"];
+export type Dataset = ApiSchemas["DatasetResponse"];
+export type DatasetPage = ApiSchemas["DatasetCollectionResponse"];
+export type DatasetExploration = ApiSchemas["DatasetExplorationResponse"];
+export type DatasetColumn = ApiSchemas["DatasetExplorationColumnResponse"];
+export type SnapshotRowsQuery = ApiSchemas["SnapshotRowsQueryRequest"];
+export type SnapshotRows = ApiSchemas["SnapshotRowsResponse"];
+export type SnapshotFilter = ApiSchemas["SnapshotFilterPayload"];
+export type SnapshotSort = ApiSchemas["SnapshotSortPayload"];
+export type ExportFormat = ApiSchemas["ExportFormat"];
+export type ExportJob = ApiSchemas["ExportResponse"];
+export type ExportCollection = ApiSchemas["ExportCollectionResponse"];
 
 export { DatePipetteApiError };
 
@@ -64,6 +75,71 @@ export async function queryDashboardItem(
   return unwrap(
     await api.POST("/api/v1/dashboards/{dashboard_id}/items/{item_id}/data:query", {
       params: { path: { dashboard_id: dashboardId, item_id: itemId } },
+    }),
+  );
+}
+
+export async function listDatasets(cursor?: string): Promise<DatasetPage> {
+  return unwrap(
+    await api.GET("/api/v1/datasets", {
+      params: { query: { limit: 50, cursor } },
+    }),
+  );
+}
+
+export async function getDatasetExploration(datasetId: string): Promise<DatasetExploration> {
+  return unwrap(
+    await api.GET("/api/v1/datasets/{dataset_id}/exploration", {
+      params: { path: { dataset_id: datasetId } },
+    }),
+  );
+}
+
+export async function queryDatasetRows(
+  datasetId: string,
+  query: SnapshotRowsQuery,
+): Promise<SnapshotRows> {
+  return unwrap(
+    await api.POST("/api/v1/datasets/{dataset_id}/rows:query", {
+      params: { path: { dataset_id: datasetId } },
+      body: query,
+    }),
+  );
+}
+
+export async function listDatasetExports(datasetId: string): Promise<ExportCollection> {
+  return unwrap(
+    await api.GET("/api/v1/datasets/{dataset_id}/exports", {
+      params: { path: { dataset_id: datasetId }, query: { limit: 100 } },
+    }),
+  );
+}
+
+export async function createDatasetExport(
+  datasetId: string,
+  format: ExportFormat,
+  query: Pick<SnapshotRowsQuery, "fields" | "filters" | "sorts">,
+): Promise<ExportJob> {
+  return unwrap(
+    await api.POST("/api/v1/datasets/{dataset_id}/exports", {
+      params: { path: { dataset_id: datasetId } },
+      headers: {
+        "X-CSRF-Token": readCookie("datepipette_csrf"),
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      body: { format, fields: query.fields, filters: query.filters, sorts: query.sorts },
+    }),
+  );
+}
+
+export async function issueExportDownload(
+  datasetId: string,
+  exportId: string,
+): Promise<ApiSchemas["ExportDownloadLinkResponse"]> {
+  return unwrap(
+    await api.POST("/api/v1/datasets/{dataset_id}/exports/{export_id}/download-link", {
+      params: { path: { dataset_id: datasetId, export_id: exportId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
     }),
   );
 }

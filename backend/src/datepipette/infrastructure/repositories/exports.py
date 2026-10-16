@@ -301,11 +301,12 @@ class SqlAlchemyExportStore:
         async with self._session_factory() as session:
             row = (
                 await session.execute(
-                    select(DatasetSnapshotModel, DatasetVersionModel)
+                    select(DatasetSnapshotModel, DatasetVersionModel, DatasetModel)
                     .join(
                         DatasetVersionModel,
                         DatasetVersionModel.id == DatasetSnapshotModel.dataset_version_id,
                     )
+                    .join(DatasetModel, DatasetModel.id == DatasetSnapshotModel.dataset_id)
                     .where(
                         DatasetSnapshotModel.id == job.snapshot_id,
                         DatasetSnapshotModel.dataset_id == job.dataset_id,
@@ -314,9 +315,10 @@ class SqlAlchemyExportStore:
             ).one_or_none()
         if row is None:
             return None
-        snapshot, version = row
+        snapshot, version, dataset = row
         return ActiveSnapshotQueryContext(
             dataset_id=job.dataset_id,
+            dataset_name=dataset.name,
             snapshot_id=snapshot.id,
             storage_backend=snapshot.storage_backend,
             object_key=snapshot.object_key,

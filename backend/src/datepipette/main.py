@@ -307,6 +307,7 @@ def create_app(
             ),
             access_authorizer,
             query_safety_policy_store,
+            resolved_settings.installation_timezone,
         )
         resolved_chart_service = chart_service or ChartService(
             SqlAlchemyChartStore(resources.session_factory),

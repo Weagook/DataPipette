@@ -2129,6 +2129,10 @@
       },
       "DatasetExplorationResponse": {
         "properties": {
+          "can_export": {
+            "title": "Can Export",
+            "type": "boolean"
+          },
           "columns": {
             "items": {
               "$ref": "#/components/schemas/DatasetExplorationColumnResponse"
@@ -2141,6 +2145,10 @@
             "title": "Dataset Id",
             "type": "string"
           },
+          "dataset_name": {
+            "title": "Dataset Name",
+            "type": "string"
+          },
           "default_field_ids": {
             "items": {
               "format": "uuid",
@@ -2148,6 +2156,10 @@
             },
             "title": "Default Field Ids",
             "type": "array"
+          },
+          "installation_timezone": {
+            "title": "Installation Timezone",
+            "type": "string"
           },
           "is_stale": {
             "title": "Is Stale",
@@ -2196,6 +2208,9 @@
         },
         "required": [
           "dataset_id",
+          "dataset_name",
+          "can_export",
+          "installation_timezone",
           "snapshot_id",
           "snapshot_row_count",
           "snapshot_activated_at",

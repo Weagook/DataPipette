@@ -12,6 +12,12 @@ const DashboardDetailPage = lazy(() =>
 const DashboardsPage = lazy(() =>
   import("./pages/DashboardsPage").then((module) => ({ default: module.DashboardsPage })),
 );
+const DatasetsPage = lazy(() =>
+  import("./pages/DatasetsPage").then((module) => ({ default: module.DatasetsPage })),
+);
+const DatasetTablePage = lazy(() =>
+  import("./pages/DatasetTablePage").then((module) => ({ default: module.DatasetTablePage })),
+);
 const LoginPage = lazy(() =>
   import("./pages/LoginPage").then((module) => ({ default: module.LoginPage })),
 );
@@ -29,6 +35,9 @@ export function App() {
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/dashboards" element={<DashboardsPage />} />
           <Route path="/dashboards/:dashboardId" element={<DashboardDetailPage />} />
+          <Route path="/datasets" element={<DatasetsPage />} />
+          <Route path="/datasets/:datasetId" element={<DatasetTablePage />} />
+          <Route path="/datasets/:datasetId/table" element={<DatasetTablePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/overview" replace />} />
       </Routes>
@@ -63,7 +72,7 @@ function ProtectedLayout() {
   }
   return (
     <AppShell user={session.data}>
-      <Outlet />
+      <Outlet context={session.data} />
     </AppShell>
   );
 }

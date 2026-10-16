@@ -93,7 +93,7 @@ Outcome: every MVP capability is understandable and usable through a polished re
 
 - [x] Session login, restoration, logout, responsive shell, and role-aware navigation
 - [x] Dashboard collection and independent bar, line, pie/donut, and KPI item rendering
-- [ ] Dataset exploration with typed Excel-like filters, pagination, freshness, and exports
+- [x] Dataset exploration with typed Excel-like filters, pagination, freshness, and exports
 - [ ] Visual/SQL dataset studio with validation, preview, impact, publication, refresh, and schedules
 - [ ] Chart studio with aggregations, filters, sorting, and timezone-aware buckets
 - [ ] Dashboard layout editor and user/group sharing
