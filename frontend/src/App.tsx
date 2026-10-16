@@ -16,6 +16,11 @@ const DashboardsPage = lazy(() =>
     default: module.DashboardsPage,
   })),
 );
+const DashboardStudioPage = lazy(() =>
+  import("./pages/DashboardStudioPage").then((module) => ({
+    default: module.DashboardStudioPage,
+  })),
+);
 const DatasetsPage = lazy(() =>
   import("./pages/DatasetsPage").then((module) => ({
     default: module.DatasetsPage,
@@ -59,6 +64,11 @@ export function App() {
           <Route index element={<Navigate to="/overview" replace />} />
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/dashboards" element={<DashboardsPage />} />
+          <Route path="/dashboards/new" element={<DashboardStudioPage />} />
+          <Route
+            path="/dashboards/:dashboardId/edit"
+            element={<DashboardStudioPage />}
+          />
           <Route
             path="/dashboards/:dashboardId"
             element={<DashboardDetailPage />}

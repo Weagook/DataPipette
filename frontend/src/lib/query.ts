@@ -33,6 +33,11 @@ export const queryKeys = {
   dashboardOverview: ["dashboards", "overview"] as const,
   dashboards: ["dashboards", "infinite"] as const,
   dashboard: (id: string) => ["dashboard", id] as const,
+  dashboardEdit: (id: string) => ["dashboard", id, "edit"] as const,
+  dashboardCharts: ["dashboards", "charts"] as const,
+  dashboardGrants: (id: string) => ["dashboard", id, "grants"] as const,
+  users: ["access", "users"] as const,
+  groups: ["access", "groups"] as const,
   dashboardItem: (dashboardId: string, itemId: string) =>
     ["dashboard", dashboardId, "item", itemId] as const,
   datasets: ["datasets", "infinite"] as const,

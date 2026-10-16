@@ -96,7 +96,7 @@ Outcome: every MVP capability is understandable and usable through a polished re
 - [x] Dataset exploration with typed Excel-like filters, pagination, freshness, and exports
 - [x] Visual/SQL dataset studio with validation, preview, impact, publication, refresh, and schedules
 - [x] Chart studio with aggregations, filters, sorting, and timezone-aware buckets
-- [ ] Dashboard layout editor and user/group sharing
+- [x] Dashboard layout editor and user/group sharing
 - [ ] Connection, visibility-scope, identity, group, service-account, and token administration
 - [ ] Query Safety policy and audit-event administration
 - [ ] Accessibility, responsive browser matrix, performance budgets, and production deployment
