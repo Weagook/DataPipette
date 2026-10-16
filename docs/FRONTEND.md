@@ -66,9 +66,11 @@ Viewer navigation deliberately omits detailed datasets, charts, source connectio
 
 Each slice must end in a usable workflow backed only by documented API operations. Placeholder controls must not perform simulated production behavior.
 
-Slices 1 through 3 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
+Slices 1 through 4 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
 
 Dataset Studio persists the same structured JSON document exposed by the public API. Visual authoring starts from live scoped catalog metadata, admits additional relations only through an explicit visible foreign-key suggestion, and preserves stable relation, join, and field identifiers across edits. Advanced SQL authoring keeps the read-only statement and its declared stable output fields together. Optimistic draft saves invalidate earlier checks; validation, preview, impact analysis, and publication are enabled only for the exact current revision. Publication monitors the durable refresh run, keeps the last-known-good snapshot readable on failure, and exposes the installation-timezone refresh schedule after first publication.
+
+Chart Studio derives field, type, and filter capabilities from the active published exploration contract. Its guided definition supports bar, line, pie, donut, and KPI forms; one dimension or KPI shape; stable aggregate measures; typed permanent filters; result sorting and limits; and installation-timezone date buckets. Creation and complete replacement use the public private-chart API and opaque revision ETags. The preview never executes an unsaved document: it queries only the saved definition, clearly marks dirty state, and preserves freshness, stale-fallback, truncation, and accessible-data metadata from the bounded snapshot response.
 
 ## Visual direction
 

@@ -23,8 +23,6 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-const futureAnalystAreas = [{ icon: BarChart3, label: "Charts" }];
-
 const futureAdminAreas = [
   { icon: Gauge, label: "Connections" },
   { icon: Users, label: "Access" },
@@ -56,11 +54,22 @@ export function AppShell({ user, children }: AppShellProps) {
       >
         <Menu size={20} />
       </button>
-      {mobileOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
+      {mobileOpen && (
+        <button
+          className="nav-scrim"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
       <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
         <div className="sidebar-head">
           <Brand />
-          <button className="mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation" type="button">
+          <button
+            className="mobile-close"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation"
+            type="button"
+          >
             <X size={18} />
           </button>
         </div>
@@ -80,20 +89,21 @@ export function AppShell({ user, children }: AppShellProps) {
                 <Database size={18} />
                 Datasets
               </NavLink>
-              {futureAnalystAreas.map(({ icon: Icon, label }) => (
-                <span className="future-nav" key={label} title={`${label} arrives in the next frontend slices`}>
-                  <Icon size={18} />
-                  {label}
-                  <small>Next</small>
-                </span>
-              ))}
+              <NavLink to="/charts" onClick={() => setMobileOpen(false)}>
+                <BarChart3 size={18} />
+                Charts
+              </NavLink>
             </div>
           )}
           {isAdmin && (
             <div className="nav-group" aria-label="Administration roadmap">
               <span className="nav-group-label">Administration</span>
               {futureAdminAreas.map(({ icon: Icon, label }) => (
-                <span className="future-nav" key={label} title={`${label} arrives in a later frontend slice`}>
+                <span
+                  className="future-nav"
+                  key={label}
+                  title={`${label} arrives in a later frontend slice`}
+                >
                   <Icon size={18} />
                   {label}
                   <small>Planned</small>
@@ -117,7 +127,12 @@ export function AppShell({ user, children }: AppShellProps) {
             <strong>Analytics</strong>
           </div>
           <div className="profile-wrap">
-            <button className="profile-button" onClick={() => setProfileOpen((open) => !open)} type="button" aria-expanded={profileOpen}>
+            <button
+              className="profile-button"
+              onClick={() => setProfileOpen((open) => !open)}
+              type="button"
+              aria-expanded={profileOpen}
+            >
               <span className="avatar">{initials(user.display_name)}</span>
               <span className="profile-copy">
                 <strong>{user.display_name}</strong>
@@ -128,7 +143,11 @@ export function AppShell({ user, children }: AppShellProps) {
             {profileOpen && (
               <div className="profile-menu">
                 <p>{user.email}</p>
-                <button type="button" onClick={() => signOut.mutate()} disabled={signOut.isPending}>
+                <button
+                  type="button"
+                  onClick={() => signOut.mutate()}
+                  disabled={signOut.isPending}
+                >
                   <LogOut size={16} />
                   {signOut.isPending ? "Signing out…" : "Sign out"}
                 </button>
