@@ -18,6 +18,12 @@ export type CurrentUser = ApiSchemas["UserResponse"];
 export type Dashboard = ApiSchemas["DashboardResponse"];
 export type DashboardPage = ApiSchemas["DashboardCollectionResponse"];
 export type DashboardItemResult = ApiSchemas["DashboardItemQueryResponse"];
+export type DashboardDefinition = ApiSchemas["DashboardDefinitionPayload"];
+export type DashboardItem = ApiSchemas["DashboardItemPayload"];
+export type DashboardGrant = ApiSchemas["DashboardGrantResponse"];
+export type GrantPrincipalType = ApiSchemas["GrantPrincipalType"];
+export type UserAdmin = ApiSchemas["UserAdminResponse"];
+export type Group = ApiSchemas["GroupResponse"];
 export type Dataset = ApiSchemas["DatasetResponse"];
 export type DatasetPage = ApiSchemas["DatasetCollectionResponse"];
 export type DatasetDefinition =
@@ -91,6 +97,113 @@ export async function getDashboard(dashboardId: string): Promise<Dashboard> {
       params: { path: { dashboard_id: dashboardId } },
     }),
   );
+}
+
+export async function getDashboardForEdit(
+  dashboardId: string,
+): Promise<{ dashboard: Dashboard; etag: string }> {
+  const result = await api.GET("/api/v1/dashboards/{dashboard_id}", {
+    params: { path: { dashboard_id: dashboardId } },
+  });
+  const dashboard = unwrap(result);
+  return {
+    dashboard,
+    etag:
+      result.response.headers.get("etag") ?? `"dashboard-${dashboard.revision}"`,
+  };
+}
+
+export async function createDashboard(
+  name: string,
+  definition: DashboardDefinition,
+): Promise<{ dashboard: Dashboard; etag: string }> {
+  const result = await api.POST("/api/v1/dashboards", {
+    headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    body: { name, definition },
+  });
+  const dashboard = unwrap(result);
+  return {
+    dashboard,
+    etag:
+      result.response.headers.get("etag") ?? `"dashboard-${dashboard.revision}"`,
+  };
+}
+
+export async function replaceDashboard(
+  dashboardId: string,
+  name: string,
+  definition: DashboardDefinition,
+  etag: string,
+): Promise<{ dashboard: Dashboard; etag: string }> {
+  const result = await api.PUT("/api/v1/dashboards/{dashboard_id}", {
+    params: { path: { dashboard_id: dashboardId } },
+    headers: {
+      "X-CSRF-Token": readCookie("datepipette_csrf"),
+      "If-Match": etag,
+    },
+    body: { name, definition },
+  });
+  const dashboard = unwrap(result);
+  return {
+    dashboard,
+    etag:
+      result.response.headers.get("etag") ?? `"dashboard-${dashboard.revision}"`,
+  };
+}
+
+export async function listDashboardGrants(
+  dashboardId: string,
+): Promise<DashboardGrant[]> {
+  const value = unwrap(
+    await api.GET("/api/v1/dashboards/{dashboard_id}/grants", {
+      params: { path: { dashboard_id: dashboardId } },
+    }),
+  );
+  return value.data;
+}
+
+export async function createDashboardGrant(
+  dashboardId: string,
+  principalType: GrantPrincipalType,
+  principalId: string,
+): Promise<DashboardGrant> {
+  return unwrap(
+    await api.POST("/api/v1/dashboards/{dashboard_id}/grants", {
+      params: { path: { dashboard_id: dashboardId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: { principal_type: principalType, principal_id: principalId },
+    }),
+  );
+}
+
+export async function revokeDashboardGrant(
+  dashboardId: string,
+  grantId: string,
+): Promise<void> {
+  unwrap(
+    await api.DELETE("/api/v1/dashboards/{dashboard_id}/grants/{grant_id}", {
+      params: { path: { dashboard_id: dashboardId, grant_id: grantId } },
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    }),
+  );
+}
+
+export async function listUsers(): Promise<UserAdmin[]> {
+  const value = unwrap(
+    await api.GET("/api/v1/users", {
+      params: { query: { limit: 100 } },
+    }),
+  );
+  return value.data;
+}
+
+export async function listGroups(): Promise<Group[]> {
+  const value = unwrap(
+    await api.GET("/api/v1/groups", {
+      params: { query: { limit: 100 } },
+    }),
+  );
+  return value.data;
 }
 
 export async function queryDashboardItem(

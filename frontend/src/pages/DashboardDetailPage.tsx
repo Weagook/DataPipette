@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CalendarClock, MoreHorizontal, RefreshCw, Share2 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useOutletContext, useParams } from "react-router-dom";
 
 import { DashboardItemCard } from "../components/DashboardItemCard";
 import { FullPageStatus, InlineError } from "../components/Status";
-import { getDashboard, problemMessage } from "../lib/api";
+import { getDashboard, problemMessage, type CurrentUser } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { queryKeys } from "../lib/query";
 
 export function DashboardDetailPage() {
+  const user = useOutletContext<CurrentUser>();
   const { dashboardId = "" } = useParams();
   const dashboard = useQuery({
     queryKey: queryKeys.dashboard(dashboardId),
@@ -27,7 +28,7 @@ export function DashboardDetailPage() {
         <div><span className="eyebrow">Dashboard</span><h1>{dashboard.data.name}</h1><p><CalendarClock size={15} /> Updated {formatDateTime(dashboard.data.updated_at)} · revision {dashboard.data.revision}</p></div>
         <div className="heading-actions">
           <button className="button secondary" type="button" onClick={() => void dashboard.refetch()}><RefreshCw size={16} /> Refresh view</button>
-          <button className="button secondary" type="button" disabled title="Sharing management arrives in the dashboard studio slice"><Share2 size={16} /> Share</button>
+          {(user.role === "admin" || dashboard.data.owner_id === user.id) && <Link className="button secondary" to={`/dashboards/${dashboard.data.id}/edit`}><Share2 size={16} /> Edit & share</Link>}
           <button className="icon-button bordered" type="button" disabled aria-label="More dashboard actions"><MoreHorizontal size={18} /></button>
         </div>
       </header>
