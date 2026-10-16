@@ -47,11 +47,8 @@ Viewer navigation deliberately omits detailed datasets, charts, source connectio
 │   └── /:chartId
 ├── /connections
 │   └── /:connectionId
-└── /admin
-    ├── /people
-    ├── /service-accounts
-    ├── /query-safety
-    └── /audit
+├── /access
+└── /governance
 ```
 
 ## Delivery slices
@@ -66,7 +63,7 @@ Viewer navigation deliberately omits detailed datasets, charts, source connectio
 
 Each slice must end in a usable workflow backed only by documented API operations. Placeholder controls must not perform simulated production behavior.
 
-Slices 1 through 5 and the Connections part of Slice 6 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
+Slices 1 through 5 plus the Connections and Access portions of Slice 6 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
 
 Dataset Studio persists the same structured JSON document exposed by the public API. Visual authoring starts from live scoped catalog metadata, admits additional relations only through an explicit visible foreign-key suggestion, and preserves stable relation, join, and field identifiers across edits. Advanced SQL authoring keeps the read-only statement and its declared stable output fields together. Optimistic draft saves invalidate earlier checks; validation, preview, impact analysis, and publication are enabled only for the exact current revision. Publication monitors the durable refresh run, keeps the last-known-good snapshot readable on failure, and exposes the installation-timezone refresh schedule after first publication.
 
@@ -75,6 +72,8 @@ Chart Studio derives field, type, and filter capabilities from the active publis
 Dashboard Studio persists the public schema-versioned 12-column document without a second responsive layout format. It offers an owner-scoped chart palette, deterministic first-fit placement, drag movement, exact keyboard-accessible movement and sizing controls, collision/boundary prevention, compaction, multi-dataset visibility, and optimistic complete replacement through the dashboard ETag. A saved dashboard deliberately grants and revokes view-only access for people or groups. The Viewer preview is the ordinary saved dashboard route, so owners and recipients exercise the same independently loading constrained item-query contract; unsaved layouts never execute.
 
 Connections administration exposes only the safe metadata returned by the public API. Passwords and CA certificates are write-only: an empty password edit preserves the encrypted value, while CA removal is a separate explicit action. Administrators can test saved settings and see only the timestamp, PostgreSQL version, and stable safe failure code; the live catalog progressively exposes visible schemas, relations, columns, primary keys, and foreign keys. Direct analyst and group grants are created from those live selections at exact `all`, `schema`, or `table` scope and can be revoked immediately. Non-administrators cannot enter these routes; analysts consume only their already-scoped catalog inside Dataset Studio.
+
+Access administration keeps local people, reusable groups, and external integration identities in one admin-only workspace. People can be created, assigned a coarse role, disabled, or have their browser sessions revoked without conflating those operations. Groups expose explicit active-user membership. Each external system receives its own service account and independently revocable token history so rotation does not require downtime. A newly issued token is shown once and held only in component state; dismissing it removes recoverable plaintext while the API and subsequent list responses retain metadata and digest only.
 
 ## Visual direction
 
@@ -89,4 +88,5 @@ The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal
 - Stale snapshot data remains renderable with a persistent warning and safe refresh-error metadata.
 - Mutations requiring CSRF read the non-HttpOnly CSRF cookie immediately before the request. Tokens and passwords are never persisted by the frontend.
 - Connection queries never contain secret material. Create/update forms discard plaintext password and CA input after a successful mutation, and connection tests render only redacted API results.
+- Newly issued API-token plaintext exists only in ephemeral component state. It is never added to TanStack Query, browser storage, URLs, logs, or token-list responses, and a disabled service account cannot issue another token.
 - Dataset exploration metadata includes only the safe display name, installation timezone, and effective export capability needed to render a reloadable direct link accurately; backend authorization remains authoritative for every row query and export action.

@@ -64,6 +64,11 @@ const ConnectionDetailPage = lazy(() =>
     default: module.ConnectionDetailPage,
   })),
 );
+const AccessPage = lazy(() =>
+  import("./pages/AccessPage").then((module) => ({
+    default: module.AccessPage,
+  })),
+);
 
 export function App() {
   return (
@@ -103,6 +108,7 @@ export function App() {
             path="/connections/:connectionId"
             element={<ConnectionDetailPage />}
           />
+          <Route path="/access" element={<AccessPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/overview" replace />} />
       </Routes>

@@ -24,7 +24,6 @@ interface AppShellProps {
 }
 
 const futureAdminAreas = [
-  { icon: Users, label: "Access" },
   { icon: ShieldCheck, label: "Governance" },
 ];
 
@@ -100,6 +99,10 @@ export function AppShell({ user, children }: AppShellProps) {
               <NavLink to="/connections" onClick={() => setMobileOpen(false)}>
                 <Gauge size={18} />
                 Connections
+              </NavLink>
+              <NavLink to="/access" onClick={() => setMobileOpen(false)}>
+                <Users size={18} />
+                Access
               </NavLink>
               {futureAdminAreas.map(({ icon: Icon, label }) => (
                 <span
