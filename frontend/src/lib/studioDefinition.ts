@@ -108,8 +108,43 @@ export function emptySqlDefinition(): SqlDefinition {
   return {
     kind: "sql",
     schema_version: 1,
-    statement: "SELECT\n  id\nFROM public.example",
-    fields: [newSqlField("id")],
+    statement: "",
+    fields: [newSqlField("result_column")],
+  };
+}
+
+export function appendVisualField(
+  definition: VisualDefinition,
+  relationId: string,
+  columnName: string,
+): VisualDefinition {
+  if (
+    definition.fields.some(
+      (field) =>
+        field.source.relation_id === relationId &&
+        field.source.column === columnName,
+    )
+  )
+    return definition;
+
+  return {
+    ...definition,
+    fields: [
+      ...definition.fields,
+      {
+        id: crypto.randomUUID(),
+        source: { relation_id: relationId, column: columnName },
+        name: uniqueFieldName(
+          columnName,
+          definition.fields.map((field) => field.name),
+        ),
+        display: {
+          label: humanize(columnName),
+          format: null,
+          visible: true,
+        },
+      },
+    ],
   };
 }
 
@@ -125,8 +160,17 @@ export function definitionIsReady(
   definition: DatasetDefinition | null,
 ): boolean {
   if (!definition || definition.fields.length === 0) return false;
+  const fieldNames = definition.fields.map((field) => field.name.trim());
+  if (!uniqueNonEmpty(fieldNames)) return false;
   if (definition.kind === "sql") return definition.statement.trim().length > 0;
-  return definition.source.relations.length > 0 && definition.fields.length > 0;
+  const aliases = definition.source.relations.map((relation) =>
+    relation.alias.trim(),
+  );
+  return definition.source.relations.length > 0 && uniqueNonEmpty(aliases);
+}
+
+function uniqueNonEmpty(values: string[]): boolean {
+  return values.every(Boolean) && new Set(values).size === values.length;
 }
 
 function uniqueFieldName(name: string, used: string[]): string {

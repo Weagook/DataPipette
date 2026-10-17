@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   appendJoinedRelation,
+  appendVisualField,
+  definitionIsReady,
+  emptySqlDefinition,
   relationAlias,
   visualDefinitionFromRelation,
 } from "./studioDefinition";
@@ -102,5 +105,48 @@ describe("dataset studio definition model", () => {
 
   it("keeps generated aliases unique", () => {
     expect(relationAlias("Order Items", ["order_items"])).toBe("order_items_2");
+  });
+
+  it("lets an excluded visual column be selected again", () => {
+    const definition = appendVisualField(
+      {
+        kind: "visual",
+        schema_version: 2,
+        source: {
+          relations: [
+            { id: "orders", schema: "public", name: "orders", alias: "orders" },
+          ],
+        },
+        fields: [],
+        joins: [],
+      },
+      "orders",
+      "created_at",
+    );
+
+    expect(definition.fields).toHaveLength(1);
+    expect(definition.fields[0]).toMatchObject({
+      source: { relation_id: "orders", column: "created_at" },
+      name: "created_at",
+      display: { label: "Created at", visible: true },
+    });
+    expect(appendVisualField(definition, "orders", "created_at")).toBe(
+      definition,
+    );
+  });
+
+  it("requires a coherent editable definition before creation", () => {
+    const sql = emptySqlDefinition();
+    expect(definitionIsReady(sql)).toBe(false);
+    expect(
+      definitionIsReady({ ...sql, statement: "SELECT id FROM public.orders" }),
+    ).toBe(true);
+    expect(
+      definitionIsReady({
+        ...sql,
+        statement: "SELECT id, name FROM public.orders",
+        fields: [sql.fields[0], { ...sql.fields[0], id: "another-field" }],
+      }),
+    ).toBe(false);
   });
 });
