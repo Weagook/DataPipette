@@ -131,8 +131,10 @@ export function buildChartOption(result: RenderableChartResult): ChartOption {
   const labels = dimension
     ? result.data.rows.map((row) => formatDimension(row[dimension.key]))
     : [];
+  const reduceMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   const common: ChartOption = {
-    animationDuration: 420,
+    animation: !reduceMotion,
+    animationDuration: reduceMotion ? 0 : 420,
     color: palette,
     textStyle: {
       fontFamily: "Inter, ui-sans-serif, system-ui",

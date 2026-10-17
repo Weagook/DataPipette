@@ -67,6 +67,16 @@ docker compose --env-file .env -f deploy/compose/compose.yaml ps
 docker compose --env-file .env -f deploy/compose/compose.yaml logs -f api worker scheduler frontend
 ```
 
+The frontend container has a gateway-local `GET /healthz` endpoint. Its Docker health check proves that Nginx can serve traffic without conflating gateway liveness with API readiness; the API container independently checks PostgreSQL and Redis. After `up --wait`, verify the public path and same-origin proxy:
+
+```bash
+curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/healthz
+curl --fail --silent --show-error --head http://127.0.0.1:8080/login
+curl --fail --silent --show-error http://127.0.0.1:8080/api/v1/health/ready
+```
+
+HTML and SPA fallback responses are `no-store`. Fingerprinted `/assets/` responses are cached for one year as immutable. The gateway adds a restrictive same-origin Content Security Policy, clickjacking protection, MIME sniffing protection, a strict-origin referrer policy, and disables camera, geolocation, and microphone browser capabilities. TLS and HSTS remain the responsibility of the production ingress because this evaluation gateway intentionally serves plain loopback HTTP.
+
 Rebuild after pulling a new revision; migrations and bootstrap remain idempotent:
 
 ```bash

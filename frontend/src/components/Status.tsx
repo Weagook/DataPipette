@@ -14,18 +14,24 @@ export function FullPageStatus({
   onAction,
 }: FullPageStatusProps) {
   return (
-    <main className="full-page-status">
-      <div className="status-orbit" aria-hidden="true">
-        {onAction ? <AlertCircle /> : <LoaderCircle className="spin" />}
-      </div>
-      <h1>{label}</h1>
-      {detail && <p>{detail}</p>}
-      {actionLabel && onAction && (
-        <button className="button secondary" onClick={onAction} type="button">
-          <RotateCcw size={16} />
-          {actionLabel}
-        </button>
-      )}
+    <main className="full-page-status" aria-busy={!onAction}>
+      <section
+        className="full-page-status-message"
+        role={onAction ? "alert" : "status"}
+        aria-live={onAction ? "assertive" : "polite"}
+      >
+        <div className="status-orbit" aria-hidden="true">
+          {onAction ? <AlertCircle /> : <LoaderCircle className="spin" />}
+        </div>
+        <h1>{label}</h1>
+        {detail && <p>{detail}</p>}
+        {actionLabel && onAction && (
+          <button className="button secondary" onClick={onAction} type="button">
+            <RotateCcw size={16} />
+            {actionLabel}
+          </button>
+        )}
+      </section>
     </main>
   );
 }

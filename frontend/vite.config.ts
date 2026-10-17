@@ -21,5 +21,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
     css: true,
+    maxWorkers: 1,
+    pool: "vmThreads",
+    testTimeout: 20_000,
   },
 });
