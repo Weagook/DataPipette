@@ -77,6 +77,23 @@ Connections administration exposes only the safe metadata returned by the public
 
 Access administration keeps local people, reusable groups, and external integration identities in one admin-only workspace. People can be created, assigned a coarse role, disabled, or have their browser sessions revoked without conflating those operations. Groups expose explicit active-user membership. Each external system receives its own service account and independently revocable token history so rotation does not require downtime. A newly issued token is shown once and held only in component state; dismissing it removes recoverable plaintext while the API and subsequent list responses retain metadata and digest only.
 
+## Hardening baseline
+
+The shell exposes a keyboard skip link, route-specific document titles, a polite route announcer, visible focus, and an Escape-close mobile navigation that moves focus into the menu and returns it to the opener. Closed off-canvas navigation is removed from both pointer and accessibility interaction. Loading, recoverable failure, mutation feedback, snapshot warnings, and export feedback use live status or alert semantics. Charts stop animation when the operating system requests reduced motion and retain a structured accessible-data table.
+
+The responsive acceptance matrix is deliberately small and reproducible. Chromium checks use the production Nginx image rather than Vite development behavior:
+
+| Viewport | Representative device | Expected shell |
+| --- | --- | --- |
+| 360 × 800 | Narrow phone | Off-canvas navigation, single-column content, no document overflow |
+| 768 × 1024 | Tablet/portrait | Off-canvas navigation, compact multi-column content where safe |
+| 1280 × 800 | Laptop | Persistent navigation and full authoring workspace |
+| 1600 × 1000 | Wide desktop | Centered content within the 1560 px canvas cap |
+
+The production build enforces gzip transfer budgets with `npm run budget --prefix frontend`: 80 KiB for boot-entry JavaScript, 20 KiB for shared CSS, 12 KiB for the largest ordinary lazy route, 32 KiB for the shared TanStack Query runtime, and 200 KiB for the deliberately isolated ECharts visualization runtime. A budget increase requires an explicit review of the user-visible benefit; the Vite chunk-size warning is not disabled.
+
+This baseline is not a WCAG conformance claim or a substitute for assistive-technology testing. It is a regression boundary covering keyboard access, semantic status, reduced motion, responsive overflow, transfer size, and the production gateway.
+
 ## Visual direction
 
 The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal data accents, restrained borders, and compact typography. Cards are used only to group meaningful state. Charts share one accessible categorical palette and reserve amber/red for freshness or failure, never decoration. The DatePipette pipette/flow mark is reused from the repository artwork rather than introducing a second identity.

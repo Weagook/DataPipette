@@ -17,8 +17,9 @@ RUN npm run build --prefix frontend
 FROM nginx:1.28-alpine AS runtime
 
 COPY deploy/docker/nginx.conf /etc/nginx/nginx.conf
+COPY deploy/docker/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=builder /workspace/frontend/dist /usr/share/nginx/html
 
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --retries=12 \
-    CMD wget -q -O /dev/null http://127.0.0.1:8080/api/v1/health/live || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1

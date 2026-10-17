@@ -122,6 +122,7 @@ npm ci --prefix frontend
 npm run typecheck --prefix frontend
 npm test --prefix frontend
 npm run build --prefix frontend
+npm run budget --prefix frontend
 ```
 
 After an intentional API change, run `npm run generate --prefix clients/typescript` and commit the reviewed generated schema together with `docs/openapi.json`. See the [client README](clients/typescript/README.md) for browser and service-token usage and the executable dashboard example.

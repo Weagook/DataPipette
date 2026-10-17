@@ -11,8 +11,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { logout, type CurrentUser } from "../lib/api";
 import { queryKeys } from "../lib/query";
@@ -27,7 +27,10 @@ export function AppShell({ user, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
   const signOut = useMutation({
     mutationFn: logout,
     onSettled: async () => {
@@ -37,25 +40,52 @@ export function AppShell({ user, children }: AppShellProps) {
   });
   const canAuthor = user.role === "admin" || user.role === "analyst";
   const isAdmin = user.role === "admin";
+  const pageName = routeName(location.pathname);
+
+  useEffect(() => {
+    document.title = `${pageName} · DatePipette`;
+  }, [pageName]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    closeButton.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        menuButton.current?.focus();
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileOpen]);
 
   return (
     <div className="app-frame">
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      <span className="sr-only" aria-live="polite">{pageName} page</span>
       <button
         className="mobile-menu-button"
         onClick={() => setMobileOpen(true)}
         type="button"
         aria-label="Open navigation"
+        aria-controls="primary-sidebar"
+        aria-expanded={mobileOpen}
+        ref={menuButton}
       >
         <Menu size={20} />
       </button>
       {mobileOpen && (
-        <button
+        <div
           className="nav-scrim"
-          aria-label="Close navigation"
+          aria-hidden="true"
           onClick={() => setMobileOpen(false)}
         />
       )}
-      <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
+      <aside id="primary-sidebar" className={`sidebar ${mobileOpen ? "open" : ""}`}>
         <div className="sidebar-head">
           <Brand />
           <button
@@ -63,6 +93,7 @@ export function AppShell({ user, children }: AppShellProps) {
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
             type="button"
+            ref={closeButton}
           >
             <X size={18} />
           </button>
@@ -77,7 +108,7 @@ export function AppShell({ user, children }: AppShellProps) {
             Dashboards
           </NavLink>
           {canAuthor && (
-            <div className="nav-group" aria-label="Authoring roadmap">
+            <div className="nav-group" aria-label="Authoring">
               <span className="nav-group-label">Authoring</span>
               <NavLink to="/datasets" onClick={() => setMobileOpen(false)}>
                 <Database size={18} />
@@ -90,7 +121,7 @@ export function AppShell({ user, children }: AppShellProps) {
             </div>
           )}
           {isAdmin && (
-            <div className="nav-group" aria-label="Administration roadmap">
+            <div className="nav-group" aria-label="Administration">
               <span className="nav-group-label">Administration</span>
               <NavLink to="/connections" onClick={() => setMobileOpen(false)}>
                 <Gauge size={18} />
@@ -127,6 +158,8 @@ export function AppShell({ user, children }: AppShellProps) {
               onClick={() => setProfileOpen((open) => !open)}
               type="button"
               aria-expanded={profileOpen}
+              aria-controls="profile-menu"
+              aria-label={`Open profile menu for ${user.display_name}`}
             >
               <span className="avatar">{initials(user.display_name)}</span>
               <span className="profile-copy">
@@ -136,7 +169,7 @@ export function AppShell({ user, children }: AppShellProps) {
               <ChevronDown size={16} />
             </button>
             {profileOpen && (
-              <div className="profile-menu">
+              <div className="profile-menu" id="profile-menu">
                 <p>{user.email}</p>
                 <button
                   type="button"
@@ -150,10 +183,20 @@ export function AppShell({ user, children }: AppShellProps) {
             )}
           </div>
         </header>
-        <main className="content">{children}</main>
+        <main className="content" id="main-content" tabIndex={-1}>{children}</main>
       </div>
     </div>
   );
+}
+
+function routeName(pathname: string): string {
+  if (pathname.startsWith("/dashboards")) return "Dashboards";
+  if (pathname.startsWith("/datasets")) return "Datasets";
+  if (pathname.startsWith("/charts")) return "Charts";
+  if (pathname.startsWith("/connections")) return "Connections";
+  if (pathname.startsWith("/access")) return "Access";
+  if (pathname.startsWith("/governance")) return "Governance";
+  return "Overview";
 }
 
 function initials(name: string): string {
