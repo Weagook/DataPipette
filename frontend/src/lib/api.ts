@@ -5,6 +5,8 @@ import {
   type components,
 } from "@datepipette/api-client";
 
+import { randomUuid } from "./id";
+
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL?.trim() || window.location.origin;
 
@@ -754,7 +756,7 @@ export async function requestDatasetRefresh(
       headers: {
         "X-CSRF-Token": readCookie("datepipette_csrf"),
         "If-Match": etag,
-        "Idempotency-Key": crypto.randomUUID(),
+        "Idempotency-Key": randomUuid(),
       },
     }),
   );
@@ -840,7 +842,7 @@ export async function createDatasetExport(
       params: { path: { dataset_id: datasetId } },
       headers: {
         "X-CSRF-Token": readCookie("datepipette_csrf"),
-        "Idempotency-Key": crypto.randomUUID(),
+        "Idempotency-Key": randomUuid(),
       },
       body: {
         format,

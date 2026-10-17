@@ -61,6 +61,7 @@ import {
   type RefreshScheduleInput,
 } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { randomUuid } from "../lib/id";
 import { queryKeys } from "../lib/query";
 import {
   appendVisualField,
@@ -925,7 +926,7 @@ function VisualEditor({
   const [joinError, setJoinError] = useState("");
   async function addJoined(detail: CatalogRelation) {
     setJoinError("");
-    const candidateId = crypto.randomUUID();
+    const candidateId = randomUuid();
     try {
       const suggestions = await suggestCatalogJoins(connectionId, [
         ...definition.source.relations.map((item) => ({

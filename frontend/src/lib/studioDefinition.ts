@@ -4,6 +4,7 @@ import type {
   CatalogRelation,
   DatasetDefinition,
 } from "./api";
+import { randomUuid } from "./id";
 
 export type VisualDefinition = ApiSchemas["VisualDefinitionPayload"];
 export type SqlDefinition = ApiSchemas["SqlDefinitionPayload"];
@@ -25,7 +26,7 @@ export function relationAlias(name: string, used: string[] = []): string {
 export function visualDefinitionFromRelation(
   detail: CatalogRelation,
 ): VisualDefinition {
-  const relationId = crypto.randomUUID();
+  const relationId = randomUuid();
   return {
     kind: "visual",
     schema_version: 2,
@@ -40,7 +41,7 @@ export function visualDefinitionFromRelation(
       ],
     },
     fields: detail.columns.map((column) => ({
-      id: crypto.randomUUID(),
+      id: randomUuid(),
       source: { relation_id: relationId, column: column.name },
       name: column.name,
       display: { label: humanize(column.name), format: null, visible: true },
@@ -75,7 +76,7 @@ export function appendJoinedRelation(
     fields: [
       ...definition.fields,
       ...detail.columns.map((column) => ({
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         source: { relation_id: candidateId, column: column.name },
         name: uniqueFieldName(
           column.name,
@@ -87,7 +88,7 @@ export function appendJoinedRelation(
     joins: [
       ...(definition.joins ?? []),
       {
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         type: "left",
         left_relation_id: leftRelationId,
         right_relation_id: rightRelationId,
@@ -132,7 +133,7 @@ export function appendVisualField(
     fields: [
       ...definition.fields,
       {
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         source: { relation_id: relationId, column: columnName },
         name: uniqueFieldName(
           columnName,
@@ -150,7 +151,7 @@ export function appendVisualField(
 
 export function newSqlField(name = "field"): SqlDefinition["fields"][number] {
   return {
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     name,
     display: { label: humanize(name), format: null, visible: true },
   };
