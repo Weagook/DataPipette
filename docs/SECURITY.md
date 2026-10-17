@@ -168,6 +168,9 @@ Query Safety planner thresholds and source, interactive, export, and background-
 - CORS defaults to the official frontend origin and is explicitly configured for integrations.
 - Debug mode and interactive API documentation require deliberate production configuration.
 - Containers run as non-root where supported and receive only required filesystem access.
+- The evaluation Compose topology binds every published port to loopback by default and exposes browser traffic through one same-origin Nginx gateway. Deliberately changing the gateway bind address does not make the topology production-ready.
+- Initial administrator values may originate in the ignored `.env`; Compose mounts that file read-only only for the one-shot bootstrap container, whose CLI extracts the password without logging it. The password is never a process argument or ordinary container environment value. Bootstrap is create-only and skips an existing installation without comparing or resetting credentials.
+- `.env` must be permission-restricted and excluded from backups or support bundles unless encrypted. Production deployments must replace its secret-delivery role with an appropriate secret manager.
 
 ## Security verification
 
