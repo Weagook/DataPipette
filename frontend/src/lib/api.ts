@@ -70,6 +70,25 @@ export type Chart = ApiSchemas["ChartResponse"];
 export type ChartPage = ApiSchemas["ChartCollectionResponse"];
 export type ChartDefinition = ApiSchemas["ChartDefinitionPayload"];
 export type ChartQueryResult = ApiSchemas["ChartQueryResponse"];
+export type QuerySafetyPolicy = ApiSchemas["QuerySafetyPolicyResponse"];
+export type QuerySafetyPolicyInput =
+  ApiSchemas["ReplaceQuerySafetyPolicyRequest"];
+export type AuditEvent = ApiSchemas["AuditEventResponse"];
+export type AuditEventPage = ApiSchemas["AuditEventCollectionResponse"];
+export type AuditActorType = ApiSchemas["AuditActorType"];
+export type AuditOutcome = ApiSchemas["AuditOutcome"];
+
+export interface AuditFilters {
+  action?: string;
+  actorId?: string;
+  actorType?: AuditActorType;
+  occurredFrom?: string;
+  occurredTo?: string;
+  outcome?: AuditOutcome;
+  requestId?: string;
+  resourceId?: string;
+  resourceType?: string;
+}
 
 export { DatePipetteApiError };
 
@@ -845,6 +864,65 @@ export async function issueExportDownload(
         headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
       },
     ),
+  );
+}
+
+export async function getQuerySafetyPolicy(): Promise<{
+  policy: QuerySafetyPolicy;
+  etag: string;
+}> {
+  const result = await api.GET("/api/v1/query-safety-policy");
+  const policy = unwrap(result);
+  return {
+    policy,
+    etag:
+      result.response.headers.get("etag") ??
+      `"query-safety-policy-${policy.revision}"`,
+  };
+}
+
+export async function replaceQuerySafetyPolicy(
+  input: QuerySafetyPolicyInput,
+  etag: string,
+): Promise<{ policy: QuerySafetyPolicy; etag: string }> {
+  const result = await api.PUT("/api/v1/query-safety-policy", {
+    headers: {
+      "If-Match": etag,
+      "X-CSRF-Token": readCookie("datepipette_csrf"),
+    },
+    body: input,
+  });
+  const policy = unwrap(result);
+  return {
+    policy,
+    etag:
+      result.response.headers.get("etag") ??
+      `"query-safety-policy-${policy.revision}"`,
+  };
+}
+
+export async function listAuditEvents(
+  filters: AuditFilters,
+  cursor?: string,
+): Promise<AuditEventPage> {
+  return unwrap(
+    await api.GET("/api/v1/audit-events", {
+      params: {
+        query: {
+          action: filters.action || undefined,
+          actor_id: filters.actorId || undefined,
+          actor_type: filters.actorType,
+          cursor,
+          limit: 30,
+          occurred_from: filters.occurredFrom,
+          occurred_to: filters.occurredTo,
+          outcome: filters.outcome,
+          request_id: filters.requestId || undefined,
+          resource_id: filters.resourceId || undefined,
+          resource_type: filters.resourceType || undefined,
+        },
+      },
+    }),
   );
 }
 
