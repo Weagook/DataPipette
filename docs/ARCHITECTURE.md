@@ -57,12 +57,15 @@ DatePipette/
 │   └── typescript/
 ├── frontend/
 ├── deploy/
-│   └── compose/
+│   ├── compose/
+│   └── docker/
 ├── docs/
 └── pyproject.toml
 ```
 
 The React frontend and TypeScript API client remain independently buildable. The frontend consumes the packaged client so the official application and external integrations share one generated contract.
+
+The self-contained evaluation topology builds one backend image reused by the API, migrations, administrator bootstrap, worker, scheduler, and storage initialization, plus one Nginx image containing the static React build. Nginx is the sole browser entry point and proxies the public `/api` contract to FastAPI, preserving same-origin session and CSRF behavior. One-shot migration, storage, and bootstrap containers gate long-running services. This is a single-host evaluation boundary rather than a production-readiness claim; [the deployment guide](DEPLOYMENT.md) records its operational limits.
 
 Dependencies point inward: infrastructure and API adapters may depend on application and domain interfaces; the domain must not depend on FastAPI, Celery, SQLAlchemy, Redis, S3, or DuckDB.
 

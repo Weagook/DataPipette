@@ -10,7 +10,20 @@ Thank you for your interest in DatePipette. The project is pre-alpha and is esta
 4. For a feature or architecture change, open a discussion or issue before implementing a large patch.
 5. Never include real customer data, credentials, snapshots, or export artifacts.
 
-## Development setup
+## Complete evaluation stack
+
+The self-contained evaluation topology requires only Git, Docker, and Docker Compose v2 on the host. Configure the ignored environment file, including unique infrastructure, encryption, and bootstrap-administrator secrets, then start the entire application:
+
+```bash
+cp deploy/compose/.env.example .env
+chmod 600 .env
+# Edit .env before continuing.
+docker compose --env-file .env -f deploy/compose/compose.yaml up -d --build --wait
+```
+
+Open `http://127.0.0.1:8080`. The command builds the API and frontend, applies migrations, initializes storage, creates the first administrator if needed, and starts PostgreSQL, Redis, MinIO, API, worker, scheduler, and the same-origin frontend gateway. Repeating it never resets an existing administrator. See [the evaluation deployment guide](docs/DEPLOYMENT.md) for server access and operational constraints.
+
+## Host-based development setup
 
 Requirements:
 
@@ -18,16 +31,17 @@ Requirements:
 - Node.js 22.12 or newer with npm for the generated TypeScript client;
 - Docker with Compose v2 for PostgreSQL, Redis, and the MinIO-compatible development object store.
 
-Install the locked workspace, start local dependencies, and apply metadata migrations:
+Install the locked workspace, start only local infrastructure, initialize its private bucket, and apply metadata migrations:
 
 ```bash
 uv sync --locked --all-packages --all-groups
 cp deploy/compose/.env.example .env
-docker compose --env-file .env -f deploy/compose/compose.yaml up -d --wait
+docker compose --env-file .env -f deploy/compose/compose.yaml up -d --wait metadata-db redis minio
+uv run --package datepipette datepipette-storage-init
 uv run --package datepipette alembic -c backend/alembic.ini upgrade head
 ```
 
-The one-shot `minio-init` service creates the configured private bucket idempotently before the worker starts. The example credentials and HTTP endpoint are development-only.
+The storage initialization command creates the configured private bucket idempotently. The example credentials and HTTP endpoint are development-only.
 
 Create the first local administrator. The command prompts for the password twice and refuses to create another bootstrap administrator after the first account exists:
 
@@ -54,7 +68,7 @@ npm run dev --prefix frontend
 
 Open `http://127.0.0.1:5173`. The development server proxies same-origin `/api` requests to the API on port 8000 so secure browser-session behavior is exercised without enabling permissive CORS.
 
-Compose also starts a single-concurrency Celery worker on the `refresh` and `export` queues. To run a worker directly while developing:
+Run a single-concurrency Celery worker on the `refresh` and `export` queues in another terminal:
 
 ```bash
 uv run --package datepipette celery \
@@ -62,7 +76,7 @@ uv run --package datepipette celery \
   worker --queues refresh,export --concurrency 1 --loglevel INFO
 ```
 
-Compose also starts the durable refresh scheduler and analytical-object cleanup loop. To run it directly, use:
+Run the durable refresh scheduler and analytical-object cleanup loop in another terminal:
 
 ```bash
 uv run --package datepipette datepipette-scheduler

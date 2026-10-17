@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - ".dockerignore"
+      - "deploy/docker/backend.Dockerfile"
       - "deploy/compose/compose.yaml"
+      - "deploy/compose/.env.example"
       - "docs/openapi.json"
       - "pyproject.toml"
       - "tools/export_openapi.py"
@@ -15,7 +18,10 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - ".dockerignore"
+      - "deploy/docker/backend.Dockerfile"
       - "deploy/compose/compose.yaml"
+      - "deploy/compose/.env.example"
       - "docs/openapi.json"
       - "pyproject.toml"
       - "tools/export_openapi.py"
@@ -83,6 +89,7 @@ jobs:
       - name: Start S3-compatible test storage
         run: |
           docker compose -f deploy/compose/compose.yaml up -d --wait minio
+          docker compose -f deploy/compose/compose.yaml build migrate
           docker compose -f deploy/compose/compose.yaml run --rm minio-init
 
       - name: Check migration drift

@@ -70,6 +70,7 @@ Start with the [documentation index](docs/README.md).
 - [Official frontend](docs/FRONTEND.md)
 - [API guidelines](docs/API_GUIDELINES.md)
 - [Security model](docs/SECURITY.md)
+- [Evaluation deployment](docs/DEPLOYMENT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Architecture decisions](docs/adr/README.md)
 
@@ -77,20 +78,16 @@ Start with the [documentation index](docs/README.md).
 
 DatePipette is a uv workspace. The independently packaged backend lives in `backend/`; the official React application lives in `frontend/`; the reusable generated TypeScript API client lives in [`clients/typescript`](clients/typescript/README.md); local PostgreSQL, Redis, and MinIO-compatible infrastructure lives in `deploy/compose/`.
 
-To run the current backend foundation:
+To start the complete evaluation installation, copy the environment template, replace every development credential, and run one Compose command:
 
 ```bash
-uv sync --locked --all-packages --all-groups
 cp deploy/compose/.env.example .env
-docker compose --env-file .env -f deploy/compose/compose.yaml up -d --wait
-uv run --package datepipette alembic -c backend/alembic.ini upgrade head
-uv run --package datepipette datepipette-admin bootstrap-admin \
-  --email admin@example.com \
-  --display-name "Local administrator"
-uv run --package datepipette datepipette
+chmod 600 .env
+# Edit .env before continuing.
+docker compose --env-file .env -f deploy/compose/compose.yaml up -d --build --wait
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for configuration, verification, and cleanup commands.
+Open `http://127.0.0.1:8080`. Migrations, private bucket initialization, and first-administrator bootstrap are convergent one-shot services; repeating the command never resets an existing administrator. See [the deployment guide](docs/DEPLOYMENT.md) for server access, secrets, updates, and the production boundary. See [CONTRIBUTING.md](CONTRIBUTING.md) for the host-based development workflow and verification commands.
 
 ## Contributing
 

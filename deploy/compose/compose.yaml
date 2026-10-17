@@ -1,5 +1,67 @@
 name: datepipette
 
+x-backend-image: &backend-image
+  image: datepipette/backend:${DATEPIPETTE_IMAGE_TAG:-local}
+
+x-app-environment: &app-environment
+  DATEPIPETTE_ENVIRONMENT: ${DATEPIPETTE_ENVIRONMENT:-development}
+  DATEPIPETTE_LOG_LEVEL: ${DATEPIPETTE_LOG_LEVEL:-INFO}
+  DATEPIPETTE_DOCS_ENABLED: ${DATEPIPETTE_DOCS_ENABLED:-true}
+  DATEPIPETTE_METADATA_DATABASE_URL: postgresql+psycopg://${DATEPIPETTE_POSTGRES_USER:-datepipette}:${DATEPIPETTE_POSTGRES_PASSWORD:-datepipette_dev_only}@metadata-db:5432/${DATEPIPETTE_POSTGRES_DB:-datepipette}
+  DATEPIPETTE_REDIS_URL: redis://redis:6379/0
+  DATEPIPETTE_CONNECTION_ENCRYPTION_KEY: ${DATEPIPETTE_CONNECTION_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
+  DATEPIPETTE_INSTALLATION_TIMEZONE: ${DATEPIPETTE_INSTALLATION_TIMEZONE:-UTC}
+  DATEPIPETTE_OBJECT_STORAGE_BACKEND: s3
+  DATEPIPETTE_SNAPSHOT_STORAGE_PATH: /var/lib/datepipette/snapshots
+  DATEPIPETTE_S3_ENDPOINT_URL: http://minio:9000
+  DATEPIPETTE_S3_REGION: ${DATEPIPETTE_S3_REGION:-us-east-1}
+  DATEPIPETTE_S3_BUCKET: ${DATEPIPETTE_S3_BUCKET:-datepipette}
+  DATEPIPETTE_S3_ACCESS_KEY_ID: ${DATEPIPETTE_S3_ACCESS_KEY_ID:-datepipette_minio}
+  DATEPIPETTE_S3_SECRET_ACCESS_KEY: ${DATEPIPETTE_S3_SECRET_ACCESS_KEY:-datepipette_minio_dev_only}
+  DATEPIPETTE_S3_ADDRESSING_STYLE: path
+  DATEPIPETTE_SOURCE_CONNECT_TIMEOUT_SECONDS: ${DATEPIPETTE_SOURCE_CONNECT_TIMEOUT_SECONDS:-5}
+  DATEPIPETTE_SOURCE_STATEMENT_TIMEOUT_SECONDS: ${DATEPIPETTE_SOURCE_STATEMENT_TIMEOUT_SECONDS:-5}
+  DATEPIPETTE_PREVIEW_STATEMENT_TIMEOUT_SECONDS: ${DATEPIPETTE_PREVIEW_STATEMENT_TIMEOUT_SECONDS:-5}
+  DATEPIPETTE_PREVIEW_MAX_ROWS: ${DATEPIPETTE_PREVIEW_MAX_ROWS:-200}
+  DATEPIPETTE_PREVIEW_MAX_RESPONSE_BYTES: ${DATEPIPETTE_PREVIEW_MAX_RESPONSE_BYTES:-1048576}
+  DATEPIPETTE_REFRESH_STATEMENT_TIMEOUT_SECONDS: ${DATEPIPETTE_REFRESH_STATEMENT_TIMEOUT_SECONDS:-1800}
+  DATEPIPETTE_REFRESH_MAX_ROWS: ${DATEPIPETTE_REFRESH_MAX_ROWS:-10000000}
+  DATEPIPETTE_REFRESH_BATCH_ROWS: ${DATEPIPETTE_REFRESH_BATCH_ROWS:-50000}
+  DATEPIPETTE_REFRESH_MAX_ATTEMPTS: ${DATEPIPETTE_REFRESH_MAX_ATTEMPTS:-3}
+  DATEPIPETTE_REFRESH_RETRY_BASE_SECONDS: ${DATEPIPETTE_REFRESH_RETRY_BASE_SECONDS:-5}
+  DATEPIPETTE_REFRESH_RETRY_MAX_SECONDS: ${DATEPIPETTE_REFRESH_RETRY_MAX_SECONDS:-300}
+  DATEPIPETTE_REFRESH_CANCEL_POLL_SECONDS: ${DATEPIPETTE_REFRESH_CANCEL_POLL_SECONDS:-1.0}
+  DATEPIPETTE_REFRESH_RUN_LEASE_SECONDS: ${DATEPIPETTE_REFRESH_RUN_LEASE_SECONDS:-30}
+  DATEPIPETTE_QUERY_SAFETY_ESTIMATED_ROWS_WARNING: ${DATEPIPETTE_QUERY_SAFETY_ESTIMATED_ROWS_WARNING:-1000000}
+  DATEPIPETTE_QUERY_SAFETY_ESTIMATED_ROWS_BLOCK: ${DATEPIPETTE_QUERY_SAFETY_ESTIMATED_ROWS_BLOCK:-10000000}
+  DATEPIPETTE_QUERY_SAFETY_TOTAL_COST_WARNING: ${DATEPIPETTE_QUERY_SAFETY_TOTAL_COST_WARNING:-100000}
+  DATEPIPETTE_QUERY_SAFETY_TOTAL_COST_BLOCK: ${DATEPIPETTE_QUERY_SAFETY_TOTAL_COST_BLOCK:-1000000}
+  DATEPIPETTE_QUERY_SAFETY_JOIN_COUNT_WARNING: ${DATEPIPETTE_QUERY_SAFETY_JOIN_COUNT_WARNING:-5}
+  DATEPIPETTE_QUERY_SAFETY_JOIN_COUNT_BLOCK: ${DATEPIPETTE_QUERY_SAFETY_JOIN_COUNT_BLOCK:-9}
+  DATEPIPETTE_QUERY_SAFETY_SEQUENTIAL_SCAN_ROWS_WARNING: ${DATEPIPETTE_QUERY_SAFETY_SEQUENTIAL_SCAN_ROWS_WARNING:-250000}
+  DATEPIPETTE_QUERY_SAFETY_SORT_ROWS_WARNING: ${DATEPIPETTE_QUERY_SAFETY_SORT_ROWS_WARNING:-500000}
+  DATEPIPETTE_QUERY_SAFETY_STALE_STATISTICS_DAYS: ${DATEPIPETTE_QUERY_SAFETY_STALE_STATISTICS_DAYS:-30}
+  DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS: ${DATEPIPETTE_SNAPSHOT_QUERY_TIMEOUT_SECONDS:-10}
+  DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB: ${DATEPIPETTE_SNAPSHOT_QUERY_MEMORY_LIMIT_MB:-256}
+  DATEPIPETTE_SNAPSHOT_QUERY_THREADS: ${DATEPIPETTE_SNAPSHOT_QUERY_THREADS:-2}
+  DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY: ${DATEPIPETTE_SNAPSHOT_QUERY_CONCURRENCY:-4}
+  DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB: ${DATEPIPETTE_SNAPSHOT_QUERY_TEMP_LIMIT_MB:-512}
+  DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES: ${DATEPIPETTE_SNAPSHOT_QUERY_MAX_RESPONSE_BYTES:-2097152}
+  DATEPIPETTE_EXPORT_TIMEOUT_SECONDS: ${DATEPIPETTE_EXPORT_TIMEOUT_SECONDS:-1800}
+  DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB: ${DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB:-512}
+  DATEPIPETTE_EXPORT_THREADS: ${DATEPIPETTE_EXPORT_THREADS:-2}
+  DATEPIPETTE_EXPORT_TEMP_LIMIT_MB: ${DATEPIPETTE_EXPORT_TEMP_LIMIT_MB:-2048}
+  DATEPIPETTE_EXPORT_MAX_ROWS: ${DATEPIPETTE_EXPORT_MAX_ROWS:-5000000}
+  DATEPIPETTE_EXPORT_MAX_BYTES: ${DATEPIPETTE_EXPORT_MAX_BYTES:-1073741824}
+  DATEPIPETTE_EXPORT_FETCH_ROWS: ${DATEPIPETTE_EXPORT_FETCH_ROWS:-10000}
+  DATEPIPETTE_BACKGROUND_JOB_CONCURRENCY: ${DATEPIPETTE_BACKGROUND_JOB_CONCURRENCY:-2}
+  DATEPIPETTE_CLEANUP_ENABLED: ${DATEPIPETTE_CLEANUP_ENABLED:-true}
+  DATEPIPETTE_CLEANUP_INTERVAL_SECONDS: ${DATEPIPETTE_CLEANUP_INTERVAL_SECONDS:-300}
+  DATEPIPETTE_CLEANUP_BATCH_SIZE: ${DATEPIPETTE_CLEANUP_BATCH_SIZE:-100}
+  DATEPIPETTE_CLEANUP_SNAPSHOT_GRACE_SECONDS: ${DATEPIPETTE_CLEANUP_SNAPSHOT_GRACE_SECONDS:-3600}
+  DATEPIPETTE_CLEANUP_EXPORT_GRACE_SECONDS: ${DATEPIPETTE_CLEANUP_EXPORT_GRACE_SECONDS:-300}
+  DATEPIPETTE_CLEANUP_ORPHAN_GRACE_SECONDS: ${DATEPIPETTE_CLEANUP_ORPHAN_GRACE_SECONDS:-86400}
+
 services:
   metadata-db:
     image: postgres:17-alpine
@@ -8,7 +70,7 @@ services:
       POSTGRES_USER: ${DATEPIPETTE_POSTGRES_USER:-datepipette}
       POSTGRES_PASSWORD: ${DATEPIPETTE_POSTGRES_PASSWORD:-datepipette_dev_only}
     ports:
-      - "${DATEPIPETTE_POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${DATEPIPETTE_POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 2s
@@ -22,7 +84,7 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${DATEPIPETTE_REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${DATEPIPETTE_REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
@@ -39,8 +101,8 @@ services:
       MINIO_ROOT_USER: ${DATEPIPETTE_S3_ACCESS_KEY_ID:-datepipette_minio}
       MINIO_ROOT_PASSWORD: ${DATEPIPETTE_S3_SECRET_ACCESS_KEY:-datepipette_minio_dev_only}
     ports:
-      - "${DATEPIPETTE_MINIO_PORT:-9000}:9000"
-      - "${DATEPIPETTE_MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${DATEPIPETTE_MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${DATEPIPETTE_MINIO_CONSOLE_PORT:-9001}:9001"
     healthcheck:
       test: ["CMD", "minio", "--version"]
       interval: 2s
@@ -50,149 +112,136 @@ services:
       - minio-data:/data
     restart: unless-stopped
 
+  migrate:
+    <<: *backend-image
+    build:
+      context: ../..
+      dockerfile: deploy/docker/backend.Dockerfile
+    command: ["alembic", "-c", "backend/alembic.ini", "upgrade", "head"]
+    environment: *app-environment
+    depends_on:
+      metadata-db:
+        condition: service_healthy
+    restart: "no"
+
   minio-init:
-    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
-    working_dir: /workspace
-    command:
-      - uv
-      - run
-      - --frozen
-      - --package
-      - datepipette
-      - datepipette-storage-init
-    environment:
-      UV_PROJECT_ENVIRONMENT: /opt/datepipette/.venv
-      UV_LINK_MODE: copy
-      DATEPIPETTE_ENVIRONMENT: development
-      DATEPIPETTE_OBJECT_STORAGE_BACKEND: s3
-      DATEPIPETTE_S3_ENDPOINT_URL: http://minio:9000
-      DATEPIPETTE_S3_REGION: ${DATEPIPETTE_S3_REGION:-us-east-1}
-      DATEPIPETTE_S3_BUCKET: ${DATEPIPETTE_S3_BUCKET:-datepipette}
-      DATEPIPETTE_S3_ACCESS_KEY_ID: ${DATEPIPETTE_S3_ACCESS_KEY_ID:-datepipette_minio}
-      DATEPIPETTE_S3_SECRET_ACCESS_KEY: ${DATEPIPETTE_S3_SECRET_ACCESS_KEY:-datepipette_minio_dev_only}
-      DATEPIPETTE_S3_ADDRESSING_STYLE: path
-    volumes:
-      - ../../:/workspace:ro
-      - storage-init-venv:/opt/datepipette/.venv
-      - uv-cache:/root/.cache/uv
+    <<: *backend-image
+    command: ["datepipette-storage-init"]
+    environment: *app-environment
     depends_on:
       minio:
         condition: service_healthy
     restart: "no"
 
-  worker:
-    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
-    working_dir: /workspace
+  bootstrap-admin:
+    <<: *backend-image
     command:
-      - sh
-      - -c
-      - >-
-        install -d -o nobody -g nogroup /var/lib/datepipette/snapshots &&
-        exec uv run --frozen --package datepipette celery
-        --app datepipette.infrastructure.celery_app:celery_app worker
-        --uid nobody --gid nogroup --queues refresh,export --concurrency 1 --loglevel INFO
-    environment:
-      UV_PROJECT_ENVIRONMENT: /opt/datepipette/.venv
-      UV_LINK_MODE: copy
-      DATEPIPETTE_ENVIRONMENT: development
-      DATEPIPETTE_METADATA_DATABASE_URL: postgresql+psycopg://datepipette:${DATEPIPETTE_POSTGRES_PASSWORD:-datepipette_dev_only}@metadata-db:5432/${DATEPIPETTE_POSTGRES_DB:-datepipette}
-      DATEPIPETTE_REDIS_URL: redis://redis:6379/0
-      DATEPIPETTE_CONNECTION_ENCRYPTION_KEY: ${DATEPIPETTE_CONNECTION_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
-      DATEPIPETTE_REFRESH_MAX_ATTEMPTS: ${DATEPIPETTE_REFRESH_MAX_ATTEMPTS:-3}
-      DATEPIPETTE_REFRESH_RETRY_BASE_SECONDS: ${DATEPIPETTE_REFRESH_RETRY_BASE_SECONDS:-5}
-      DATEPIPETTE_REFRESH_RETRY_MAX_SECONDS: ${DATEPIPETTE_REFRESH_RETRY_MAX_SECONDS:-300}
-      DATEPIPETTE_REFRESH_CANCEL_POLL_SECONDS: ${DATEPIPETTE_REFRESH_CANCEL_POLL_SECONDS:-1.0}
-      DATEPIPETTE_REFRESH_RUN_LEASE_SECONDS: ${DATEPIPETTE_REFRESH_RUN_LEASE_SECONDS:-30}
-      DATEPIPETTE_EXPORT_TIMEOUT_SECONDS: ${DATEPIPETTE_EXPORT_TIMEOUT_SECONDS:-1800}
-      DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB: ${DATEPIPETTE_EXPORT_MEMORY_LIMIT_MB:-512}
-      DATEPIPETTE_EXPORT_THREADS: ${DATEPIPETTE_EXPORT_THREADS:-2}
-      DATEPIPETTE_EXPORT_TEMP_LIMIT_MB: ${DATEPIPETTE_EXPORT_TEMP_LIMIT_MB:-2048}
-      DATEPIPETTE_EXPORT_MAX_ROWS: ${DATEPIPETTE_EXPORT_MAX_ROWS:-5000000}
-      DATEPIPETTE_EXPORT_MAX_BYTES: ${DATEPIPETTE_EXPORT_MAX_BYTES:-1073741824}
-      DATEPIPETTE_EXPORT_FETCH_ROWS: ${DATEPIPETTE_EXPORT_FETCH_ROWS:-10000}
-      DATEPIPETTE_BACKGROUND_JOB_CONCURRENCY: ${DATEPIPETTE_BACKGROUND_JOB_CONCURRENCY:-2}
-      DATEPIPETTE_OBJECT_STORAGE_BACKEND: s3
-      DATEPIPETTE_SNAPSHOT_STORAGE_PATH: /var/lib/datepipette/snapshots
-      DATEPIPETTE_S3_ENDPOINT_URL: http://minio:9000
-      DATEPIPETTE_S3_REGION: ${DATEPIPETTE_S3_REGION:-us-east-1}
-      DATEPIPETTE_S3_BUCKET: ${DATEPIPETTE_S3_BUCKET:-datepipette}
-      DATEPIPETTE_S3_ACCESS_KEY_ID: ${DATEPIPETTE_S3_ACCESS_KEY_ID:-datepipette_minio}
-      DATEPIPETTE_S3_SECRET_ACCESS_KEY: ${DATEPIPETTE_S3_SECRET_ACCESS_KEY:-datepipette_minio_dev_only}
-      DATEPIPETTE_S3_ADDRESSING_STYLE: path
-    volumes:
-      - ../../:/workspace:ro
-      - worker-venv:/opt/datepipette/.venv
-      - uv-cache:/root/.cache/uv
-      - snapshot-data:/var/lib/datepipette/snapshots
+      - datepipette-admin
+      - bootstrap-admin
+      - --email
+      - ${DATEPIPETTE_BOOTSTRAP_ADMIN_EMAIL:-admin@example.com}
+      - --display-name
+      - ${DATEPIPETTE_BOOTSTRAP_ADMIN_DISPLAY_NAME:-Local Administrator}
+      - --password-dotenv-file
+      - /run/secrets/bootstrap_environment
+      - --if-needed
+    environment: *app-environment
+    secrets:
+      - bootstrap_environment
     depends_on:
-      metadata-db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    <<: *backend-image
+    command: ["uvicorn", "datepipette.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment: *app-environment
+    tmpfs:
+      - /var/lib/datepipette/snapshots:uid=10001,gid=10001,mode=0700
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      bootstrap-admin:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "uv run --frozen --package datepipette celery --app datepipette.infrastructure.celery_app:celery_app inspect ping --destination celery@$${HOSTNAME}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 12
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    init: true
     restart: unless-stopped
 
-  scheduler:
-    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
-    working_dir: /workspace
+  worker:
+    <<: *backend-image
     command:
-      - uv
-      - run
-      - --frozen
-      - --package
-      - datepipette
-      - datepipette-scheduler
-    environment:
-      UV_PROJECT_ENVIRONMENT: /opt/datepipette/.venv
-      UV_LINK_MODE: copy
-      DATEPIPETTE_ENVIRONMENT: development
-      DATEPIPETTE_METADATA_DATABASE_URL: postgresql+psycopg://datepipette:${DATEPIPETTE_POSTGRES_PASSWORD:-datepipette_dev_only}@metadata-db:5432/${DATEPIPETTE_POSTGRES_DB:-datepipette}
-      DATEPIPETTE_REDIS_URL: redis://redis:6379/0
-      DATEPIPETTE_INSTALLATION_TIMEZONE: ${DATEPIPETTE_INSTALLATION_TIMEZONE:-UTC}
-      DATEPIPETTE_OBJECT_STORAGE_BACKEND: s3
-      DATEPIPETTE_SNAPSHOT_STORAGE_PATH: /var/lib/datepipette/snapshots
-      DATEPIPETTE_S3_ENDPOINT_URL: http://minio:9000
-      DATEPIPETTE_S3_REGION: ${DATEPIPETTE_S3_REGION:-us-east-1}
-      DATEPIPETTE_S3_BUCKET: ${DATEPIPETTE_S3_BUCKET:-datepipette}
-      DATEPIPETTE_S3_ACCESS_KEY_ID: ${DATEPIPETTE_S3_ACCESS_KEY_ID:-datepipette_minio}
-      DATEPIPETTE_S3_SECRET_ACCESS_KEY: ${DATEPIPETTE_S3_SECRET_ACCESS_KEY:-datepipette_minio_dev_only}
-      DATEPIPETTE_S3_ADDRESSING_STYLE: path
-      DATEPIPETTE_CLEANUP_ENABLED: ${DATEPIPETTE_CLEANUP_ENABLED:-true}
-      DATEPIPETTE_CLEANUP_INTERVAL_SECONDS: ${DATEPIPETTE_CLEANUP_INTERVAL_SECONDS:-300}
-      DATEPIPETTE_CLEANUP_BATCH_SIZE: ${DATEPIPETTE_CLEANUP_BATCH_SIZE:-100}
-      DATEPIPETTE_CLEANUP_SNAPSHOT_GRACE_SECONDS: ${DATEPIPETTE_CLEANUP_SNAPSHOT_GRACE_SECONDS:-3600}
-      DATEPIPETTE_CLEANUP_EXPORT_GRACE_SECONDS: ${DATEPIPETTE_CLEANUP_EXPORT_GRACE_SECONDS:-300}
-      DATEPIPETTE_CLEANUP_ORPHAN_GRACE_SECONDS: ${DATEPIPETTE_CLEANUP_ORPHAN_GRACE_SECONDS:-86400}
-    volumes:
-      - ../../:/workspace:ro
-      - scheduler-venv:/opt/datepipette/.venv
-      - uv-cache:/root/.cache/uv
-      - snapshot-data:/var/lib/datepipette/snapshots
+      - celery
+      - --app
+      - datepipette.infrastructure.celery_app:celery_app
+      - worker
+      - --queues
+      - refresh,export
+      - --concurrency
+      - ${DATEPIPETTE_CELERY_CONCURRENCY:-1}
+      - --loglevel
+      - INFO
+    environment: *app-environment
+    tmpfs:
+      - /var/lib/datepipette/snapshots:uid=10001,gid=10001,mode=0700
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      metadata-db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "celery --app datepipette.infrastructure.celery_app:celery_app inspect ping --destination celery@$${HOSTNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    init: true
+    restart: unless-stopped
+
+  scheduler:
+    <<: *backend-image
+    command: ["datepipette-scheduler"]
+    environment: *app-environment
+    tmpfs:
+      - /var/lib/datepipette/snapshots:uid=10001,gid=10001,mode=0700
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+
+  frontend:
+    image: datepipette/frontend:${DATEPIPETTE_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/frontend.Dockerfile
+    ports:
+      - "${DATEPIPETTE_HTTP_BIND_ADDRESS:-127.0.0.1}:${DATEPIPETTE_HTTP_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   metadata-data:
   redis-data:
   minio-data:
-  worker-venv:
-  scheduler-venv:
-  storage-init-venv:
-  uv-cache:
-  snapshot-data:
+
+secrets:
+  bootstrap_environment:
+    file: ../../.env

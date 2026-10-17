@@ -70,3 +70,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0040](0040-read-only-query-recommendations.md): Read-only query recommendations and refresh execution feedback
 - [ADR-0041](0041-distributed-interactive-query-admission.md): Installation-wide interactive query admission
 - [ADR-0042](0042-official-frontend-foundation.md): Official React frontend foundation and dashboard reading slice
+- [ADR-0043](0043-one-command-evaluation-deployment.md): Convergent one-command evaluation deployment
