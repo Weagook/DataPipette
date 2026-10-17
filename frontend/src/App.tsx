@@ -69,6 +69,11 @@ const AccessPage = lazy(() =>
     default: module.AccessPage,
   })),
 );
+const GovernancePage = lazy(() =>
+  import("./pages/GovernancePage").then((module) => ({
+    default: module.GovernancePage,
+  })),
+);
 
 export function App() {
   return (
@@ -109,6 +114,7 @@ export function App() {
             element={<ConnectionDetailPage />}
           />
           <Route path="/access" element={<AccessPage />} />
+          <Route path="/governance" element={<GovernancePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/overview" replace />} />
       </Routes>

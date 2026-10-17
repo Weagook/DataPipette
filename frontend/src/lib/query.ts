@@ -67,4 +67,7 @@ export const queryKeys = {
   chart: (id: string) => ["chart", id] as const,
   chartPreview: (id: string, revision: number) =>
     ["chart", id, "preview", revision] as const,
+  querySafetyPolicy: ["governance", "query-safety-policy"] as const,
+  auditEvents: (filters: unknown) =>
+    ["governance", "audit-events", filters] as const,
 };

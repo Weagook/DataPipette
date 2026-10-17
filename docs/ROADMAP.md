@@ -100,7 +100,7 @@ Outcome: every MVP capability is understandable and usable through a polished re
 - [x] Dashboard layout editor and user/group sharing
 - [x] PostgreSQL connection administration, safe testing, live catalog inspection, and exact visibility scopes
 - [x] Local identity, group membership, service-account, and one-time token administration
-- [ ] Query Safety policy and audit-event administration
+- [x] Query Safety policy and audit-event administration
 - [ ] Accessibility, responsive browser matrix, performance budgets, and production deployment
 
 ## Later

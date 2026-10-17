@@ -23,10 +23,6 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-const futureAdminAreas = [
-  { icon: ShieldCheck, label: "Governance" },
-];
-
 export function AppShell({ user, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -104,17 +100,10 @@ export function AppShell({ user, children }: AppShellProps) {
                 <Users size={18} />
                 Access
               </NavLink>
-              {futureAdminAreas.map(({ icon: Icon, label }) => (
-                <span
-                  className="future-nav"
-                  key={label}
-                  title={`${label} arrives in a later frontend slice`}
-                >
-                  <Icon size={18} />
-                  {label}
-                  <small>Planned</small>
-                </span>
-              ))}
+              <NavLink to="/governance" onClick={() => setMobileOpen(false)}>
+                <ShieldCheck size={18} />
+                Governance
+              </NavLink>
             </div>
           )}
         </nav>
