@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     s3_server_side_encryption: Literal["AES256"] | None = None
     s3_connect_timeout_seconds: int = Field(default=5, ge=1, le=60)
     s3_read_timeout_seconds: int = Field(default=60, ge=1, le=600)
+    s3_download_delivery: Literal["redirect", "proxy"] = "redirect"
     cleanup_enabled: bool = True
     cleanup_interval_seconds: int = Field(default=300, ge=60, le=86_400)
     cleanup_batch_size: int = Field(default=100, ge=1, le=1000)

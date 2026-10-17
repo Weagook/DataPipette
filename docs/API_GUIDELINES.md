@@ -218,10 +218,10 @@ The query and cursor rationale is recorded in [ADR-0014](adr/0014-typed-snapshot
 - Creation returns `202`, `Location`, `X-DatePipette-Idempotent-Replay`, and a durable job bound to the active snapshot at request time. Retrying the same actor/dataset/key returns the same job.
 - `GET /api/v1/datasets/{dataset_id}/exports` returns at most 100 newest jobs; `GET .../{export_id}` returns durable state, applied policy revision, safe error code, timestamps, row count, bytes, checksum, and logical expiry. Non-administrators with `export` see only their own jobs.
 - `POST .../{export_id}/download-link` requires `export` and, for non-administrators, ownership of that export job. It returns a relative five-minute capability URL only for a successful unexpired job and may be called repeatedly without regenerating the artifact.
-- `GET /api/v1/export-downloads?token=...` requires the encrypted capability rather than a session. It returns a private local file or a `307` redirect to an equally short-lived presigned private S3-compatible URL with attachment metadata. Invalid capabilities are concealed as `404`; expired exports return `410`; unavailable or corrupt storage returns a redacted `503`.
+- `GET /api/v1/export-downloads?token=...` requires the encrypted capability rather than a session. It returns an attachment from local storage, proxies a verified temporary copy from private-network S3-compatible storage, or returns a `307` to an equally short-lived presigned URL when that URL is browser-reachable. Invalid capabilities are concealed as `404`; expired exports return `410`; unavailable or corrupt storage returns a redacted `503`.
 - Jobs use `queued`, `running`, `succeeded`, and `failed`. `export_timeout`, `export_limit_exceeded`, and `export_generation_failed` are stable safe worker errors; failures never affect the active dataset snapshot.
 
-The export lifecycle and security boundary are recorded in [ADR-0015](adr/0015-snapshot-bound-background-exports.md). The shared storage and presigned-download decision is recorded in [ADR-0022](adr/0022-shared-s3-compatible-object-storage.md).
+The export lifecycle and security boundary are recorded in [ADR-0015](adr/0015-snapshot-bound-background-exports.md). Shared storage is recorded in [ADR-0022](adr/0022-shared-s3-compatible-object-storage.md), and browser-reachable delivery selection in [ADR-0044](adr/0044-browser-reachable-export-delivery.md).
 
 ## Success responses
 

@@ -71,3 +71,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0041](0041-distributed-interactive-query-admission.md): Installation-wide interactive query admission
 - [ADR-0042](0042-official-frontend-foundation.md): Official React frontend foundation and dashboard reading slice
 - [ADR-0043](0043-one-command-evaluation-deployment.md): Convergent one-command evaluation deployment
+- [ADR-0044](0044-browser-reachable-export-delivery.md): Browser-reachable export delivery

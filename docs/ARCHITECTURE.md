@@ -113,7 +113,7 @@ Private versioned chart specifications, aggregate/type validation, timezone-awar
 
 ### Export
 
-Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, short-lived capability issuance, and automatic physical cleanup are implemented. After shared heavy-job admission, the worker validates the stored typed query against the captured snapshot schema, streams DuckDB batches into a local candidate under the captured timeout, rows, bytes, memory, threads, and temporary-disk policy, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Refresh and export resources retain their applied policy revision. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file or redirects to an equally short-lived presigned private-object URL. Cleanup removes the artifact after expiry plus a delivery grace while retaining job history.
+Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, short-lived capability issuance, and automatic physical cleanup are implemented. After shared heavy-job admission, the worker validates the stored typed query against the captured snapshot schema, streams DuckDB batches into a local candidate under the captured timeout, rows, bytes, memory, threads, and temporary-disk policy, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Refresh and export resources retain their applied policy revision. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file, redirects to an equally short-lived externally reachable presigned object URL, or proxies a verified ephemeral copy when S3-compatible storage is private to the deployment network. Cleanup removes the artifact after expiry plus a delivery grace while retaining job history.
 
 ### Audit and operations
 
@@ -166,7 +166,7 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 3. Enqueue only the export UUID through Redis/Celery. A worker captures the current policy, acquires a shared PostgreSQL advisory slot, and only then atomically claims the job; unavailable capacity causes redelivery while state remains queued.
 4. Materialize and verify the captured snapshot when it is remote, then stream the deterministic DuckDB result into a private CSV or XLSX candidate under the captured time, row, byte, memory, thread, and temporary-disk limits.
 5. Publish the candidate to local or S3-compatible storage, verify the stored object, atomically publish file metadata, retain it logically for 24 hours, and expose safe job history.
-6. Issue a reissuable encrypted five-minute download capability after dataset export authorization and export-job ownership checks; resolve it to a local response or a five-minute presigned S3 redirect.
+6. Issue a reissuable encrypted five-minute download capability after dataset export authorization and export-job ownership checks; resolve it to a local response, a five-minute presigned S3 redirect, or a verified API-proxied attachment for private-network object storage.
 
 ## Failure model
 

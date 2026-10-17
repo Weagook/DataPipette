@@ -1,5 +1,6 @@
 """Application services for durable snapshot-bound exports."""
 
+from asyncio import to_thread
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -380,7 +381,8 @@ class ExportDownloadService:
             raise ExportNotReadyError
         filename = f"dataset-{job.dataset_id}.{job.format.value}"
         try:
-            return self._resolver.resolve(
+            return await to_thread(
+                self._resolver.resolve,
                 job.storage_backend,
                 job.object_key,
                 expires_seconds=max(1, int((token_expiry - now).total_seconds())),

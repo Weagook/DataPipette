@@ -2,12 +2,14 @@
 
 from dataclasses import asdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.background import BackgroundTask
 
 from datepipette.api.dependencies.authentication import (
     CsrfSession,
@@ -345,4 +347,14 @@ async def download_export(
             title="Export file unavailable",
             detail="The private export file could not be read.",
         )
-    return FileResponse(download.path, media_type=download.content_type, filename=download.filename)
+    cleanup = (
+        BackgroundTask(lambda path: path.unlink(missing_ok=True), Path(download.path))
+        if download.remove_after_send
+        else None
+    )
+    return FileResponse(
+        download.path,
+        media_type=download.content_type,
+        filename=download.filename,
+        background=cleanup,
+    )

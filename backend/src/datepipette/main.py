@@ -337,7 +337,10 @@ def create_app(
             EncryptedExportDownloadTokenCodec(
                 resolved_settings.connection_encryption_key.get_secret_value()
             ),
-            ObjectExportDownloadResolver(object_storages),
+            ObjectExportDownloadResolver(
+                object_storages,
+                s3_download_delivery=resolved_settings.s3_download_delivery,
+            ),
             access_authorizer,
         )
         try:
