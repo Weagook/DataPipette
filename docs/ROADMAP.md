@@ -62,6 +62,7 @@ Outcome: analysts can inspect and extract governed detailed data.
 - [x] Typed filters, sorting, and pagination
 - [x] CSV and XLSX background exports
 - [x] Export history, logical expiry, and signed-download flow
+- [x] Browser-reachable direct download for local, private MinIO, and external S3 delivery topologies
 - [x] Formula-injection and authorization tests
 
 ## Phase 4 — Charts and dashboards
@@ -93,6 +94,11 @@ Outcome: another application can securely embed DatePipette backend capabilities
 Outcome: every MVP capability is understandable and usable through a polished reference React application backed only by the public API.
 
 - [x] Session login, restoration, logout, responsive shell, and role-aware navigation
+- [ ] English-default interface with complete Russian localization and a persisted profile language preference; API error codes and technical identifiers remain stable
+- [ ] Desktop-only node-canvas dataset authoring alongside the guided visual builder and Advanced SQL
+  - PostgreSQL Table, Join, Select Columns, Rename & Format, and Dataset Output nodes
+  - FK-suggested and manual compatible-column joins
+  - persisted graph and viewport, minimap, zoom, undo/redo, edge deletion, selected-node settings, and safe auto-layout
 - [x] Dashboard collection and independent bar, line, pie/donut, and KPI item rendering
 - [x] Dataset exploration with typed Excel-like filters, pagination, freshness, and exports
 - [x] Visual/SQL dataset studio with validation, preview, impact, publication, refresh, and schedules

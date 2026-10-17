@@ -58,6 +58,14 @@ class ObjectStorage(Protocol):
         expected_checksum_sha256: str | None,
     ) -> str | None: ...
 
+    def prepare_download(
+        self,
+        object_key: str,
+        *,
+        expected_byte_size: int | None,
+        expected_checksum_sha256: str | None,
+    ) -> tuple[Path, bool]: ...
+
     def delete(self, object_key: str) -> None: ...
 
     def list_page(
@@ -190,6 +198,22 @@ class LocalObjectStorage:
         )
         return path
 
+    def prepare_download(
+        self,
+        object_key: str,
+        *,
+        expected_byte_size: int | None,
+        expected_checksum_sha256: str | None,
+    ) -> tuple[Path, bool]:
+        return (
+            self.materialize_path(
+                object_key,
+                expected_byte_size=expected_byte_size,
+                expected_checksum_sha256=expected_checksum_sha256,
+            ),
+            False,
+        )
+
     def delete(self, object_key: str) -> None:
         self._path(object_key).unlink(missing_ok=True)
 
@@ -301,6 +325,23 @@ class S3ObjectStorage:
         expected_byte_size: int | None,
         expected_checksum_sha256: str | None,
     ) -> Iterator[Path]:
+        target = self._download_to_temporary_file(
+            object_key,
+            expected_byte_size=expected_byte_size,
+            expected_checksum_sha256=expected_checksum_sha256,
+        )
+        try:
+            yield target
+        finally:
+            target.unlink(missing_ok=True)
+
+    def _download_to_temporary_file(
+        self,
+        object_key: str,
+        *,
+        expected_byte_size: int | None,
+        expected_checksum_sha256: str | None,
+    ) -> Path:
         key = _key(object_key)
         directory = self._work_root / ".object-tmp"
         directory.mkdir(parents=True, exist_ok=True)
@@ -319,14 +360,29 @@ class S3ObjectStorage:
                 expected_checksum_sha256=expected_checksum_sha256,
             )
             os.replace(candidate, target)
-            yield target
+            return target
         except ObjectStorageUnavailableError:
             raise
         except Exception as exc:
             raise ObjectStorageUnavailableError("S3 download failed") from exc
         finally:
             candidate.unlink(missing_ok=True)
-            target.unlink(missing_ok=True)
+
+    def prepare_download(
+        self,
+        object_key: str,
+        *,
+        expected_byte_size: int | None,
+        expected_checksum_sha256: str | None,
+    ) -> tuple[Path, bool]:
+        return (
+            self._download_to_temporary_file(
+                object_key,
+                expected_byte_size=expected_byte_size,
+                expected_checksum_sha256=expected_checksum_sha256,
+            ),
+            True,
+        )
 
     def presign_download(
         self,
@@ -425,8 +481,16 @@ class ObjectStorageRegistry:
 
 
 class ObjectExportDownloadResolver:
-    def __init__(self, storages: ObjectStorageRegistry) -> None:
+    def __init__(
+        self,
+        storages: ObjectStorageRegistry,
+        *,
+        s3_download_delivery: str = "redirect",
+    ) -> None:
+        if s3_download_delivery not in {"redirect", "proxy"}:
+            raise ValueError("S3 download delivery must be redirect or proxy")
         self._storages = storages
+        self._s3_download_delivery = s3_download_delivery
 
     def resolve(
         self,
@@ -441,24 +505,28 @@ class ObjectExportDownloadResolver:
     ) -> ExportDownload:
         try:
             storage = self._storages.require(storage_backend)
-            redirect_url = storage.presign_download(
+            if storage.backend != "s3" or self._s3_download_delivery == "redirect":
+                redirect_url = storage.presign_download(
+                    object_key,
+                    expires_seconds=expires_seconds,
+                    filename=filename,
+                    content_type=content_type,
+                    expected_byte_size=expected_byte_size,
+                    expected_checksum_sha256=expected_checksum_sha256,
+                )
+                if redirect_url is not None:
+                    return ExportDownload(None, content_type, filename, redirect_url)
+            path, remove_after_send = storage.prepare_download(
                 object_key,
-                expires_seconds=expires_seconds,
-                filename=filename,
-                content_type=content_type,
                 expected_byte_size=expected_byte_size,
                 expected_checksum_sha256=expected_checksum_sha256,
             )
-            if redirect_url is not None:
-                return ExportDownload(None, content_type, filename, redirect_url)
-            if not isinstance(storage, LocalObjectStorage):
-                raise ObjectStorageUnavailableError("Download backend cannot resolve objects")
-            path = storage.materialize_path(
-                object_key,
-                expected_byte_size=expected_byte_size,
-                expected_checksum_sha256=expected_checksum_sha256,
+            return ExportDownload(
+                str(path),
+                content_type,
+                filename,
+                remove_after_send=remove_after_send,
             )
-            return ExportDownload(str(path), content_type, filename)
         except (OSError, ObjectStorageUnavailableError, ValueError) as exc:
             raise ValueError("Export object is unavailable") from exc
 

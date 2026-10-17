@@ -44,6 +44,7 @@ export function ExportPanel({ datasetId, query }: ExportPanelProps) {
     onSuccess: ({ download_url }) => {
       const anchor = document.createElement("a");
       anchor.href = download_url;
+      anchor.download = "";
       anchor.rel = "noopener";
       document.body.append(anchor);
       anchor.click();

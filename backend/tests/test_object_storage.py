@@ -279,6 +279,51 @@ def test_download_resolver_dispatches_by_durable_backend(tmp_path: Path) -> None
         )
 
 
+def test_download_resolver_proxies_private_s3_and_marks_temporary_file(
+    tmp_path: Path,
+) -> None:
+    client = FakeS3Client()
+    payload = b"private export"
+    checksum = _digest(payload)
+    client.objects[("analytics", "exports/report.csv")] = payload
+    client.metadata[("analytics", "exports/report.csv")] = {"datepipette-sha256": checksum}
+    storage = S3ObjectStorage(
+        client=client,
+        bucket="analytics",
+        work_root=tmp_path,
+        server_side_encryption=None,
+    )
+    resolver = ObjectExportDownloadResolver(
+        ObjectStorageRegistry("s3", {"s3": storage}),
+        s3_download_delivery="proxy",
+    )
+
+    download = resolver.resolve(
+        "s3",
+        "exports/report.csv",
+        expires_seconds=60,
+        filename="report.csv",
+        content_type="text/csv",
+        expected_byte_size=len(payload),
+        expected_checksum_sha256=checksum,
+    )
+
+    assert download.redirect_url is None
+    assert download.remove_after_send is True
+    assert download.path is not None
+    temporary_file = Path(download.path)
+    assert temporary_file.read_bytes() == payload
+    temporary_file.unlink()
+
+
+def test_download_resolver_rejects_unknown_s3_delivery_mode(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="redirect or proxy"):
+        ObjectExportDownloadResolver(
+            ObjectStorageRegistry("local", {"local": LocalObjectStorage(tmp_path)}),
+            s3_download_delivery="unsupported",
+        )
+
+
 def test_s3_client_requires_explicit_credentials() -> None:
     from datepipette.infrastructure.object_storage import create_s3_client
 

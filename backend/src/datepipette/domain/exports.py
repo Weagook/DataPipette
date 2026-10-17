@@ -77,3 +77,4 @@ class ExportDownload:
     content_type: str
     filename: str
     redirect_url: str | None = None
+    remove_after_send: bool = False
