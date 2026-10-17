@@ -31,6 +31,7 @@ class UserModel(Base):
         CheckConstraint("role IN ('admin', 'analyst', 'viewer')", name="role_valid"),
         CheckConstraint("status IN ('active', 'disabled')", name="status_valid"),
         CheckConstraint("account_type IN ('human', 'service')", name="account_type_valid"),
+        CheckConstraint("locale IN ('en', 'ru')", name="locale_valid"),
         Index(
             "uq_service_accounts_name_normalized",
             text("lower(display_name)"),
@@ -49,6 +50,7 @@ class UserModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     account_type: Mapped[str] = mapped_column(String(20))
+    locale: Mapped[str] = mapped_column(String(5), server_default="en")
 
 
 class ApiTokenModel(Base):

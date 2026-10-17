@@ -28,7 +28,7 @@ from datepipette.application.user_administration import (
     UserNotFoundError,
     UserUpdate,
 )
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datepipette.domain.identity import AccountStatus, InterfaceLocale, SystemRole, User
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -81,6 +81,7 @@ class UserAdminResponse(BaseModel):
     last_login_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    locale: InterfaceLocale
 
 
 class CursorMeta(BaseModel):
@@ -110,6 +111,7 @@ def _user_response(user: User) -> UserAdminResponse:
         last_login_at=user.last_login_at,
         created_at=user.created_at,
         updated_at=user.updated_at,
+        locale=user.locale,
     )
 
 

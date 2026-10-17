@@ -11,6 +11,7 @@ const admin = {
   email: "admin@example.com",
   display_name: "Local Administrator",
   role: "admin" as const,
+  locale: "en" as const,
 };
 
 function renderShell(path = "/governance") {

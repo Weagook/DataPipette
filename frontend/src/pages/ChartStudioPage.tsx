@@ -67,6 +67,7 @@ import {
   type FilterDraft,
 } from "../lib/datasetQuery";
 import { formatDateTime, relativeTime } from "../lib/format";
+import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 const ChartView = lazy(() =>
@@ -104,6 +105,7 @@ export function ChartStudioPage() {
 }
 
 function NewChartStudio() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -132,17 +134,17 @@ function NewChartStudio() {
         setSetupError(
           error instanceof Error
             ? error.message
-            : "This dataset has no chartable fields.",
+            : t("This dataset has no chartable fields."),
         );
       }
     }
-  }, [exploration.data]);
+  }, [exploration.data, t]);
 
   const prepared = usePreparedDefinition(definition, filters, exploration.data);
   const create = useMutation({
     mutationFn: () => {
       if (!prepared.definition)
-        throw new Error(prepared.error || "Finish the chart definition.");
+        throw new Error(prepared.error || t("Finish the chart definition."));
       return createChart(name.trim(), datasetId, prepared.definition);
     },
     onSuccess: async ({ chart, etag }) => {
@@ -159,34 +161,34 @@ function NewChartStudio() {
   return (
     <div className="chart-studio page-stack">
       <StudioHeading
-        eyebrow="New private chart"
-        title="Build a visual answer"
-        detail="Choose a published dataset. DatePipette saves the analytical definition before it executes a bounded preview."
+        eyebrow={t("New private chart")}
+        title={t("Build a visual answer")}
+        detail={t("Choose a published dataset. DatePipette saves the analytical definition before it executes a bounded preview.")}
       />
       <section className="studio-panel chart-source-panel">
         <div className="section-heading">
           <div>
             <span className="step-number">01</span>
             <span>
-              <strong>Name and source</strong>
+              <strong>{t("Name and source")}</strong>
               <small>
-                The dataset snapshot stays immutable while you design.
+                {t("The dataset snapshot stays immutable while you design.")}
               </small>
             </span>
           </div>
         </div>
         <div className="studio-form-grid">
           <label>
-            <span>Chart name</span>
+            <span>{t("Chart name")}</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Monthly revenue by region"
+              placeholder={t("Monthly revenue by region")}
               maxLength={100}
             />
           </label>
           <label>
-            <span>Published dataset</span>
+            <span>{t("Published dataset")}</span>
             <select
               value={datasetId}
               onChange={(event) => {
@@ -195,7 +197,7 @@ function NewChartStudio() {
                 setSetupError("");
               }}
             >
-              <option value="">Select a dataset</option>
+              <option value="">{t("Select a dataset")}</option>
               {published.map((dataset) => (
                 <option key={dataset.id} value={dataset.id}>
                   {dataset.name}
@@ -209,7 +211,7 @@ function NewChartStudio() {
         )}
         {!datasets.isPending && published.length === 0 && (
           <p className="field-note">
-            Publish a dataset before creating a chart.
+            {t("Publish a dataset before creating a chart.")}
           </p>
         )}
       </section>
@@ -236,8 +238,8 @@ function NewChartStudio() {
       <div className="studio-sticky-actions">
         <span>
           {prepared.definition && chartDefinitionIsReady(prepared.definition)
-            ? "Ready to save as a private chart"
-            : "Choose a dataset and complete the definition"}
+            ? t("Ready to save as a private chart")
+            : t("Choose a dataset and complete the definition")}
         </span>
         <button
           className="button primary"
@@ -251,7 +253,7 @@ function NewChartStudio() {
           type="button"
         >
           {create.isPending ? <LoaderCircle className="spin" /> : <Save />}
-          Save and preview
+          {t("Save and preview")}
         </button>
       </div>
     </div>
@@ -259,6 +261,7 @@ function NewChartStudio() {
 }
 
 function ExistingChartStudio({ chartId }: { chartId: string }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [definition, setDefinition] = useState<ChartDefinition | null>(null);
@@ -305,7 +308,7 @@ function ExistingChartStudio({ chartId }: { chartId: string }) {
   const save = useMutation({
     mutationFn: () => {
       if (!prepared.definition)
-        throw new Error(prepared.error || "Finish the chart definition.");
+        throw new Error(prepared.error || t("Finish the chart definition."));
       return replaceChart(chartId, name.trim(), prepared.definition, etag);
     },
     onSuccess: async (value) => {
@@ -340,22 +343,22 @@ function ExistingChartStudio({ chartId }: { chartId: string }) {
   return (
     <div className="chart-studio page-stack">
       <StudioHeading
-        eyebrow={`Saved chart · revision ${saved.revision}`}
+        eyebrow={t("Saved chart · revision {revision}", { revision: saved.revision })}
         title={saved.name}
-        detail={`${exploration.data.dataset_name} · active snapshot · ${exploration.data.snapshot_row_count.toLocaleString()} rows`}
+        detail={t("{name} · active snapshot · {count} rows", { name: exploration.data.dataset_name, count: exploration.data.snapshot_row_count.toLocaleString() })}
       />
       <div className="chart-studio-statusbar">
         <span className={dirty ? "unsaved" : "saved"}>
           {dirty ? <Clock3 /> : <Check />}
-          {dirty ? "Unsaved changes" : "Saved definition"}
+          {t(dirty ? "Unsaved changes" : "Saved definition")}
         </span>
-        <span>Private to owner and administrators</span>
-        <span>Updated {relativeTime(saved.updated_at)}</span>
+        <span>{t("Private to owner and administrators")}</span>
+        <span>{t("Updated {date}", { date: relativeTime(saved.updated_at) })}</span>
       </div>
       <section className="studio-panel">
         <div className="studio-form-grid single-name">
           <label>
-            <span>Chart name</span>
+            <span>{t("Chart name")}</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -366,7 +369,7 @@ function ExistingChartStudio({ chartId }: { chartId: string }) {
             <Database />
             <span>
               <strong>{exploration.data.dataset_name}</strong>
-              <small>Published dataset · source locked</small>
+              <small>{t("Published dataset · source locked")}</small>
             </span>
           </div>
         </div>
@@ -395,8 +398,8 @@ function ExistingChartStudio({ chartId }: { chartId: string }) {
       <div className="studio-sticky-actions">
         <span>
           {dirty
-            ? "Save before the preview can execute this revision"
-            : `Preview uses saved revision ${saved.revision}`}
+            ? t("Save before the preview can execute this revision")
+            : t("Preview uses saved revision {revision}", { revision: saved.revision })}
         </span>
         <button
           className="button primary"
@@ -411,7 +414,7 @@ function ExistingChartStudio({ chartId }: { chartId: string }) {
           type="button"
         >
           {save.isPending ? <LoaderCircle className="spin" /> : <Save />}
-          Save revision
+          {t("Save revision")}
         </button>
       </div>
     </div>
@@ -431,6 +434,7 @@ function ChartBuilder({
   onFiltersChange: (value: FilterDraft[]) => void;
   exploration: DatasetExploration;
 }) {
+  const { t } = useI18n();
   const dimension = definition.dimensions?.[0];
   const dimensionColumn = exploration.columns.find(
     (column) => column.field_id === dimension?.field_id,
@@ -444,15 +448,15 @@ function ChartBuilder({
           <div>
             <span className="step-number">02</span>
             <span>
-              <strong>Visual form</strong>
-              <small>Choose the clearest shape for the question.</small>
+              <strong>{t("Visual form")}</strong>
+              <small>{t("Choose the clearest shape for the question.")}</small>
             </span>
           </div>
         </div>
         <div
           className="chart-type-grid"
           role="radiogroup"
-          aria-label="Chart type"
+          aria-label={t("Chart type")}
         >
           {chartTypes.map((item) => {
             const Icon = chartIcons[item.value];
@@ -475,8 +479,8 @@ function ChartBuilder({
               >
                 <Icon />
                 <span>
-                  <strong>{item.label}</strong>
-                  <small>{item.hint}</small>
+                  <strong>{t(item.label)}</strong>
+                  <small>{t(item.hint)}</small>
                 </span>
                 {selected && <Check />}
               </button>
@@ -491,14 +495,14 @@ function ChartBuilder({
             <div>
               <span className="step-number">03</span>
               <span>
-                <strong>Dimension</strong>
-                <small>One field defines the groups on the visual axis.</small>
+                <strong>{t("Dimension")}</strong>
+                <small>{t("One field defines the groups on the visual axis.")}</small>
               </span>
             </div>
           </div>
           <div className="dimension-grid">
             <label>
-              <span>Group by</span>
+              <span>{t("Group by")}</span>
               <select
                 value={dimension?.field_id ?? ""}
                 onChange={(event) =>
@@ -519,7 +523,7 @@ function ChartBuilder({
               </select>
             </label>
             <label>
-              <span>Time bucket</span>
+              <span>{t("Time bucket")}</span>
               <select
                 value={dimension?.time_bucket ?? ""}
                 disabled={
@@ -538,7 +542,7 @@ function ChartBuilder({
                   })
                 }
               >
-                <option value="">Exact values</option>
+                <option value="">{t("Exact values")}</option>
                 {Object.entries(bucketLabels)
                   .filter(
                     ([value]) =>
@@ -547,7 +551,7 @@ function ChartBuilder({
                   )
                   .map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(label)}
                     </option>
                   ))}
               </select>
@@ -555,8 +559,7 @@ function ChartBuilder({
           </div>
           {dimensionColumn && isTemporalColumn(dimensionColumn) && (
             <p className="field-note">
-              Timestamp buckets use {exploration.installation_timezone}; dates
-              keep their calendar value.
+              {t("Timestamp buckets use {timezone}; dates keep their calendar value.", { timezone: exploration.installation_timezone })}
             </p>
           )}
         </section>
@@ -569,9 +572,9 @@ function ChartBuilder({
               {definition.chart_type === "kpi" ? "03" : "04"}
             </span>
             <span>
-              <strong>Measures</strong>
+              <strong>{t("Measures")}</strong>
               <small>
-                Aggregate published fields into stable result columns.
+                {t("Aggregate published fields into stable result columns.")}
               </small>
             </span>
           </div>
@@ -594,7 +597,7 @@ function ChartBuilder({
               }
               type="button"
             >
-              <Plus /> Add measure
+              <Plus /> {t("Add measure")}
             </button>
           )}
         </div>
@@ -609,7 +612,7 @@ function ChartBuilder({
               <div className="measure-row" key={measure.id}>
                 <span className="measure-index">M{index + 1}</span>
                 <label>
-                  <span>Field</span>
+                  <span>{t("Field")}</span>
                   <select
                     value={measure.field_id}
                     onChange={(event) => {
@@ -625,7 +628,7 @@ function ChartBuilder({
                                 ...item,
                                 field_id: nextColumn.field_id,
                                 aggregation,
-                                label: `${aggregationLabels[aggregation]} of ${nextColumn.label}`,
+                                label: t("{aggregation} of {field}", { aggregation: t(aggregationLabels[aggregation]), field: nextColumn.label }),
                               }
                             : item,
                         ),
@@ -643,7 +646,7 @@ function ChartBuilder({
                   </select>
                 </label>
                 <label>
-                  <span>Aggregation</span>
+                  <span>{t("Aggregation")}</span>
                   <select
                     value={measure.aggregation}
                     onChange={(event) =>
@@ -663,13 +666,13 @@ function ChartBuilder({
                   >
                     {allowed.map((aggregation) => (
                       <option key={aggregation} value={aggregation}>
-                        {aggregationLabels[aggregation]}
+                        {t(aggregationLabels[aggregation])}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label>
-                  <span>Result label</span>
+                  <span>{t("Result label")}</span>
                   <input
                     value={measure.label}
                     maxLength={100}
@@ -688,7 +691,7 @@ function ChartBuilder({
                 {multipleMeasures && definition.measures.length > 1 && (
                   <button
                     className="icon-button"
-                    aria-label={`Remove ${measure.label}`}
+                    aria-label={t("Remove {name}", { name: measure.label })}
                     onClick={() =>
                       onDefinitionChange({
                         ...definition,
@@ -723,7 +726,7 @@ function ChartBuilder({
       />
       <details className="studio-panel json-inspector">
         <summary>
-          <Braces /> Definition JSON <ChevronRight />
+          <Braces /> {t("Definition JSON")} <ChevronRight />
         </summary>
         <pre>
           {JSON.stringify(
@@ -746,14 +749,15 @@ function FilterSection({
   filters: FilterDraft[];
   onChange: (value: FilterDraft[]) => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="studio-panel">
       <div className="section-heading">
         <div>
           <SlidersHorizontal className="section-icon" />
           <span>
-            <strong>Persistent filters</strong>
-            <small>These conditions become part of the saved chart.</small>
+            <strong>{t("Persistent filters")}</strong>
+            <small>{t("These conditions become part of the saved chart.")}</small>
           </span>
         </div>
         {filters.length < 20 && (
@@ -762,14 +766,14 @@ function FilterSection({
             onClick={() => onChange([...filters, newFilterDraft(columns[0])])}
             type="button"
           >
-            <Plus /> Add filter
+            <Plus /> {t("Add filter")}
           </button>
         )}
       </div>
       {filters.length === 0 ? (
         <div className="compact-empty">
           <SlidersHorizontal />
-          <span>No permanent filters. Every snapshot row contributes.</span>
+          <span>{t("No permanent filters. Every snapshot row contributes.")}</span>
         </div>
       ) : (
         <div className="chart-filter-list">
@@ -783,7 +787,7 @@ function FilterSection({
             return (
               <div className="chart-filter-row" key={filter.id}>
                 <select
-                  aria-label="Filter field"
+                  aria-label={t("Filter field")}
                   value={filter.fieldId}
                   onChange={(event) => {
                     const next = columns.find(
@@ -803,7 +807,7 @@ function FilterSection({
                   ))}
                 </select>
                 <select
-                  aria-label="Filter operator"
+                  aria-label={t("Filter operator")}
                   value={filter.operator}
                   onChange={(event) =>
                     onChange(
@@ -823,16 +827,16 @@ function FilterSection({
                 >
                   {column.filter_operators.map((operator) => (
                     <option key={operator} value={operator}>
-                      {operatorLabels[operator]}
+                      {t(operatorLabels[operator])}
                     </option>
                   ))}
                 </select>
                 {!noValue && (
                   <input
-                    aria-label="Filter value"
+                    aria-label={t("Filter value")}
                     type={filter.operator === "in" ? "text" : inputType(column)}
                     value={filter.value}
-                    placeholder={valuePlaceholder(column, filter.operator)}
+                    placeholder={t(valuePlaceholder(column, filter.operator))}
                     onChange={(event) =>
                       onChange(
                         filters.map((item) =>
@@ -846,7 +850,7 @@ function FilterSection({
                 )}
                 {filter.operator === "between" && (
                   <input
-                    aria-label="Second filter value"
+                    aria-label={t("Second filter value")}
                     type={inputType(column)}
                     value={filter.secondValue}
                     onChange={(event) =>
@@ -862,7 +866,7 @@ function FilterSection({
                 )}
                 <button
                   className="icon-button"
-                  aria-label="Remove filter"
+                  aria-label={t("Remove filter")}
                   onClick={() =>
                     onChange(filters.filter((item) => item.id !== filter.id))
                   }
@@ -874,7 +878,7 @@ function FilterSection({
             );
           })}
           <p className="field-note">
-            Separate multiple “is any of” values with semicolons.
+            {t("Separate multiple “is any of” values with semicolons.")}
           </p>
         </div>
       )}
@@ -891,6 +895,7 @@ function SortAndLimit({
   onChange: (value: ChartDefinition) => void;
   columns: DatasetColumn[];
 }) {
+  const { t } = useI18n();
   const dimension = definition.dimensions?.[0];
   const dimensionColumn = columns.find(
     (item) => item.field_id === dimension?.field_id,
@@ -903,14 +908,14 @@ function SortAndLimit({
         <div>
           <span className="step-number">↕</span>
           <span>
-            <strong>Order and result size</strong>
-            <small>Keep the response focused and deterministic.</small>
+            <strong>{t("Order and result size")}</strong>
+            <small>{t("Keep the response focused and deterministic.")}</small>
           </span>
         </div>
       </div>
       <div className="sort-limit-grid">
         <label>
-          <span>Sort result by</span>
+          <span>{t("Sort result by")}</span>
           <select
             value={sortValue}
             onChange={(event) => {
@@ -931,21 +936,21 @@ function SortAndLimit({
               });
             }}
           >
-            <option value="">Natural order</option>
+            <option value="">{t("Natural order")}</option>
             {dimension && (
               <option value={`dimension:${dimension.field_id}`}>
-                Dimension · {dimensionColumn?.label}
+                {t("Dimension")} · {dimensionColumn?.label}
               </option>
             )}
             {definition.measures.map((measure) => (
               <option key={measure.id} value={`measure:${measure.id}`}>
-                Measure · {measure.label}
+                {t("Measure")} · {measure.label}
               </option>
             ))}
           </select>
         </label>
         <label>
-          <span>Direction</span>
+          <span>{t("Direction")}</span>
           <select
             value={sort?.direction ?? "desc"}
             disabled={!sort}
@@ -963,12 +968,12 @@ function SortAndLimit({
               })
             }
           >
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
+            <option value="desc">{t("Descending")}</option>
+            <option value="asc">{t("Ascending")}</option>
           </select>
         </label>
         <label>
-          <span>Maximum groups</span>
+          <span>{t("Maximum groups")}</span>
           <input
             type="number"
             min={1}
@@ -997,21 +1002,22 @@ function PreviewPanel({
   dirty: boolean;
   onRetry: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <aside className="chart-preview-panel">
       <header>
         <div>
-          <span className="eyebrow">Saved preview</span>
-          <h2>{result?.meta.chart_name ?? "Visualization"}</h2>
+          <span className="eyebrow">{t("Saved preview")}</span>
+          <h2>{result?.meta.chart_name ?? t("Visualization")}</h2>
         </div>
-        <span className="bounded-pill">Bounded query</span>
+        <span className="bounded-pill">{t("Bounded query")}</span>
       </header>
       <div className="chart-preview-canvas">
         {dirty && (
           <div className="preview-message">
             <Save />
-            <strong>Save to refresh preview</strong>
-            <p>Unsaved definitions are never executed against snapshot data.</p>
+            <strong>{t("Save to refresh preview")}</strong>
+            <p>{t("Unsaved definitions are never executed against snapshot data.")}</p>
           </div>
         )}
         {!dirty && isPending && (
@@ -1029,8 +1035,8 @@ function PreviewPanel({
         {!dirty && result && result.data.rows.length === 0 && (
           <div className="preview-message">
             <Eye />
-            <strong>No matching groups</strong>
-            <p>The saved filters returned no aggregate rows.</p>
+            <strong>{t("No matching groups")}</strong>
+            <p>{t("The saved filters returned no aggregate rows.")}</p>
           </div>
         )}
         {!dirty && result && result.data.rows.length > 0 && (
@@ -1050,9 +1056,9 @@ function PreviewPanel({
       {result && !dirty && (
         <footer>
           <span>
-            <Check /> revision {result.meta.chart_revision}
+            <Check /> {t("revision {revision}", { revision: result.meta.chart_revision })}
           </span>
-          <span>{result.data.rows.length} groups</span>
+          <span>{t("{count} groups", { count: result.data.rows.length })}</span>
           <span>{formatDateTime(result.meta.snapshot_activated_at)}</span>
         </footer>
       )}
@@ -1060,14 +1066,14 @@ function PreviewPanel({
         <div className="preview-warning">
           <AlertTriangle />
           <span>
-            Showing the last successful snapshot.{" "}
+            {t("Showing the last successful snapshot.")}{" "}
             {result.meta.last_refresh_error}
           </span>
         </div>
       )}
       {result?.meta.truncated_by_bytes && !dirty && (
         <div className="preview-warning">
-          <AlertTriangle /> Response reached the configured byte limit.
+          <AlertTriangle /> {t("Response reached the configured byte limit.")}
         </div>
       )}
     </aside>
@@ -1083,10 +1089,11 @@ function StudioHeading({
   title: string;
   detail: string;
 }) {
+  const { t } = useI18n();
   return (
     <header className="page-heading chart-studio-heading">
       <Link className="back-link" to="/charts">
-        <ArrowLeft /> Charts
+        <ArrowLeft /> {t("Charts")}
       </Link>
       <span className="eyebrow">{eyebrow}</span>
       <h1>{title}</h1>
@@ -1100,6 +1107,7 @@ function usePreparedDefinition(
   filters: FilterDraft[],
   exploration?: DatasetExploration,
 ): { definition: ChartDefinition | null; error: string } {
+  const { t } = useI18n();
   return useMemo(() => {
     if (!definition || !exploration) return { definition: null, error: "" };
     try {
@@ -1115,10 +1123,10 @@ function usePreparedDefinition(
       return {
         definition: null,
         error:
-          error instanceof Error ? error.message : "Check the filter values.",
+          error instanceof Error ? t(error.message) : t("Check the filter values."),
       };
     }
-  }, [definition, exploration, filters]);
+  }, [definition, exploration, filters, t]);
 }
 
 function definitionWithSafeFilters(

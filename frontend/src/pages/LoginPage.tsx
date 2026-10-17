@@ -6,9 +6,11 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import brandArtwork from "../../../docs/assets/datepipette-hero-minimal.svg";
 import { Brand } from "../components/Brand";
 import { login, problemMessage } from "../lib/api";
+import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function LoginPage() {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,36 +44,36 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
-      <section className="login-story" aria-label="DatePipette product introduction">
+      <section className="login-story" aria-label={t("DatePipette product introduction")}>
         <div className="login-brand"><Brand /></div>
         <div className="story-copy">
-          <span className="eyebrow light">Governed analytics workspace</span>
-          <h1>Move from operational data to a clear decision.</h1>
+          <span className="eyebrow light">{t("Governed analytics workspace")}</span>
+          <h1>{t("Move from operational data to a clear decision.")}</h1>
           <p>
-            Build once from PostgreSQL, read safely from snapshots, and share only the insight each person needs.
+            {t("Build once from PostgreSQL, read safely from snapshots, and share only the insight each person needs.")}
           </p>
           <div className="story-proof">
-            <span><ShieldCheck size={18} /> Private by default</span>
-            <span><LockKeyhole size={18} /> Source-safe reads</span>
+            <span><ShieldCheck size={18} /> {t("Private by default")}</span>
+            <span><LockKeyhole size={18} /> {t("Source-safe reads")}</span>
           </div>
         </div>
         <img src={brandArtwork} alt="" className="login-art" />
-        <p className="story-caption">Precise data. Deliberate access. Calm decisions.</p>
+        <p className="story-caption">{t("Precise data. Deliberate access. Calm decisions.")}</p>
       </section>
       <section className="login-panel">
         <form className="login-form" onSubmit={submit}>
           <div>
-            <span className="eyebrow">Welcome back</span>
-            <h2>Sign in to DatePipette</h2>
-            <p>Use your local workspace account.</p>
+            <span className="eyebrow">{t("Welcome back")}</span>
+            <h2>{t("Sign in to DatePipette")}</h2>
+            <p>{t("Use your local workspace account.")}</p>
           </div>
           <label>
-            Work email
+            {t("Work email")}
             <input
               type="email"
               name="email"
               autoComplete="username"
-              placeholder="you@company.com"
+              placeholder={t("you@company.com")}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
@@ -79,7 +81,7 @@ export function LoginPage() {
             />
           </label>
           <label>
-            Password
+            {t("Password")}
             <span className="password-field">
               <input
                 type={showPassword ? "text" : "password"}
@@ -92,7 +94,7 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword((visible) => !visible)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("Hide password") : t("Show password")}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -100,10 +102,10 @@ export function LoginPage() {
           </label>
           {signIn.isError && <div className="form-error" role="alert">{problemMessage(signIn.error)}</div>}
           <button className="button primary wide" type="submit" disabled={signIn.isPending}>
-            {signIn.isPending ? "Signing in…" : "Open workspace"}
+            {signIn.isPending ? t("Signing in…") : t("Open workspace")}
             {!signIn.isPending && <ArrowRight size={17} />}
           </button>
-          <p className="login-security">Your password is sent only to this DatePipette installation and is never stored in the browser.</p>
+          <p className="login-security">{t("Your password is sent only to this DatePipette installation and is never stored in the browser.")}</p>
         </form>
       </section>
     </main>

@@ -118,6 +118,17 @@ export async function logout(): Promise<void> {
   );
 }
 
+export async function updateCurrentUserLocale(
+  locale: "en" | "ru",
+): Promise<CurrentUser> {
+  return unwrap(
+    await api.PATCH("/api/v1/auth/me/preferences", {
+      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      body: { locale },
+    }),
+  );
+}
+
 export async function listDashboards(cursor?: string): Promise<DashboardPage> {
   return unwrap(
     await api.GET("/api/v1/dashboards", {

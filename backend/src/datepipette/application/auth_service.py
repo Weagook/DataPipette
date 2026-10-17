@@ -5,6 +5,7 @@ import hashlib
 import hmac
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from datepipette.application.authentication import (
     AuthenticationStore,
@@ -19,7 +20,7 @@ from datepipette.application.security import (
     verify_password,
 )
 from datepipette.domain.audit import AuditOutcome
-from datepipette.domain.identity import AccountStatus, AuthenticatedSession, User
+from datepipette.domain.identity import AccountStatus, AuthenticatedSession, InterfaceLocale, User
 
 
 class InvalidCredentialsError(Exception):
@@ -174,6 +175,20 @@ class AuthenticationService:
         await self._store.revoke_session(
             session_id=session.id,
             user_id=session.user.id,
+            occurred_at=datetime.now(UTC),
+            request_id=request_id,
+        )
+
+    async def update_locale(
+        self,
+        *,
+        user_id: UUID,
+        locale: InterfaceLocale,
+        request_id: str,
+    ) -> User:
+        return await self._store.update_locale(
+            user_id=user_id,
+            locale=locale,
             occurred_at=datetime.now(UTC),
             request_id=request_id,
         )

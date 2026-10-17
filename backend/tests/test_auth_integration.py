@@ -59,6 +59,21 @@ async def _bootstrap() -> None:
         await engine.dispose()
 
 
+async def _audit_events(action: str) -> list[AuditEventModel]:
+    engine = create_database_engine(TEST_SETTINGS)
+    try:
+        async with create_session_factory(engine)() as session:
+            return list(
+                (
+                    await session.scalars(
+                        select(AuditEventModel).where(AuditEventModel.action == action)
+                    )
+                ).all()
+            )
+    finally:
+        await engine.dispose()
+
+
 @pytest.fixture(autouse=True)
 def clean_auth_state() -> Generator[None, None, None]:
     asyncio.run(_reset_state())
@@ -89,6 +104,7 @@ def test_login_me_and_csrf_protected_logout() -> None:
             "email": ADMIN_EMAIL,
             "display_name": "Admin",
             "role": "admin",
+            "locale": "en",
         }
         assert login.headers["Cache-Control"] == "no-store"
         set_cookie = login.headers.get_list("set-cookie")
@@ -98,6 +114,7 @@ def test_login_me_and_csrf_protected_logout() -> None:
         me = client.get("/api/v1/auth/me")
         assert me.status_code == 200
         assert me.json()["email"] == ADMIN_EMAIL
+        assert me.json()["locale"] == "en"
 
         missing_csrf = client.delete("/api/v1/auth/sessions/current")
         assert missing_csrf.status_code == 403
@@ -120,6 +137,44 @@ def test_login_me_and_csrf_protected_logout() -> None:
         rejected = client.get("/api/v1/auth/me")
         assert rejected.status_code == 401
         assert rejected.json()["code"] == "authentication_required"
+
+
+def test_current_user_updates_and_persists_interface_locale() -> None:
+    asyncio.run(_bootstrap())
+
+    with _client() as client:
+        assert _login(client).status_code == 201
+        csrf_token = client.cookies[CSRF_COOKIE_NAME]
+
+        missing_csrf = client.patch(
+            "/api/v1/auth/me/preferences",
+            json={"locale": "ru"},
+        )
+        assert missing_csrf.status_code == 403
+
+        unsupported = client.patch(
+            "/api/v1/auth/me/preferences",
+            json={"locale": "de"},
+            headers={"X-CSRF-Token": csrf_token},
+        )
+        assert unsupported.status_code == 422
+
+        updated = client.patch(
+            "/api/v1/auth/me/preferences",
+            json={"locale": "ru"},
+            headers={"X-CSRF-Token": csrf_token},
+        )
+        assert updated.status_code == 200
+        assert updated.headers["Cache-Control"] == "no-store"
+        assert updated.json()["locale"] == "ru"
+
+        reloaded = client.get("/api/v1/auth/me")
+        assert reloaded.status_code == 200
+        assert reloaded.json()["locale"] == "ru"
+
+    events = asyncio.run(_audit_events("identity.locale_updated"))
+    assert len(events) == 1
+    assert events[0].details == {"locale": "ru"}
 
 
 def test_unknown_and_wrong_credentials_share_safe_error() -> None:

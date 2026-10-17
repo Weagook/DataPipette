@@ -18,6 +18,7 @@ import { CanvasRenderer } from "echarts/renderers";
 
 import type { ChartQueryResult, DashboardItemResult } from "../lib/api";
 import { formatMetric } from "../lib/format";
+import { useI18n, type InterfaceLocale } from "../lib/i18n";
 
 echarts.use([
   BarChart,
@@ -43,6 +44,7 @@ const palette = ["#4f67f6", "#18a999", "#8f66d8", "#e69f37", "#4b91c8"];
 type RenderableChartResult = DashboardItemResult | ChartQueryResult;
 
 export function ChartView({ result }: { result: RenderableChartResult }) {
+  const { locale, t } = useI18n();
   const type = result.meta.chart_type;
   const measure = result.data.columns.find(
     (column) => column.role === "measure",
@@ -52,14 +54,14 @@ export function ChartView({ result }: { result: RenderableChartResult }) {
   if (type === "kpi") {
     return (
       <div className="kpi-view">
-        <span>{measure?.label ?? "Value"}</span>
+        <span>{measure?.label ?? t("Value")}</span>
         <strong>
           {formatMetric(measure && firstRow ? firstRow[measure.key] : null)}
         </strong>
         <small>
           {result.data.rows.length === 0
-            ? "No result for the saved filters"
-            : "Current snapshot result"}
+            ? t("No result for the saved filters")
+            : t("Current snapshot result")}
         </small>
       </div>
     );
@@ -68,11 +70,11 @@ export function ChartView({ result }: { result: RenderableChartResult }) {
   return (
     <>
       <EChart
-        option={buildChartOption(result)}
-        label={`${result.meta.chart_name} ${type} chart`}
+        option={buildChartOption(result, locale)}
+        label={t("{name} {type} chart", { name: result.meta.chart_name, type })}
       />
       <details className="chart-data">
-        <summary>View accessible data</summary>
+        <summary>{t("View accessible data")}</summary>
         <div className="table-scroll">
           <table>
             <thead>
@@ -121,7 +123,10 @@ function EChart({ option, label }: { option: ChartOption; label: string }) {
   );
 }
 
-export function buildChartOption(result: RenderableChartResult): ChartOption {
+export function buildChartOption(
+  result: RenderableChartResult,
+  locale: InterfaceLocale = "en",
+): ChartOption {
   const dimension = result.data.columns.find(
     (column) => column.role === "dimension",
   );
@@ -129,7 +134,7 @@ export function buildChartOption(result: RenderableChartResult): ChartOption {
     (column) => column.role === "measure",
   );
   const labels = dimension
-    ? result.data.rows.map((row) => formatDimension(row[dimension.key]))
+    ? result.data.rows.map((row) => formatDimension(row[dimension.key], locale))
     : [];
   const reduceMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   const common: ChartOption = {
@@ -217,11 +222,11 @@ function numericValue(value: unknown): number {
   return Number.isFinite(converted) ? converted : 0;
 }
 
-function formatDimension(value: unknown): string {
+function formatDimension(value: unknown, locale: InterfaceLocale): string {
   if (typeof value !== "string") return formatMetric(value);
   const timestamp = Date.parse(value);
   if (!Number.isNaN(timestamp) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
+    return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", { dateStyle: "medium" }).format(
       timestamp,
     );
   }

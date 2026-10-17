@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Current User Preferences */
+        patch: operations["update_current_user_preferences_api_v1_auth_me_preferences_patch"];
+        trace?: never;
+    };
     "/api/v1/auth/sessions": {
         parameters: {
             query?: never;
@@ -2372,6 +2389,12 @@ export interface components {
             /** Nullable */
             nullable: boolean | null;
         };
+        /**
+         * InterfaceLocale
+         * @description Human-facing language preference for the official client.
+         * @enum {string}
+         */
+        InterfaceLocale: "en" | "ru";
         /** IssuedApiTokenResponse */
         IssuedApiTokenResponse: {
             /**
@@ -3065,6 +3088,10 @@ export interface components {
             /** Username */
             username?: string | null;
         };
+        /** UpdateCurrentUserPreferencesRequest */
+        UpdateCurrentUserPreferencesRequest: {
+            locale: components["schemas"]["InterfaceLocale"];
+        };
         /** UpdateDashboardRequest */
         UpdateDashboardRequest: {
             definition: components["schemas"]["DashboardDefinitionPayload"];
@@ -3108,6 +3135,7 @@ export interface components {
             id: string;
             /** Last Login At */
             last_login_at: string | null;
+            locale: components["schemas"]["InterfaceLocale"];
             role: components["schemas"]["SystemRole"];
             status: components["schemas"]["AccountStatus"];
             /**
@@ -3130,6 +3158,7 @@ export interface components {
             email: string;
             /** Id */
             id: string;
+            locale: components["schemas"]["InterfaceLocale"];
             /** Role */
             role: string;
         };
@@ -3370,6 +3399,59 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_current_user_preferences_api_v1_auth_me_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCurrentUserPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

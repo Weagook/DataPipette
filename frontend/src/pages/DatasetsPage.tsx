@@ -6,9 +6,11 @@ import { Link, Navigate, useOutletContext } from "react-router-dom";
 import { InlineError } from "../components/Status";
 import { listDatasets, problemMessage, type CurrentUser } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function DatasetsPage() {
+  const { t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const [search, setSearch] = useState("");
   const datasets = useInfiniteQuery({
@@ -33,28 +35,27 @@ export function DatasetsPage() {
     <div className="page-stack">
       <header className="page-heading split-heading">
         <div>
-          <span className="eyebrow">Reusable data models</span>
-          <h1>Datasets</h1>
+          <span className="eyebrow">{t("Reusable data models")}</span>
+          <h1>{t("Datasets")}</h1>
           <p>
-            Open a published snapshot, shape the table for your question, and
-            export exactly the rows you can see.
+            {t("Open a published snapshot, shape the table for your question, and export exactly the rows you can see.")}
           </p>
         </div>
         <Link className="button primary" to="/datasets/new">
-          <Plus size={17} /> New dataset
+          <Plus size={17} /> {t("New dataset")}
         </Link>
       </header>
       <div className="collection-toolbar">
         <label className="search-field">
           <Search size={17} />
-          <span className="sr-only">Search datasets</span>
+          <span className="sr-only">{t("Search datasets")}</span>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search datasets"
+            placeholder={t("Search datasets")}
           />
         </label>
-        <span>{values.length} visible</span>
+        <span>{t("{count} visible", { count: values.length })}</span>
       </div>
       {datasets.isError && (
         <InlineError
@@ -62,7 +63,7 @@ export function DatasetsPage() {
           onRetry={() => void datasets.refetch()}
         />
       )}
-      <section className="dataset-cards" aria-label="Datasets">
+      <section className="dataset-cards" aria-label={t("Datasets")}>
         {datasets.isPending &&
           [0, 1, 2, 3, 4, 5].map((item) => (
             <div className="dataset-card skeleton" key={item} />
@@ -76,16 +77,16 @@ export function DatasetsPage() {
                   <Database size={20} />
                 </span>
                 <span className={`state-pill ${published ? "ready" : "draft"}`}>
-                  {published ? "Snapshot ready" : "Draft only"}
+                  {t(published ? "Snapshot ready" : "Draft only")}
                 </span>
               </div>
               <div className="dataset-card-copy">
                 <h2>{dataset.name}</h2>
-                <p>Draft revision {dataset.draft_revision}</p>
+                <p>{t("Draft revision {revision}", { revision: dataset.draft_revision })}</p>
               </div>
               <footer>
                 <time dateTime={dataset.updated_at}>
-                  Updated {formatDateTime(dataset.updated_at)}
+                  {t("Updated {date}", { date: formatDateTime(dataset.updated_at) })}
                 </time>
                 {published ? <ArrowRight size={17} /> : <Layers3 size={17} />}
               </footer>
@@ -106,12 +107,12 @@ export function DatasetsPage() {
         <div className="empty-state">
           <Database />
           <strong>
-            {search ? "No matching datasets" : "No authorable datasets yet"}
+            {t(search ? "No matching datasets" : "No authorable datasets yet")}
           </strong>
           <p>
             {search
-              ? "Try a different name."
-              : "Published datasets will appear here."}
+              ? t("Try a different name.")
+              : t("Published datasets will appear here.")}
           </p>
         </div>
       )}
@@ -122,7 +123,7 @@ export function DatasetsPage() {
           disabled={datasets.isFetchingNextPage}
           type="button"
         >
-          {datasets.isFetchingNextPage ? "Loading…" : "Load more"}
+          {t(datasets.isFetchingNextPage ? "Loading…" : "Load more")}
         </button>
       )}
     </div>

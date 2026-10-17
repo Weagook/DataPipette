@@ -21,7 +21,7 @@ from datepipette.application.auth_service import (
     RateLimitedError,
 )
 from datepipette.config import Settings
-from datepipette.domain.identity import User
+from datepipette.domain.identity import InterfaceLocale, User
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -36,6 +36,11 @@ class UserResponse(BaseModel):
     email: str
     display_name: str
     role: str
+    locale: InterfaceLocale
+
+
+class UpdateCurrentUserPreferencesRequest(BaseModel):
+    locale: InterfaceLocale
 
 
 class LoginResponse(BaseModel):
@@ -49,6 +54,7 @@ def _user_response(user: User) -> UserResponse:
         email=user.email,
         display_name=user.display_name,
         role=user.role.value,
+        locale=user.locale,
     )
 
 
@@ -132,6 +138,30 @@ async def read_current_user(
 ) -> UserResponse:
     response.headers["Cache-Control"] = "no-store"
     return _user_response(session.user)
+
+
+@router.patch(
+    "/me/preferences",
+    response_model=UserResponse,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ProblemDetails},
+        status.HTTP_403_FORBIDDEN: {"model": ProblemDetails},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ProblemDetails},
+    },
+)
+async def update_current_user_preferences(
+    payload: UpdateCurrentUserPreferencesRequest,
+    request: Request,
+    response: Response,
+    session: CsrfSession,
+) -> UserResponse:
+    user = await _service(request).update_locale(
+        user_id=session.user.id,
+        locale=payload.locale,
+        request_id=request_id(),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return _user_response(user)
 
 
 @router.delete(

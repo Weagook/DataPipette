@@ -18,6 +18,7 @@ The DatePipette backend is a public product surface. The official frontend and e
 ```text
 /api/v1/auth/sessions
 /api/v1/auth/me
+/api/v1/auth/me/preferences
 /api/v1/auth/sessions/current
 /api/v1/users
 /api/v1/users/{user_id}
@@ -64,12 +65,12 @@ Final endpoint names must be tested for consistency before implementation. Actio
 - Session and CSRF token plaintext exists only in the browser; metadata PostgreSQL stores SHA-256 digests.
 - The `datepipette_session` cookie is HTTP-only and the `datepipette_csrf` cookie is readable by the official frontend. Both are `SameSite=Strict`; production always adds `Secure`.
 - State-changing requests copy the CSRF cookie into `X-CSRF-Token`. The API verifies the cookie, header, and digest bound to the authenticated session.
-- `GET /api/v1/auth/me` resolves the current principal. `DELETE /api/v1/auth/sessions/current` revokes the session.
+- `GET /api/v1/auth/me` resolves the current principal and includes the persisted interface `locale` (`en` or `ru`). `PATCH /api/v1/auth/me/preferences` changes that user's locale and requires the session-bound CSRF cookie/header pair. `DELETE /api/v1/auth/sessions/current` revokes the session.
 - External systems use `Authorization: Bearer <token>`.
 - Authentication identifies a principal; authorization still evaluates role, token scope, ACL, and request context.
 - Invalid and unknown credentials return the same public error. Redis limits attempts by normalized account and client address.
 
-The durable rationale and consequences are recorded in [ADR-0005](adr/0005-server-side-browser-sessions.md).
+The durable rationale and consequences are recorded in [ADR-0005](adr/0005-server-side-browser-sessions.md) and [ADR-0045](adr/0045-persisted-interface-localization.md).
 
 ## Service accounts and API tokens
 

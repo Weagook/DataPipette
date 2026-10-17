@@ -11,6 +11,7 @@ import {
   type SnapshotRowsQuery,
 } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 interface ExportPanelProps {
@@ -19,6 +20,7 @@ interface ExportPanelProps {
 }
 
 export function ExportPanel({ datasetId, query }: ExportPanelProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -34,7 +36,7 @@ export function ExportPanel({ datasetId, query }: ExportPanelProps) {
   const createExport = useMutation({
     mutationFn: (format: ExportFormat) => createDatasetExport(datasetId, format, query),
     onSuccess: async () => {
-      setFeedback("Export queued. You can keep working while it is prepared.");
+      setFeedback(t("Export queued. You can keep working while it is prepared."));
       await queryClient.invalidateQueries({ queryKey: queryKeys.datasetExports(datasetId) });
     },
     onError: (error) => setFeedback(problemMessage(error)),
@@ -49,7 +51,7 @@ export function ExportPanel({ datasetId, query }: ExportPanelProps) {
       document.body.append(anchor);
       anchor.click();
       anchor.remove();
-      setFeedback("A fresh one-time download link was issued.");
+      setFeedback(t("The file download has started."));
     },
     onError: (error) => setFeedback(problemMessage(error)),
   });
@@ -57,12 +59,12 @@ export function ExportPanel({ datasetId, query }: ExportPanelProps) {
   return (
     <div className="export-wrap">
       <button className="button secondary" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <Download size={16} /> Export
+        <Download size={16} /> {t("Export")}
       </button>
       {open && (
-        <aside className="export-panel" aria-label="Exports">
-          <header><div><span className="eyebrow">Current table</span><h2>Exports</h2></div><button className="icon-button" type="button" onClick={() => setOpen(false)} aria-label="Close exports"><XCircle size={19} /></button></header>
-          <p>Each file uses the active columns, filters, sort order, and snapshot.</p>
+        <aside className="export-panel" aria-label={t("Exports")}>
+          <header><div><span className="eyebrow">{t("Current table")}</span><h2>{t("Exports")}</h2></div><button className="icon-button" type="button" onClick={() => setOpen(false)} aria-label={t("Close exports")}><XCircle size={19} /></button></header>
+          <p>{t("Each file uses the active columns, filters, sort order, and snapshot.")}</p>
           <div className="export-actions">
             {(["csv", "xlsx"] as const).map((format) => (
               <button className="button secondary" type="button" key={format} disabled={createExport.isPending} onClick={() => createExport.mutate(format)}>
@@ -72,7 +74,7 @@ export function ExportPanel({ datasetId, query }: ExportPanelProps) {
           </div>
           {feedback && <p className="export-feedback" role="status">{feedback}</p>}
           <div className="export-history">
-            {exportsQuery.isPending && <p>Loading export history…</p>}
+            {exportsQuery.isPending && <p>{t("Loading export history…")}</p>}
             {exportsQuery.isError && <p className="filter-error">{problemMessage(exportsQuery.error)}</p>}
             {exportsQuery.data?.data.map((job) => {
               const expired = new Date(job.expires_at).getTime() <= Date.now();
@@ -80,16 +82,16 @@ export function ExportPanel({ datasetId, query }: ExportPanelProps) {
                 <article key={job.id}>
                   <span className={`export-state ${job.state}`}>
                     {job.state === "succeeded" ? <Check size={13} /> : job.state === "failed" ? <XCircle size={13} /> : <LoaderCircle className="spin" size={13} />}
-                    {expired && job.state === "succeeded" ? "expired" : job.state}
+                    {t(expired && job.state === "succeeded" ? "expired" : job.state)}
                   </span>
-                  <div><strong>{job.format.toUpperCase()}</strong><small>{formatDateTime(job.requested_at)} · {job.row_count == null ? "Preparing" : `${job.row_count.toLocaleString()} rows`}</small></div>
+                  <div><strong>{job.format.toUpperCase()}</strong><small>{formatDateTime(job.requested_at)} · {job.row_count == null ? t("Preparing") : t("{count} rows", { count: job.row_count.toLocaleString() })}</small></div>
                   {job.state === "succeeded" && !expired && (
-                    <button className="button secondary small" type="button" disabled={download.isPending} onClick={() => download.mutate(job.id)}>Download</button>
+                    <button className="button secondary small" type="button" disabled={download.isPending} onClick={() => download.mutate(job.id)}>{t("Download")}</button>
                   )}
                 </article>
               );
             })}
-            {!exportsQuery.isPending && exportsQuery.data?.data.length === 0 && <p>No exports yet.</p>}
+            {!exportsQuery.isPending && exportsQuery.data?.data.length === 0 && <p>{t("No exports yet.")}</p>}
           </div>
         </aside>
       )}

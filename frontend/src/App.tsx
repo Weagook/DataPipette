@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import { AppShell } from "./components/AppShell";
 import { FullPageStatus } from "./components/Status";
 import { getCurrentUser, isUnauthorized } from "./lib/api";
+import { I18nProvider, useI18n } from "./lib/i18n";
 import { queryKeys } from "./lib/query";
 const DashboardDetailPage = lazy(() =>
   import("./pages/DashboardDetailPage").then((module) => ({
@@ -77,7 +78,16 @@ const GovernancePage = lazy(() =>
 
 export function App() {
   return (
-    <Suspense fallback={<FullPageStatus label="Opening DatePipette" />}>
+    <I18nProvider>
+      <LocalizedRoutes />
+    </I18nProvider>
+  );
+}
+
+function LocalizedRoutes() {
+  const { t } = useI18n();
+  return (
+    <Suspense fallback={<FullPageStatus label={t("Opening DatePipette")} />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>
@@ -124,15 +134,20 @@ export function App() {
 
 function ProtectedLayout() {
   const location = useLocation();
+  const { setLocale, t } = useI18n();
   const session = useQuery({
     queryKey: queryKeys.session,
     queryFn: getCurrentUser,
     retry: false,
     staleTime: 60_000,
   });
+  useEffect(() => {
+    const locale = session.data?.locale;
+    if (locale) setLocale(locale === "ru" ? "ru" : "en");
+  }, [session.data?.locale, setLocale]);
 
   if (session.isPending) {
-    return <FullPageStatus label="Opening your workspace" />;
+    return <FullPageStatus label={t("Opening your workspace")} />;
   }
   if (session.isError) {
     if (isUnauthorized(session.error)) {
@@ -142,9 +157,9 @@ function ProtectedLayout() {
     }
     return (
       <FullPageStatus
-        label="The workspace is temporarily unavailable"
-        detail="Check the API connection and try again."
-        actionLabel="Try again"
+        label={t("The workspace is temporarily unavailable")}
+        detail={t("Check the API connection and try again.")}
+        actionLabel={t("Try again")}
         onAction={() => void session.refetch()}
       />
     );

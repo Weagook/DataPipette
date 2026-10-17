@@ -26,6 +26,13 @@ class AccountType(StrEnum):
     SERVICE = "service"
 
 
+class InterfaceLocale(StrEnum):
+    """Human-facing language preference for the official client."""
+
+    EN = "en"
+    RU = "ru"
+
+
 @dataclass(frozen=True, slots=True)
 class User:
     id: UUID
@@ -37,6 +44,7 @@ class User:
     created_at: datetime
     updated_at: datetime
     account_type: AccountType = AccountType.HUMAN
+    locale: InterfaceLocale = InterfaceLocale.EN
 
 
 @dataclass(frozen=True, slots=True)
