@@ -355,7 +355,8 @@ function ConnectionGrantRow({ grant, users, groups, onRevoke, revoking }: { gran
 
 function ConnectionStatus({ connection, result }: { connection: Connection; result?: Awaited<ReturnType<typeof testConnection>> }) {
   const succeeded = result?.succeeded ?? connection.last_test_succeeded;
-  return <span className={`connection-title-status ${succeeded === true ? "healthy" : succeeded === false ? "failed" : "untested"}`}>{succeeded === true ? <CheckCircle2 size={16} /> : succeeded === false ? <XCircle size={16} /> : <RefreshCw size={16} />}{succeeded === true ? "Connection healthy" : succeeded === false ? "Test failed" : "Not tested"}</span>;
+  const testedAt = result?.tested_at ?? connection.last_tested_at;
+  return <span title={testedAt ? `Tested ${formatDateTime(testedAt)}` : undefined} className={`connection-title-status ${succeeded === true ? "healthy" : succeeded === false ? "failed" : "untested"}`}>{succeeded === true ? <CheckCircle2 size={16} /> : succeeded === false ? <XCircle size={16} /> : <RefreshCw size={16} />}{succeeded === true ? "Last test passed" : succeeded === false ? "Last test failed" : "Not tested"}</span>;
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

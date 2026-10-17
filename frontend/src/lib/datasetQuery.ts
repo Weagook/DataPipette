@@ -1,4 +1,5 @@
 import type { DatasetColumn, SnapshotFilter } from "./api";
+import { randomUuid } from "./id";
 
 export type FilterOperator = SnapshotFilter["operator"];
 
@@ -27,7 +28,7 @@ export const operatorLabels: Record<FilterOperator, string> = {
 
 export function newFilterDraft(column: DatasetColumn): FilterDraft {
   return {
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     fieldId: column.field_id,
     operator: column.filter_operators[0] ?? "eq",
     value: "",

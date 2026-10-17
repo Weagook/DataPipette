@@ -4,6 +4,7 @@ import type {
   CatalogRelation,
   DatasetDefinition,
 } from "./api";
+import { randomUuid } from "./id";
 
 export type VisualDefinition = ApiSchemas["VisualDefinitionPayload"];
 export type SqlDefinition = ApiSchemas["SqlDefinitionPayload"];
@@ -25,7 +26,7 @@ export function relationAlias(name: string, used: string[] = []): string {
 export function visualDefinitionFromRelation(
   detail: CatalogRelation,
 ): VisualDefinition {
-  const relationId = crypto.randomUUID();
+  const relationId = randomUuid();
   return {
     kind: "visual",
     schema_version: 2,
@@ -40,7 +41,7 @@ export function visualDefinitionFromRelation(
       ],
     },
     fields: detail.columns.map((column) => ({
-      id: crypto.randomUUID(),
+      id: randomUuid(),
       source: { relation_id: relationId, column: column.name },
       name: column.name,
       display: { label: humanize(column.name), format: null, visible: true },
@@ -75,7 +76,7 @@ export function appendJoinedRelation(
     fields: [
       ...definition.fields,
       ...detail.columns.map((column) => ({
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         source: { relation_id: candidateId, column: column.name },
         name: uniqueFieldName(
           column.name,
@@ -87,7 +88,7 @@ export function appendJoinedRelation(
     joins: [
       ...(definition.joins ?? []),
       {
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         type: "left",
         left_relation_id: leftRelationId,
         right_relation_id: rightRelationId,
@@ -108,14 +109,49 @@ export function emptySqlDefinition(): SqlDefinition {
   return {
     kind: "sql",
     schema_version: 1,
-    statement: "SELECT\n  id\nFROM public.example",
-    fields: [newSqlField("id")],
+    statement: "",
+    fields: [newSqlField("result_column")],
+  };
+}
+
+export function appendVisualField(
+  definition: VisualDefinition,
+  relationId: string,
+  columnName: string,
+): VisualDefinition {
+  if (
+    definition.fields.some(
+      (field) =>
+        field.source.relation_id === relationId &&
+        field.source.column === columnName,
+    )
+  )
+    return definition;
+
+  return {
+    ...definition,
+    fields: [
+      ...definition.fields,
+      {
+        id: randomUuid(),
+        source: { relation_id: relationId, column: columnName },
+        name: uniqueFieldName(
+          columnName,
+          definition.fields.map((field) => field.name),
+        ),
+        display: {
+          label: humanize(columnName),
+          format: null,
+          visible: true,
+        },
+      },
+    ],
   };
 }
 
 export function newSqlField(name = "field"): SqlDefinition["fields"][number] {
   return {
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     name,
     display: { label: humanize(name), format: null, visible: true },
   };
@@ -125,8 +161,17 @@ export function definitionIsReady(
   definition: DatasetDefinition | null,
 ): boolean {
   if (!definition || definition.fields.length === 0) return false;
+  const fieldNames = definition.fields.map((field) => field.name.trim());
+  if (!uniqueNonEmpty(fieldNames)) return false;
   if (definition.kind === "sql") return definition.statement.trim().length > 0;
-  return definition.source.relations.length > 0 && definition.fields.length > 0;
+  const aliases = definition.source.relations.map((relation) =>
+    relation.alias.trim(),
+  );
+  return definition.source.relations.length > 0 && uniqueNonEmpty(aliases);
+}
+
+function uniqueNonEmpty(values: string[]): boolean {
+  return values.every(Boolean) && new Set(values).size === values.length;
 }
 
 function uniqueFieldName(name: string, used: string[]): string {

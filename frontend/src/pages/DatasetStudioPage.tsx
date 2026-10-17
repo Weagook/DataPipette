@@ -61,8 +61,10 @@ import {
   type RefreshScheduleInput,
 } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { randomUuid } from "../lib/id";
 import { queryKeys } from "../lib/query";
 import {
+  appendVisualField,
   appendJoinedRelation,
   definitionIsReady,
   emptySqlDefinition,
@@ -125,6 +127,23 @@ function NewStudio() {
     setDefinition(next === "sql" ? emptySqlDefinition() : null);
   }
 
+  const ready = definitionIsReady(definition);
+  const guidance = !name.trim()
+    ? "Give the dataset a clear name"
+    : !connectionId
+      ? "Choose a PostgreSQL connection"
+      : mode === "visual" && !definition
+        ? "Choose the first table to open the builder"
+        : definition?.kind === "visual" && definition.fields.length === 0
+          ? "Select at least one output column"
+          : definition?.kind === "sql" && !definition.statement.trim()
+            ? "Write a read-only SELECT or WITH query"
+            : definition?.kind === "sql" && definition.fields.length === 0
+              ? "Declare at least one SQL result field"
+              : !ready
+                ? "Use unique non-empty relation aliases and output names"
+                : "Ready to create a private editable draft";
+
   return (
     <div className="page-stack studio-page">
       <StudioHeading
@@ -137,15 +156,26 @@ function NewStudio() {
           onRetry={() => void connections.refetch()}
         />
       )}
-      <section className="studio-create-card">
+      <ol className="dataset-create-steps" aria-label="Dataset creation steps">
+        <li className={name.trim() && connectionId ? "complete" : "active"}>
+          <span>1</span><div><strong>Setup</strong><small>Name and connection</small></div>
+        </li>
+        <li className={definition ? "complete" : name.trim() && connectionId ? "active" : ""}>
+          <span>2</span><div><strong>Build</strong><small>Tables or SQL</small></div>
+        </li>
+        <li className={ready && name.trim() ? "active" : ""}>
+          <span>3</span><div><strong>Create draft</strong><small>Then validate and preview</small></div>
+        </li>
+      </ol>
+      <section className="studio-create-card dataset-setup-card">
         <div className="studio-create-intro">
           <span className="panel-icon">
             <Database size={20} />
           </span>
           <div>
-            <strong>Start with a governed source</strong>
+            <strong>1. Set up the dataset</strong>
             <p>
-              The definition is saved as JSON and can be reopened at any time.
+              Choose where the data comes from. Nothing reads business rows yet.
             </p>
           </div>
         </div>
@@ -183,6 +213,8 @@ function NewStudio() {
             className={mode === "visual" ? "selected" : ""}
             onClick={() => changeMode("visual")}
             type="button"
+            role="radio"
+            aria-checked={mode === "visual"}
           >
             <Table2 />
             <span>
@@ -195,6 +227,8 @@ function NewStudio() {
             className={mode === "sql" ? "selected" : ""}
             onClick={() => changeMode("sql")}
             type="button"
+            role="radio"
+            aria-checked={mode === "sql"}
           >
             <Code2 />
             <span>
@@ -207,36 +241,78 @@ function NewStudio() {
           </button>
         </div>
       </section>
-      {connectionId && mode === "visual" && (
-        <CatalogStarter
-          connectionId={connectionId}
-          onChoose={(detail) =>
-            setDefinition(visualDefinitionFromRelation(detail))
-          }
-          chosen={
-            definition?.kind === "visual"
-              ? definition.source.relations[0]
-              : undefined
-          }
-        />
-      )}
-      {connectionId && definition?.kind === "sql" && (
-        <SqlEditor definition={definition} onChange={setDefinition} />
-      )}
-      {definition && <JsonInspector definition={definition} />}
+      <div className="new-dataset-workspace">
+        <div className="new-dataset-builder">
+          {!connectionId && (
+            <section className="studio-panel builder-empty-state">
+              <Database />
+              <strong>Choose a connection to start building</strong>
+              <p>The source catalog and SQL editor stay scoped to that PostgreSQL connection.</p>
+            </section>
+          )}
+          {connectionId && mode === "visual" && !definition && (
+            <CatalogStarter
+              connectionId={connectionId}
+              onChoose={(detail) =>
+                setDefinition(visualDefinitionFromRelation(detail))
+              }
+            />
+          )}
+          {connectionId && definition?.kind === "visual" && (
+            <section className="studio-panel new-builder-panel">
+              <header>
+                <div>
+                  <span className="panel-icon"><Table2 /></span>
+                  <span>
+                    <strong>2. Build the visual model</strong>
+                    <small>Select output columns, labels, formats, and related tables.</small>
+                  </span>
+                </div>
+                <button className="button secondary small" onClick={() => setDefinition(null)} type="button">
+                  Change first table
+                </button>
+              </header>
+              <VisualEditor
+                connectionId={connectionId}
+                definition={definition}
+                onChange={setDefinition}
+              />
+            </section>
+          )}
+          {connectionId && definition?.kind === "sql" && (
+            <section className="studio-panel new-builder-panel sql-builder-panel">
+              <header>
+                <div>
+                  <span className="panel-icon"><Code2 /></span>
+                  <span>
+                    <strong>2. Write the SQL definition</strong>
+                    <small>The original query stays editable in the saved draft.</small>
+                  </span>
+                </div>
+              </header>
+              <SqlEditor definition={definition} onChange={setDefinition} autoFocus />
+            </section>
+          )}
+        </div>
+        <aside className="new-dataset-side">
+          <CreationReadiness
+            name={name}
+            connectionId={connectionId}
+            mode={mode}
+            definition={definition}
+          />
+          {definition && <JsonInspector definition={definition} />}
+        </aside>
+      </div>
       {create.isError && <InlineError message={problemMessage(create.error)} />}
       <div className="studio-sticky-actions">
-        <span>
-          {definitionIsReady(definition)
-            ? "Ready to create a private draft"
-            : "Choose a source and at least one field"}
-        </span>
+        <span>{guidance}</span>
         <button
           className="button primary"
           disabled={
             !name.trim() ||
             !connectionId ||
-            !definitionIsReady(definition) ||
+            !ready ||
             create.isPending
           }
           onClick={() => create.mutate()}
@@ -550,6 +626,65 @@ function StudioHeading({
   );
 }
 
+function CreationReadiness({
+  name,
+  connectionId,
+  mode,
+  definition,
+}: {
+  name: string;
+  connectionId: string;
+  mode: "visual" | "sql";
+  definition: DatasetDefinition | null;
+}) {
+  const aliases =
+    definition?.kind === "visual"
+      ? definition.source.relations.map((relation) => relation.alias.trim())
+      : [];
+  const sourceReady =
+    mode === "visual"
+      ? definition?.kind === "visual" &&
+        definition.source.relations.length > 0 &&
+        aliases.every(Boolean) &&
+        new Set(aliases).size === aliases.length
+      : definition?.kind === "sql" && definition.statement.trim().length > 0;
+  const fieldNames = definition?.fields.map((field) => field.name.trim()) ?? [];
+  const fieldsReady =
+    fieldNames.length > 0 &&
+    fieldNames.every(Boolean) &&
+    new Set(fieldNames).size === fieldNames.length;
+  return (
+    <section className="creation-readiness" aria-label="Creation readiness">
+      <header>
+        <FileCheck2 />
+        <div>
+          <strong>Draft readiness</strong>
+          <small>Complete these before creating the dataset.</small>
+        </div>
+      </header>
+      <ul>
+        <ReadinessItem ready={Boolean(name.trim())} label="Dataset named" />
+        <ReadinessItem ready={Boolean(connectionId)} label="Connection selected" />
+        <ReadinessItem
+          ready={Boolean(sourceReady)}
+          label={mode === "visual" ? "First table selected" : "SQL query written"}
+        />
+        <ReadinessItem ready={fieldsReady} label="Output fields valid" />
+      </ul>
+      <p>Creation saves a private JSON draft. It does not query or publish source rows.</p>
+    </section>
+  );
+}
+
+function ReadinessItem({ ready, label }: { ready: boolean; label: string }) {
+  return (
+    <li className={ready ? "ready" : ""}>
+      <span><Check /></span>
+      {label}
+    </li>
+  );
+}
+
 function BuildWorkspace({
   datasetId,
   connectionId,
@@ -762,11 +897,17 @@ function CatalogPicker({
         </div>
       )}
       {(schemas.error || relations.error || detail.error) && (
-        <InlineError
-          message={problemMessage(
-            schemas.error ?? relations.error ?? detail.error,
-          )}
-        />
+        <div className="catalog-picker-error">
+          <InlineError
+            message={problemMessage(
+              schemas.error ?? relations.error ?? detail.error,
+            )}
+          />
+          <p>
+            Ask an administrator to retest this connection and confirm that
+            PostgreSQL accepts traffic from the DatePipette server.
+          </p>
+        </div>
       )}
     </div>
   );
@@ -785,7 +926,7 @@ function VisualEditor({
   const [joinError, setJoinError] = useState("");
   async function addJoined(detail: CatalogRelation) {
     setJoinError("");
-    const candidateId = crypto.randomUUID();
+    const candidateId = randomUuid();
     try {
       const suggestions = await suggestCatalogJoins(connectionId, [
         ...definition.source.relations.map((item) => ({
@@ -821,11 +962,56 @@ function VisualEditor({
           <div className="relation-chip" key={relation.id}>
             <span>{index === 0 ? <Database /> : <Link2 />}</span>
             <div>
-              <strong>{relation.alias}</strong>
+              <input
+                aria-label={`Alias for ${relation.schema}.${relation.name}`}
+                value={relation.alias}
+                onChange={(event) =>
+                  onChange({
+                    ...definition,
+                    source: {
+                      relations: definition.source.relations.map((item) =>
+                        item.id === relation.id
+                          ? { ...item, alias: event.target.value }
+                          : item,
+                      ),
+                    },
+                  })
+                }
+              />
               <small>
                 {relation.schema}.{relation.name}
               </small>
             </div>
+            {index > 0 &&
+              !definition.joins?.some(
+                (join) => join.left_relation_id === relation.id,
+              ) && (
+                <button
+                  className="icon-button"
+                  aria-label={`Remove table ${relation.schema}.${relation.name}`}
+                  onClick={() =>
+                    onChange({
+                      ...definition,
+                      source: {
+                        relations: definition.source.relations.filter(
+                          (item) => item.id !== relation.id,
+                        ),
+                      },
+                      fields: definition.fields.filter(
+                        (field) => field.source.relation_id !== relation.id,
+                      ),
+                      joins: definition.joins?.filter(
+                        (join) =>
+                          join.left_relation_id !== relation.id &&
+                          join.right_relation_id !== relation.id,
+                      ),
+                    })
+                  }
+                  type="button"
+                >
+                  <Trash2 />
+                </button>
+              )}
           </div>
         ))}
         <button
@@ -850,8 +1036,160 @@ function VisualEditor({
           {joinError && <InlineError message={joinError} />}
         </div>
       )}
+      {Boolean(definition.joins?.length) && (
+        <JoinEditor definition={definition} onChange={onChange} />
+      )}
+      <section className="source-columns-section">
+        <div className="field-header">
+          <span>Source columns</span>
+          <small>Choose which columns become dataset output fields</small>
+        </div>
+        <div className="source-column-groups">
+          {definition.source.relations.map((relation) => (
+            <SourceColumnSelector
+              key={relation.id}
+              connectionId={connectionId}
+              relation={relation}
+              definition={definition}
+              onChange={onChange}
+            />
+          ))}
+        </div>
+      </section>
       <FieldEditor definition={definition} onChange={onChange} />
     </div>
+  );
+}
+
+function JoinEditor({
+  definition,
+  onChange,
+}: {
+  definition: VisualDefinition;
+  onChange: (value: DatasetDefinition) => void;
+}) {
+  const relationNames = new Map(
+    definition.source.relations.map((relation) => [relation.id, relation.alias]),
+  );
+  return (
+    <section className="join-editor">
+      <div className="field-header">
+        <span>Relationships</span>
+        <small>Foreign-key suggestions become explicit editable joins</small>
+      </div>
+      {definition.joins?.map((join) => (
+        <article key={join.id}>
+          <div className="join-path">
+            <Link2 />
+            <strong>{relationNames.get(join.left_relation_id)}</strong>
+            <span>to</span>
+            <strong>{relationNames.get(join.right_relation_id)}</strong>
+          </div>
+          <label>
+            <span>Join type</span>
+            <select
+              aria-label={`Join type for ${relationNames.get(join.right_relation_id)}`}
+              value={join.type}
+              onChange={(event) =>
+                onChange({
+                  ...definition,
+                  joins: definition.joins?.map((item) =>
+                    item.id === join.id
+                      ? { ...item, type: event.target.value as "inner" | "left" }
+                      : item,
+                  ),
+                })
+              }
+            >
+              <option value="left">LEFT JOIN</option>
+              <option value="inner">INNER JOIN</option>
+            </select>
+          </label>
+          <div className="join-conditions">
+            {join.conditions.map((condition) => (
+              <code key={`${condition.left_column}:${condition.right_column}`}>
+                {relationNames.get(join.left_relation_id)}.{condition.left_column}
+                <span>=</span>
+                {relationNames.get(join.right_relation_id)}.{condition.right_column}
+              </code>
+            ))}
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function SourceColumnSelector({
+  connectionId,
+  relation,
+  definition,
+  onChange,
+}: {
+  connectionId: string;
+  relation: VisualDefinition["source"]["relations"][number];
+  definition: VisualDefinition;
+  onChange: (value: DatasetDefinition) => void;
+}) {
+  const detail = useQuery({
+    queryKey: queryKeys.catalogRelation(
+      connectionId,
+      relation.schema,
+      relation.name,
+    ),
+    queryFn: () =>
+      getCatalogRelation(connectionId, relation.schema, relation.name),
+  });
+  const selected = new Set(
+    definition.fields
+      .filter((field) => field.source.relation_id === relation.id)
+      .map((field) => field.source.column),
+  );
+  return (
+    <article className="source-column-group">
+      <header>
+        <div>
+          <strong>{relation.alias}</strong>
+          <small>{relation.schema}.{relation.name}</small>
+        </div>
+        <span>{selected.size} selected</span>
+      </header>
+      {detail.isPending && <div className="column-picker-skeleton skeleton" />}
+      {detail.isError && <InlineError message={problemMessage(detail.error)} />}
+      <div className="source-column-list">
+        {detail.data?.columns.map((column) => {
+          const checked = selected.has(column.name);
+          return (
+            <label key={column.name}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(event) =>
+                  onChange(
+                    event.target.checked
+                      ? appendVisualField(definition, relation.id, column.name)
+                      : {
+                          ...definition,
+                          fields: definition.fields.filter(
+                            (field) =>
+                              !(
+                                field.source.relation_id === relation.id &&
+                                field.source.column === column.name
+                              ),
+                          ),
+                        },
+                  )
+                }
+              />
+              <span>
+                <strong>{column.name}</strong>
+                <small>{column.data_type}{column.nullable ? " · nullable" : ""}</small>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </article>
   );
 }
 
@@ -882,6 +1220,22 @@ function FieldEditor({
               {relations.get(field.source.relation_id)}.{field.source.column}
             </small>
           </div>
+          <label>
+            <span>Output name</span>
+            <input
+              value={field.name}
+              onChange={(event) =>
+                onChange({
+                  ...definition,
+                  fields: definition.fields.map((item) =>
+                    item.id === field.id
+                      ? { ...item, name: event.target.value }
+                      : item,
+                  ),
+                })
+              }
+            />
+          </label>
           <label>
             <span>Label</span>
             <input
@@ -959,7 +1313,6 @@ function FieldEditor({
           <button
             className="icon-button"
             aria-label={`Remove ${field.name}`}
-            disabled={definition.fields.length === 1}
             onClick={() =>
               onChange({
                 ...definition,
@@ -981,25 +1334,29 @@ function FieldEditor({
 function SqlEditor({
   definition,
   onChange,
+  autoFocus = false,
 }: {
   definition: SqlDefinition;
   onChange: (value: DatasetDefinition) => void;
+  autoFocus?: boolean;
 }) {
   return (
     <div className="sql-editor">
       <label>
         <span>Read-only PostgreSQL query</span>
         <textarea
+          autoFocus={autoFocus}
           spellCheck={false}
           value={definition.statement}
+          placeholder={"SELECT\n  id,\n  created_at\nFROM public.orders"}
           onChange={(event) =>
             onChange({ ...definition, statement: event.target.value })
           }
         />
       </label>
       <div className="sql-hint">
-        <ShieldCheck /> Only a single SELECT or WITH statement is accepted.
-        Validation uses EXPLAIN without ANALYZE.
+        <ShieldCheck /> Use schema-qualified table names. Only one SELECT or
+        WITH statement is accepted; validation uses EXPLAIN without ANALYZE.
       </div>
       <div className="field-editor">
         <div className="field-header">
@@ -1115,7 +1472,6 @@ function SqlEditor({
             <button
               className="icon-button"
               aria-label={`Remove ${field.name}`}
-              disabled={definition.fields.length === 1}
               onClick={() =>
                 onChange({
                   ...definition,

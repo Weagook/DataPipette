@@ -59,6 +59,7 @@ import {
   updateItem,
 } from "../lib/dashboardLayout";
 import { formatDateTime } from "../lib/format";
+import { randomUuid } from "../lib/id";
 import { queryKeys } from "../lib/query";
 
 const typeLabels = {
@@ -252,7 +253,7 @@ function DashboardEditor(props: DashboardEditorProps) {
       setLayoutNotice("A dashboard can contain at most 50 visualizations.");
       return;
     }
-    props.onDefinitionChange(addChart(props.definition, chartId, crypto.randomUUID()));
+    props.onDefinitionChange(addChart(props.definition, chartId, randomUuid()));
     setLayoutNotice("");
   }
 

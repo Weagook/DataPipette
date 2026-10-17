@@ -4,6 +4,7 @@ import {
   type FilterDraft,
   type FilterOperator,
 } from "./datasetQuery";
+import { randomUuid } from "./id";
 
 export type ChartType = ApiSchemas["ChartType"];
 export type ChartAggregation = ApiSchemas["ChartAggregation"];
@@ -89,7 +90,7 @@ export function newMeasure(
     ? "sum"
     : "count";
   return {
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     field_id: column.field_id,
     aggregation,
     label: `${aggregationLabels[aggregation]} of ${column.label}`,
@@ -124,7 +125,7 @@ export function filterDraftsFromDefinition(
   definition: ChartDefinition,
 ): FilterDraft[] {
   return (definition.filters ?? []).map((filter) => ({
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     fieldId: filter.field_id,
     operator: filter.operator,
     value:

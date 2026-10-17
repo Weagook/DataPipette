@@ -123,11 +123,14 @@ describe("dataset studio", () => {
     fireEvent.change(await screen.findByLabelText("PostgreSQL connection"), {
       target: { value: CONNECTION_ID },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Advanced SQL/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Advanced SQL/ }));
     fireEvent.change(
       await screen.findByLabelText("Read-only PostgreSQL query"),
       { target: { value: "SELECT id FROM public.orders" } },
     );
+    fireEvent.change(screen.getByLabelText("SQL result name"), {
+      target: { value: "id" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
 
     await waitFor(() =>
@@ -138,6 +141,177 @@ describe("dataset studio", () => {
           kind: "sql",
           statement: "SELECT id FROM public.orders",
           fields: [{ name: "id" }],
+        },
+      }),
+    );
+  });
+
+  it("opens the complete visual builder before creating a dataset", async () => {
+    document.cookie = "datepipette_csrf=test-token; path=/";
+    let createBody: unknown;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        if (url.pathname === "/api/v1/auth/me")
+          return Response.json({
+            id: "user-1",
+            email: "ada@example.com",
+            display_name: "Ada Analyst",
+            role: "analyst",
+          });
+        if (url.pathname === "/api/v1/connections")
+          return Response.json({
+            data: [
+              {
+                id: CONNECTION_ID,
+                name: "Warehouse",
+                database_name: "analytics",
+                host: "db",
+                port: 5432,
+                username: "reader",
+                ssl_mode: "require",
+                has_password: true,
+                has_ca_certificate: false,
+                created_by: "user-1",
+                last_tested_at: null,
+                last_test_succeeded: null,
+                last_test_error_code: null,
+                created_at: "2026-10-16T00:00:00Z",
+                updated_at: "2026-10-16T00:00:00Z",
+              },
+            ],
+            meta: { next_cursor: null },
+          });
+        if (url.pathname.endsWith("/catalog/schemas"))
+          return Response.json({
+            data: [{ name: "public" }],
+            meta: { next_cursor: null },
+          });
+        if (url.pathname.endsWith("/catalog/schemas/public/relations"))
+          return Response.json({
+            data: [
+              { schema_name: "public", name: "orders", kind: "table" },
+            ],
+            meta: { next_cursor: null },
+          });
+        if (url.pathname.endsWith("/catalog/schemas/public/relations/orders"))
+          return Response.json({
+            schema_name: "public",
+            name: "orders",
+            kind: "table",
+            primary_key: ["id"],
+            foreign_keys: [],
+            columns: [
+              {
+                name: "id",
+                data_type: "bigint",
+                nullable: false,
+                ordinal_position: 1,
+              },
+              {
+                name: "customer_id",
+                data_type: "bigint",
+                nullable: false,
+                ordinal_position: 2,
+              },
+            ],
+          });
+        if (url.pathname === "/api/v1/datasets" && request.method === "POST") {
+          createBody = await request.json();
+          return Response.json(
+            {
+              id: DATASET_ID,
+              name: "Orders model",
+              owner_id: "user-1",
+              connection_id: CONNECTION_ID,
+              active_version_id: null,
+              active_snapshot_id: null,
+              draft_revision: 1,
+              created_at: "2026-10-16T00:00:00Z",
+              updated_at: "2026-10-16T00:00:00Z",
+            },
+            { status: 201, headers: { ETag: '"draft-1"' } },
+          );
+        }
+        if (url.pathname === `/api/v1/datasets/${DATASET_ID}`)
+          return Response.json({
+            id: DATASET_ID,
+            name: "Orders model",
+            owner_id: "user-1",
+            connection_id: CONNECTION_ID,
+            active_version_id: null,
+            active_snapshot_id: null,
+            draft_revision: 1,
+            created_at: "2026-10-16T00:00:00Z",
+            updated_at: "2026-10-16T00:00:00Z",
+          });
+        if (url.pathname === `/api/v1/datasets/${DATASET_ID}/draft`)
+          return Response.json(
+            {
+              id: "draft-1",
+              dataset_id: DATASET_ID,
+              revision: 1,
+              definition: (createBody as { definition: unknown }).definition,
+              validation: null,
+              created_by: "user-1",
+              created_at: "2026-10-16T00:00:00Z",
+              updated_at: "2026-10-16T00:00:00Z",
+            },
+            { headers: { ETag: '"draft-1"' } },
+          );
+        throw new Error(`Unexpected request: ${request.method} ${request.url}`);
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/datasets/new"]}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "New dataset" });
+    fireEvent.change(screen.getByLabelText("Dataset name"), {
+      target: { value: "Orders model" },
+    });
+    await screen.findByRole("option", { name: "Warehouse · analytics" });
+    fireEvent.change(screen.getByLabelText("Schema"), {
+      target: { value: "public" },
+    });
+    await screen.findByRole("option", { name: "orders · table" });
+    fireEvent.change(screen.getByLabelText("Table or view"), {
+      target: { value: "orders" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Use table" }));
+
+    expect(await screen.findByText("2. Build the visual model")).toBeVisible();
+    expect(screen.getByText("Source columns")).toBeVisible();
+    const customer = await screen.findByRole("checkbox", {
+      name: /customer_id/,
+    });
+    expect(customer).toBeChecked();
+    fireEvent.click(customer);
+    fireEvent.change(screen.getAllByLabelText("Output name")[0], {
+      target: { value: "order_id" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+
+    await waitFor(() =>
+      expect(createBody).toMatchObject({
+        name: "Orders model",
+        connection_id: CONNECTION_ID,
+        definition: {
+          kind: "visual",
+          source: { relations: [{ schema: "public", name: "orders" }] },
+          fields: [{ name: "order_id", source: { column: "id" } }],
         },
       }),
     );
