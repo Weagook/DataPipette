@@ -19,8 +19,9 @@ import {
   ShieldCheck,
   Table2,
   Trash2,
+  Workflow,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -76,6 +77,12 @@ import {
   type VisualDefinition,
 } from "../lib/studioDefinition";
 
+const DatasetCanvasBuilder = lazy(() =>
+  import("../components/DatasetCanvasBuilder").then((module) => ({
+    default: module.DatasetCanvasBuilder,
+  })),
+);
+
 type StudioTab = "build" | "check" | "preview" | "publish";
 type RelationChoice = { schema: string; name: string };
 const FORMATS: { value: "" | DisplayFormat; label: string }[] = [
@@ -105,7 +112,7 @@ function NewStudio() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [connectionId, setConnectionId] = useState("");
-  const [mode, setMode] = useState<"visual" | "sql">("visual");
+  const [mode, setMode] = useState<"visual" | "canvas" | "sql">("visual");
   const [definition, setDefinition] = useState<DatasetDefinition | null>(null);
   const connections = useQuery({
     queryKey: queryKeys.connections,
@@ -124,9 +131,13 @@ function NewStudio() {
       setConnectionId(connections.data.data[0].id);
   }, [connectionId, connections.data]);
 
-  function changeMode(next: "visual" | "sql") {
+  function changeMode(next: "visual" | "canvas" | "sql") {
     setMode(next);
-    setDefinition(next === "sql" ? emptySqlDefinition() : null);
+    setDefinition((current) => {
+      if (next === "sql")
+        return current?.kind === "sql" ? current : emptySqlDefinition();
+      return current?.kind === "visual" ? current : null;
+    });
   }
 
   const ready = definitionIsReady(definition);
@@ -134,7 +145,7 @@ function NewStudio() {
     ? "Give the dataset a clear name"
     : !connectionId
       ? "Choose a PostgreSQL connection"
-      : mode === "visual" && !definition
+      : mode !== "sql" && !definition
         ? "Choose the first table to open the builder"
         : definition?.kind === "visual" && definition.fields.length === 0
           ? "Select at least one output column"
@@ -226,6 +237,20 @@ function NewStudio() {
             <Check />
           </button>
           <button
+            className={`${mode === "canvas" ? "selected" : ""} canvas-mode-option`}
+            onClick={() => changeMode("canvas")}
+            type="button"
+            role="radio"
+            aria-checked={mode === "canvas"}
+          >
+            <Workflow />
+            <span>
+              <strong>{t("Canvas Builder")}</strong>
+              <small>{t("Compose tables and joins on a desktop node canvas.")}</small>
+            </span>
+            <Check />
+          </button>
+          <button
             className={mode === "sql" ? "selected" : ""}
             onClick={() => changeMode("sql")}
             type="button"
@@ -252,7 +277,7 @@ function NewStudio() {
               <p>{t("The source catalog and SQL editor stay scoped to that PostgreSQL connection.")}</p>
             </section>
           )}
-          {connectionId && mode === "visual" && !definition && (
+          {connectionId && mode !== "sql" && !definition && (
             <CatalogStarter
               connectionId={connectionId}
               onChoose={(detail) =>
@@ -260,7 +285,7 @@ function NewStudio() {
               }
             />
           )}
-          {connectionId && definition?.kind === "visual" && (
+          {connectionId && definition?.kind === "visual" && mode === "visual" && (
             <section className="studio-panel new-builder-panel">
               <header>
                 <div>
@@ -279,6 +304,31 @@ function NewStudio() {
                 definition={definition}
                 onChange={setDefinition}
               />
+            </section>
+          )}
+          {connectionId && definition?.kind === "visual" && mode === "canvas" && (
+            <section className="studio-panel new-builder-panel canvas-builder-panel">
+              <header>
+                <div>
+                  <span className="panel-icon"><Workflow /></span>
+                  <span>
+                    <strong>{t("2. Build on the canvas")}</strong>
+                    <small>{t("Connect source tables, joins, columns, presentation, and output.")}</small>
+                  </span>
+                </div>
+                <button className="button secondary small" onClick={() => setDefinition(null)} type="button">
+                  {t("Change first table")}
+                </button>
+              </header>
+              <div className="canvas-mobile-blocker">
+                <Workflow />
+                <strong>{t("Canvas Builder requires a desktop-sized screen")}</strong>
+                <p>{t("Switch to Guided Visual on this device. Your saved canvas remains unchanged.")}</p>
+                <button className="button secondary" type="button" onClick={() => setMode("visual")}>{t("Open Guided Visual")}</button>
+              </div>
+              <Suspense fallback={<div className="canvas-loading skeleton" />}>
+                <DatasetCanvasBuilder connectionId={connectionId} definition={definition} onChange={setDefinition} />
+              </Suspense>
             </section>
           )}
           {connectionId && definition?.kind === "sql" && (
@@ -640,7 +690,7 @@ function CreationReadiness({
 }: {
   name: string;
   connectionId: string;
-  mode: "visual" | "sql";
+  mode: "visual" | "canvas" | "sql";
   definition: DatasetDefinition | null;
 }) {
   const { t } = useI18n();
@@ -649,7 +699,7 @@ function CreationReadiness({
       ? definition.source.relations.map((relation) => relation.alias.trim())
       : [];
   const sourceReady =
-    mode === "visual"
+    mode !== "sql"
       ? definition?.kind === "visual" &&
         definition.source.relations.length > 0 &&
         aliases.every(Boolean) &&
@@ -674,7 +724,7 @@ function CreationReadiness({
         <ReadinessItem ready={Boolean(connectionId)} label={t("Connection selected")} />
         <ReadinessItem
           ready={Boolean(sourceReady)}
-          label={t(mode === "visual" ? "First table selected" : "SQL query written")}
+          label={t(mode !== "sql" ? "First table selected" : "SQL query written")}
         />
         <ReadinessItem ready={fieldsReady} label={t("Output fields valid")} />
       </ul>
@@ -708,6 +758,7 @@ function BuildWorkspace({
   onDefinitionChange: (value: DatasetDefinition) => void;
 }) {
   const { t } = useI18n();
+  const [visualMode, setVisualMode] = useState<"guided" | "canvas">("guided");
   return (
     <div className="studio-layout">
       <main className="studio-main">
@@ -726,6 +777,12 @@ function BuildWorkspace({
                 <small>{t("Saved as a versioned, editable definition")}</small>
               </span>
             </div>
+            {definition.kind === "visual" && (
+              <div className="builder-view-switch" role="group" aria-label={t("Visual editor mode")}>
+                <button className={visualMode === "guided" ? "active" : ""} type="button" onClick={() => setVisualMode("guided")}><Table2 /> {t("Guided Visual")}</button>
+                <button className={`${visualMode === "canvas" ? "active" : ""} canvas-mode-option`} type="button" onClick={() => setVisualMode("canvas")}><Workflow /> {t("Canvas")}</button>
+              </div>
+            )}
           </header>
           <label className="studio-name">
             <span>{t("Dataset name")}</span>
@@ -734,12 +791,28 @@ function BuildWorkspace({
               onChange={(event) => onNameChange(event.target.value)}
             />
           </label>
-          {definition.kind === "visual" ? (
+          {definition.kind === "visual" && visualMode === "guided" ? (
             <VisualEditor
               connectionId={connectionId}
               definition={definition}
               onChange={onDefinitionChange}
             />
+          ) : definition.kind === "visual" ? (
+            <>
+              <div className="canvas-mobile-blocker">
+                <Workflow />
+                <strong>{t("Canvas Builder requires a desktop-sized screen")}</strong>
+                <p>{t("Switch to Guided Visual on this device. Your saved canvas remains unchanged.")}</p>
+                <button className="button secondary" type="button" onClick={() => setVisualMode("guided")}>{t("Open Guided Visual")}</button>
+              </div>
+              <Suspense fallback={<div className="canvas-loading skeleton" />}>
+                <DatasetCanvasBuilder
+                  connectionId={connectionId}
+                  definition={definition}
+                  onChange={onDefinitionChange}
+                />
+              </Suspense>
+            </>
           ) : (
             <SqlEditor definition={definition} onChange={onDefinitionChange} />
           )}

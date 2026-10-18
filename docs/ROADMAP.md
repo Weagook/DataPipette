@@ -95,7 +95,7 @@ Outcome: every MVP capability is understandable and usable through a polished re
 
 - [x] Session login, restoration, logout, responsive shell, and role-aware navigation
 - [x] English-default interface with complete Russian localization and a persisted profile language preference; API error codes and technical identifiers remain stable
-- [ ] Desktop-only node-canvas dataset authoring alongside the guided visual builder and Advanced SQL
+- [x] Desktop-only node-canvas dataset authoring alongside the guided visual builder and Advanced SQL
   - PostgreSQL Table, Join, Select Columns, Rename & Format, and Dataset Output nodes
   - FK-suggested and manual compatible-column joins
   - persisted graph and viewport, minimap, zoom, undo/redo, edge deletion, selected-node settings, and safe auto-layout

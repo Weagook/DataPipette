@@ -3,6 +3,22 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "canvas-runtime",
+              test: /node_modules[\\/](@xyflow|zustand|classcat|d3-|internmap|use-sync-external-store)/,
+              includeDependenciesRecursively: false,
+              priority: 20,
+            },
+          ],
+        },
+      },
+    },
+  },
   server: {
     host: "127.0.0.1",
     port: 5173,

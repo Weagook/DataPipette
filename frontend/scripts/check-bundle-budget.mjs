@@ -13,7 +13,7 @@ const budgets = [
   {
     label: "application entry JavaScript",
     files: matchHtmlAsset(/<script[^>]+src="\/assets\/([^"]+\.js)"/, html),
-    maxKiB: 80,
+    maxKiB: 86,
   },
   {
     label: "shared application CSS",
@@ -30,6 +30,11 @@ const budgets = [
     label: "shared query runtime",
     files: files.filter((name) => /^query-[^.]+\.js$/.test(name)),
     maxKiB: 32,
+  },
+  {
+    label: "isolated canvas authoring runtime",
+    files: files.filter((name) => /^(canvas-runtime|DatasetCanvasBuilder)-[^.]+\.js$/.test(name)),
+    maxKiB: 70,
   },
   {
     label: "isolated visualization runtime",

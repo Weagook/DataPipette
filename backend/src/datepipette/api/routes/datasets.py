@@ -64,6 +64,9 @@ from datepipette.domain.datasets import (
     SqlField,
     ValidationFindingCode,
     ValidationSeverity,
+    VisualCanvasLayout,
+    VisualCanvasNode,
+    VisualCanvasViewport,
     VisualDatasetDefinition,
     VisualField,
     VisualJoin,
@@ -121,12 +124,33 @@ class VisualJoinPayload(StrictModel):
     conditions: list[VisualJoinConditionPayload] = Field(min_length=1, max_length=8)
 
 
+class VisualCanvasNodePayload(StrictModel):
+    id: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=-100_000, le=100_000, allow_inf_nan=False)
+    y: float = Field(ge=-100_000, le=100_000, allow_inf_nan=False)
+
+
+class VisualCanvasViewportPayload(StrictModel):
+    x: float = Field(default=0, ge=-100_000, le=100_000, allow_inf_nan=False)
+    y: float = Field(default=0, ge=-100_000, le=100_000, allow_inf_nan=False)
+    zoom: float = Field(default=1, ge=0.1, le=4, allow_inf_nan=False)
+
+
+class VisualCanvasLayoutPayload(StrictModel):
+    nodes: list[VisualCanvasNodePayload] = Field(default_factory=list, max_length=24)
+    viewport: VisualCanvasViewportPayload = Field(default_factory=VisualCanvasViewportPayload)
+
+
 class VisualDefinitionPayload(StrictModel):
     kind: Literal[DatasetDefinitionKind.VISUAL] = DatasetDefinitionKind.VISUAL
     schema_version: Literal[1, 2]
     source: VisualSourcePayload
     fields: list[VisualFieldPayload] = Field(min_length=1, max_length=500)
     joins: list[VisualJoinPayload] = Field(default_factory=list, max_length=9)
+    canvas: VisualCanvasLayoutPayload | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class SqlFieldPayload(StrictModel):
@@ -418,6 +442,21 @@ def _definition(payload: DefinitionPayload) -> DatasetDefinition:
                 ),
             )
             for join in payload.joins
+        ),
+        canvas=(
+            VisualCanvasLayout(
+                nodes=tuple(
+                    VisualCanvasNode(id=node.id, x=node.x, y=node.y)
+                    for node in payload.canvas.nodes
+                ),
+                viewport=VisualCanvasViewport(
+                    x=payload.canvas.viewport.x,
+                    y=payload.canvas.viewport.y,
+                    zoom=payload.canvas.viewport.zoom,
+                ),
+            )
+            if payload.canvas is not None
+            else None
         ),
     )
 

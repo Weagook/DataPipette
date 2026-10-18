@@ -3219,8 +3219,42 @@ export interface components {
          * @enum {string}
          */
         ValidationSeverity: "info" | "warning" | "blocked" | "error";
+        /** VisualCanvasLayoutPayload */
+        VisualCanvasLayoutPayload: {
+            /** Nodes */
+            nodes?: components["schemas"]["VisualCanvasNodePayload"][];
+            viewport?: components["schemas"]["VisualCanvasViewportPayload"];
+        };
+        /** VisualCanvasNodePayload */
+        VisualCanvasNodePayload: {
+            /** Id */
+            id: string;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /** VisualCanvasViewportPayload */
+        VisualCanvasViewportPayload: {
+            /**
+             * X
+             * @default 0
+             */
+            x: number;
+            /**
+             * Y
+             * @default 0
+             */
+            y: number;
+            /**
+             * Zoom
+             * @default 1
+             */
+            zoom: number;
+        };
         /** VisualDefinitionPayload */
         VisualDefinitionPayload: {
+            canvas?: components["schemas"]["VisualCanvasLayoutPayload"] | null;
             /** Fields */
             fields: components["schemas"]["VisualFieldPayload"][];
             /** Joins */
