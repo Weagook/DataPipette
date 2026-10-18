@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - "benchmarks/**"
       - ".dockerignore"
       - "deploy/docker/backend.Dockerfile"
       - "deploy/compose/compose.yaml"
@@ -18,6 +19,7 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "benchmarks/**"
       - ".dockerignore"
       - "deploy/docker/backend.Dockerfile"
       - "deploy/compose/compose.yaml"
@@ -82,6 +84,9 @@ jobs:
 
       - name: Type check
         run: uv run --package datepipette mypy
+
+      - name: Test benchmark tooling
+        run: uv run python -m unittest discover -s benchmarks/tests
 
       - name: Apply migrations
         run: uv run --package datepipette alembic -c backend/alembic.ini upgrade head
