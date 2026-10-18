@@ -23,7 +23,7 @@ from uuid import UUID, uuid4, uuid5
 
 BENCHMARK_NAMESPACE = UUID("c31b414b-d314-4f32-9ec4-dd7ef2d9166a")
 CONNECTION_NAME = "Reference PostgreSQL benchmark"
-DATASET_NAME = "Reference 5M x 50"
+DATASET_NAME_PREFIX = "Reference 5M x"
 TERMINAL_REFRESH_STATES = {"succeeded", "failed", "cancelled"}
 TERMINAL_EXPORT_STATES = {"succeeded", "failed", "expired"}
 
@@ -249,10 +249,12 @@ def _field_id(name: str) -> str:
     return str(uuid5(BENCHMARK_NAMESPACE, f"field:{name}"))
 
 
-def benchmark_definition() -> dict[str, Any]:
+def benchmark_definition(field_count: int = 50) -> dict[str, Any]:
+    if not 1 <= field_count <= len(FIELD_NAMES):
+        raise ValueError("field_count must be between 1 and 50")
     relation_id = str(uuid5(BENCHMARK_NAMESPACE, "relation:events"))
     fields = []
-    for name in FIELD_NAMES:
+    for name in FIELD_NAMES[:field_count]:
         display_format = None
         if name == "occurred_at":
             display_format = "datetime_dd_mm_yyyy_hh_mm"
@@ -317,6 +319,7 @@ def _authenticated_client(args: argparse.Namespace) -> ApiClient:
 def setup_benchmark(args: argparse.Namespace) -> None:
     client = _authenticated_client(args)
     started = time.perf_counter()
+    dataset_name = f"{DATASET_NAME_PREFIX} {args.field_count}"
 
     connections = client.request("GET", "/connections?limit=100").payload["data"]
     connection = _find_named(connections, CONNECTION_NAME)
@@ -348,15 +351,15 @@ def setup_benchmark(args: argparse.Namespace) -> None:
         )
 
     datasets = client.request("GET", "/datasets?limit=100").payload["data"]
-    dataset = _find_named(datasets, DATASET_NAME)
+    dataset = _find_named(datasets, dataset_name)
     if dataset is None:
         created = client.request(
             "POST",
             "/datasets",
             payload={
-                "name": DATASET_NAME,
+                "name": dataset_name,
                 "connection_id": connection_id,
-                "definition": benchmark_definition(),
+                "definition": benchmark_definition(args.field_count),
             },
             headers=client.csrf_headers,
             expected=(201,),
@@ -434,7 +437,7 @@ def setup_benchmark(args: argparse.Namespace) -> None:
         },
         "dataset": {
             "id": dataset_id,
-            "name": DATASET_NAME,
+            "name": dataset_name,
             "field_count": len(exploration["columns"]),
             "snapshot_id": exploration["snapshot_id"],
             "snapshot_row_count": exploration["snapshot_row_count"],
@@ -462,13 +465,10 @@ def setup_benchmark(args: argparse.Namespace) -> None:
 
 def build_scenarios(exploration: dict[str, Any]) -> list[Scenario]:
     ids = {column["name"]: column["field_id"] for column in exploration["columns"]}
-    missing = sorted(set(FIELD_NAMES) - set(ids))
-    if missing:
-        raise BenchmarkError(
-            f"Published benchmark snapshot is missing fields: {', '.join(missing)}"
-        )
-    common_fields = [ids[name] for name in FIELD_NAMES[:12]]
-    return [
+    if "event_id" not in ids:
+        raise BenchmarkError("Published benchmark snapshot is missing event_id")
+    common_fields = [ids[name] for name in FIELD_NAMES[:12] if name in ids]
+    scenarios = [
         Scenario(
             "point_lookup",
             {
@@ -478,60 +478,78 @@ def build_scenarios(exploration: dict[str, Any]) -> list[Scenario]:
                 "page_size": 100,
             },
         ),
-        Scenario(
-            "categorical_filter",
-            {
-                "fields": common_fields,
-                "filters": [{"field_id": ids["category"], "operator": "eq", "value": "category-7"}],
-                "sorts": [{"field_id": ids["occurred_at"], "direction": "desc"}],
-                "page_size": 100,
-            },
-        ),
-        Scenario(
-            "date_and_amount_range",
-            {
-                "fields": common_fields,
-                "filters": [
-                    {
-                        "field_id": ids["event_date"],
-                        "operator": "between",
-                        "values": ["2025-01-01", "2025-03-31"],
-                    },
-                    {
-                        "field_id": ids["amount"],
-                        "operator": "gte",
-                        "value": "500.00",
-                    },
-                ],
-                "sorts": [{"field_id": ids["event_id"], "direction": "asc"}],
-                "page_size": 100,
-            },
-        ),
-        Scenario(
-            "text_scan",
-            {
-                "fields": common_fields[:8],
-                "filters": [
-                    {
-                        "field_id": ids["description"],
-                        "operator": "contains",
-                        "value": "class 42",
-                    }
-                ],
-                "sorts": [{"field_id": ids["event_id"], "direction": "asc"}],
-                "page_size": 100,
-            },
-        ),
+    ]
+    if {"category", "occurred_at"} <= ids.keys():
+        scenarios.append(
+            Scenario(
+                "categorical_filter",
+                {
+                    "fields": common_fields,
+                    "filters": [
+                        {
+                            "field_id": ids["category"],
+                            "operator": "eq",
+                            "value": "category-7",
+                        }
+                    ],
+                    "sorts": [{"field_id": ids["occurred_at"], "direction": "desc"}],
+                    "page_size": 100,
+                },
+            )
+        )
+    if {"event_date", "amount"} <= ids.keys():
+        scenarios.append(
+            Scenario(
+                "date_and_amount_range",
+                {
+                    "fields": common_fields,
+                    "filters": [
+                        {
+                            "field_id": ids["event_date"],
+                            "operator": "between",
+                            "values": ["2025-01-01", "2025-03-31"],
+                        },
+                        {
+                            "field_id": ids["amount"],
+                            "operator": "gte",
+                            "value": "500.00",
+                        },
+                    ],
+                    "sorts": [{"field_id": ids["event_id"], "direction": "asc"}],
+                    "page_size": 100,
+                },
+            )
+        )
+    if "description" in ids:
+        scenarios.append(
+            Scenario(
+                "text_scan",
+                {
+                    "fields": common_fields[:8],
+                    "filters": [
+                        {
+                            "field_id": ids["description"],
+                            "operator": "contains",
+                            "value": "class 42",
+                        }
+                    ],
+                    "sorts": [{"field_id": ids["event_id"], "direction": "asc"}],
+                    "page_size": 100,
+                },
+            )
+        )
+    scenarios.append(
         Scenario(
             "wide_page",
             {
-                "fields": [ids[name] for name in FIELD_NAMES],
+                "fields": [ids[name] for name in FIELD_NAMES if name in ids],
                 "filters": [],
                 "sorts": [{"field_id": ids["event_id"], "direction": "desc"}],
                 "page_size": 100,
             },
-        ),
-    ]
+        )
+    )
+    return scenarios
 
 
 def percentile(values: list[float], quantile: float) -> float | None:
@@ -733,6 +751,7 @@ def parser() -> argparse.ArgumentParser:
     setup.add_argument("--source-database", default="datepippet")
     setup.add_argument("--source-user", default="datepippet")
     setup.add_argument("--source-ssl-mode", choices=("disable", "require"), default="disable")
+    setup.add_argument("--field-count", type=int, choices=range(1, 51), default=50)
     setup.add_argument("--poll-interval", type=float, default=5.0)
     setup.add_argument("--refresh-timeout", type=float, default=3600.0)
     setup.add_argument("--output")

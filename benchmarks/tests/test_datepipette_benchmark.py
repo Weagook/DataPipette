@@ -25,6 +25,12 @@ class BenchmarkDefinitionTests(unittest.TestCase):
         self.assertEqual(len({field["id"] for field in definition["fields"]}), 50)
         self.assertEqual(definition["source"]["relations"][0]["name"], "events")
 
+    def test_fixture_can_isolate_width_scaling(self) -> None:
+        definition = benchmark_definition(20)
+
+        self.assertEqual(len(definition["fields"]), 20)
+        self.assertEqual(definition["fields"][-1]["name"], "latency_ms")
+
     def test_mixed_workload_uses_published_field_ids(self) -> None:
         exploration = {
             "columns": [
