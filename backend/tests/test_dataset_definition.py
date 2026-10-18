@@ -18,6 +18,9 @@ from datepipette.domain.datasets import (
     ValidatedDatasetField,
     ValidationFindingCode,
     ValidationSeverity,
+    VisualCanvasLayout,
+    VisualCanvasNode,
+    VisualCanvasViewport,
     VisualDatasetDefinition,
     VisualField,
     VisualJoin,
@@ -218,6 +221,61 @@ def test_joined_definition_round_trips_and_compiles_identifier_safe_sql() -> Non
     hostile_sql = compile_visual_select(hostile).as_string()
     assert '"id"" OR true --"' in hostile_sql
     assert 'ON "customers"."id" OR true' not in hostile_sql
+
+
+def test_canvas_metadata_round_trips_without_changing_compiled_sql() -> None:
+    definition = _joined_definition()
+    with_canvas = VisualDatasetDefinition(
+        schema_version=definition.schema_version,
+        relations=definition.relations,
+        fields=definition.fields,
+        joins=definition.joins,
+        canvas=VisualCanvasLayout(
+            nodes=(
+                VisualCanvasNode(
+                    id=f"relation:{definition.relations[0].id}",
+                    x=120.5,
+                    y=-42,
+                ),
+                VisualCanvasNode(id="output", x=980, y=120),
+            ),
+            viewport=VisualCanvasViewport(x=12, y=34, zoom=0.85),
+        ),
+    )
+
+    document = with_canvas.to_document()
+
+    assert document["canvas"] == {
+        "nodes": [
+            {
+                "id": f"relation:{definition.relations[0].id}",
+                "x": 120.5,
+                "y": -42,
+            },
+            {"id": "output", "x": 980, "y": 120},
+        ],
+        "viewport": {"x": 12, "y": 34, "zoom": 0.85},
+    }
+    assert VisualDatasetDefinition.from_document(document) == with_canvas
+    assert compile_visual_select(with_canvas) == compile_visual_select(definition)
+
+
+def test_canvas_metadata_is_bounded_and_requires_visual_schema_v2() -> None:
+    definition = _definition()
+    canvas = VisualCanvasLayout(nodes=(VisualCanvasNode("output", 0, 0),))
+
+    with pytest.raises(ValueError, match="does not support canvas"):
+        VisualDatasetDefinition(
+            relations=definition.relations,
+            fields=definition.fields,
+            canvas=canvas,
+        )
+    with pytest.raises(ValueError, match="zoom"):
+        VisualCanvasViewport(zoom=5)
+    with pytest.raises(ValueError, match="unique"):
+        VisualCanvasLayout(
+            nodes=(VisualCanvasNode("output", 0, 0), VisualCanvasNode("output", 1, 1))
+        )
 
 
 def test_recommendations_identify_visual_join_columns_without_generating_ddl() -> None:

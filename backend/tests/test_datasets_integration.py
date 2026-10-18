@@ -443,6 +443,44 @@ def test_dataset_draft_round_trip_revision_and_redacted_audit() -> None:
     assert "Registration date" not in repr(events)
 
 
+def test_canvas_metadata_round_trips_through_public_draft_api() -> None:
+    asyncio.run(_bootstrap())
+    definition = _joined_definition()
+    root_id = definition["source"]["relations"][0]["id"]
+    definition["canvas"] = {
+        "nodes": [
+            {"id": f"relation:{root_id}", "x": 80, "y": 140},
+            {"id": "select", "x": 720.5, "y": 140},
+            {"id": "output", "x": 1320, "y": 140},
+        ],
+        "viewport": {"x": -120, "y": 24, "zoom": 0.8},
+    }
+
+    with TestClient(create_app(settings=TEST_SETTINGS)) as client:
+        _login(client)
+        connection_id = _create_connection(client)
+        created, etag = _create_dataset(client, connection_id, definition=definition)
+        draft = client.get(f"/api/v1/datasets/{created['id']}/draft")
+
+        assert draft.status_code == 200
+        assert draft.json()["definition"]["canvas"] == definition["canvas"]
+
+        changed = deepcopy(definition)
+        changed["canvas"]["viewport"] = {"x": 10, "y": -20, "zoom": 1.25}
+        replaced = client.put(
+            f"/api/v1/datasets/{created['id']}/draft",
+            json={"definition": changed},
+            headers={**_csrf(client), "If-Match": etag},
+        )
+
+        assert replaced.status_code == 200, replaced.text
+        assert replaced.json()["definition"]["canvas"]["viewport"] == {
+            "x": 10,
+            "y": -20,
+            "zoom": 1.25,
+        }
+
+
 def test_dataset_collection_conflicts_validation_and_admin_boundary() -> None:
     asyncio.run(_bootstrap())
     with TestClient(create_app(settings=TEST_SETTINGS)) as client:

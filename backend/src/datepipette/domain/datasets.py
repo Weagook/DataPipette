@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from math import isfinite
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +17,7 @@ _OUTPUT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 MAX_DATASET_FIELDS = 500
 MAX_DATASET_RELATIONS = 10
 MAX_JOIN_CONDITIONS = 8
+MAX_CANVAS_NODES = 24
 MAX_SQL_STATEMENT_BYTES = 65_536
 
 
@@ -189,10 +191,53 @@ class VisualJoin:
 
 
 @dataclass(frozen=True, slots=True)
+class VisualCanvasNode:
+    id: str
+    x: float
+    y: float
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "id", _required_text(self.id, "Canvas node ID", 100))
+        if not isfinite(self.x) or not isfinite(self.y):
+            raise ValueError("Canvas node coordinates must be finite")
+        if abs(self.x) > 100_000 or abs(self.y) > 100_000:
+            raise ValueError("Canvas node coordinates are outside the supported range")
+
+
+@dataclass(frozen=True, slots=True)
+class VisualCanvasViewport:
+    x: float = 0
+    y: float = 0
+    zoom: float = 1
+
+    def __post_init__(self) -> None:
+        if not all(isfinite(value) for value in (self.x, self.y, self.zoom)):
+            raise ValueError("Canvas viewport values must be finite")
+        if abs(self.x) > 100_000 or abs(self.y) > 100_000:
+            raise ValueError("Canvas viewport is outside the supported range")
+        if not 0.1 <= self.zoom <= 4:
+            raise ValueError("Canvas zoom must be between 0.1 and 4")
+
+
+@dataclass(frozen=True, slots=True)
+class VisualCanvasLayout:
+    nodes: tuple[VisualCanvasNode, ...] = ()
+    viewport: VisualCanvasViewport = VisualCanvasViewport()
+
+    def __post_init__(self) -> None:
+        if len(self.nodes) > MAX_CANVAS_NODES:
+            raise ValueError(f"At most {MAX_CANVAS_NODES} canvas nodes are allowed")
+        node_ids = [node.id for node in self.nodes]
+        if len(node_ids) != len(set(node_ids)):
+            raise ValueError("Canvas node identifiers must be unique")
+
+
+@dataclass(frozen=True, slots=True)
 class VisualDatasetDefinition:
     relations: tuple[VisualRelation, ...]
     fields: tuple[VisualField, ...]
     joins: tuple[VisualJoin, ...] = ()
+    canvas: VisualCanvasLayout | None = None
     schema_version: int = 1
 
     def __post_init__(self) -> None:
@@ -204,6 +249,8 @@ class VisualDatasetDefinition:
             raise ValueError(f"At most {MAX_DATASET_RELATIONS} source relations are allowed")
         if self.schema_version == 1 and (len(self.relations) != 1 or self.joins):
             raise ValueError("Schema version 1 requires one relation and no joins")
+        if self.schema_version == 1 and self.canvas is not None:
+            raise ValueError("Schema version 1 does not support canvas metadata")
         if not self.fields:
             raise ValueError("At least one field is required")
         if len(self.fields) > MAX_DATASET_FIELDS:
@@ -249,7 +296,7 @@ class VisualDatasetDefinition:
         return self.relations[0]
 
     def to_document(self) -> dict[str, Any]:
-        return {
+        document: dict[str, Any] = {
             "kind": DatasetDefinitionKind.VISUAL.value,
             "schema_version": self.schema_version,
             "source": {
@@ -296,6 +343,16 @@ class VisualDatasetDefinition:
                 for join in self.joins
             ],
         }
+        if self.canvas is not None:
+            document["canvas"] = {
+                "nodes": [{"id": node.id, "x": node.x, "y": node.y} for node in self.canvas.nodes],
+                "viewport": {
+                    "x": self.canvas.viewport.x,
+                    "y": self.canvas.viewport.y,
+                    "zoom": self.canvas.viewport.zoom,
+                },
+            }
+        return document
 
     @classmethod
     def from_document(cls, document: dict[str, Any]) -> "VisualDatasetDefinition":
@@ -331,10 +388,31 @@ class VisualDatasetDefinition:
                 )
                 for value in document["fields"]
             )
+            canvas_value = document.get("canvas")
+            canvas = (
+                VisualCanvasLayout(
+                    nodes=tuple(
+                        VisualCanvasNode(
+                            id=value["id"],
+                            x=value["x"],
+                            y=value["y"],
+                        )
+                        for value in canvas_value["nodes"]
+                    ),
+                    viewport=VisualCanvasViewport(
+                        x=canvas_value["viewport"]["x"],
+                        y=canvas_value["viewport"]["y"],
+                        zoom=canvas_value["viewport"]["zoom"],
+                    ),
+                )
+                if canvas_value is not None
+                else None
+            )
             return cls(
                 schema_version=document["schema_version"],
                 relations=parsed_relations,
                 fields=fields,
+                canvas=canvas,
                 joins=tuple(
                     VisualJoin(
                         id=UUID(value["id"]),

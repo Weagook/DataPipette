@@ -5837,9 +5837,95 @@
         "title": "ValidationSeverity",
         "type": "string"
       },
+      "VisualCanvasLayoutPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/VisualCanvasNodePayload"
+            },
+            "maxItems": 24,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/VisualCanvasViewportPayload"
+          }
+        },
+        "title": "VisualCanvasLayoutPayload",
+        "type": "object"
+      },
+      "VisualCanvasNodePayload": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "x": {
+            "maximum": 100000.0,
+            "minimum": -100000.0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "maximum": 100000.0,
+            "minimum": -100000.0,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "x",
+          "y"
+        ],
+        "title": "VisualCanvasNodePayload",
+        "type": "object"
+      },
+      "VisualCanvasViewportPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": -100000.0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": -100000.0,
+            "title": "Y",
+            "type": "number"
+          },
+          "zoom": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 0.1,
+            "title": "Zoom",
+            "type": "number"
+          }
+        },
+        "title": "VisualCanvasViewportPayload",
+        "type": "object"
+      },
       "VisualDefinitionPayload": {
         "additionalProperties": false,
         "properties": {
+          "canvas": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualCanvasLayoutPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "fields": {
             "items": {
               "$ref": "#/components/schemas/VisualFieldPayload"
