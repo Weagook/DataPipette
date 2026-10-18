@@ -14,7 +14,13 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
-import { logout, type CurrentUser } from "../lib/api";
+import {
+  logout,
+  problemMessage,
+  updateCurrentUserLocale,
+  type CurrentUser,
+} from "../lib/api";
+import { useI18n, type InterfaceLocale } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 import { Brand } from "./Brand";
 
@@ -24,6 +30,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ user, children }: AppShellProps) {
+  const { locale, setLocale, t } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -38,9 +45,17 @@ export function AppShell({ user, children }: AppShellProps) {
       await navigate("/login", { replace: true });
     },
   });
+  const language = useMutation({
+    mutationFn: updateCurrentUserLocale,
+    onSuccess: (updatedUser) => {
+      queryClient.setQueryData(queryKeys.session, updatedUser);
+      setLocale(updatedUser.locale === "ru" ? "ru" : "en");
+    },
+    onError: () => setLocale(user.locale === "ru" ? "ru" : "en"),
+  });
   const canAuthor = user.role === "admin" || user.role === "analyst";
   const isAdmin = user.role === "admin";
-  const pageName = routeName(location.pathname);
+  const pageName = routeName(location.pathname, t);
 
   useEffect(() => {
     document.title = `${pageName} · DatePipette`;
@@ -65,13 +80,13 @@ export function AppShell({ user, children }: AppShellProps) {
 
   return (
     <div className="app-frame">
-      <a className="skip-link" href="#main-content">Skip to content</a>
-      <span className="sr-only" aria-live="polite">{pageName} page</span>
+      <a className="skip-link" href="#main-content">{t("Skip to content")}</a>
+      <span className="sr-only" aria-live="polite">{t("{page} page", { page: pageName })}</span>
       <button
         className="mobile-menu-button"
         onClick={() => setMobileOpen(true)}
         type="button"
-        aria-label="Open navigation"
+        aria-label={t("Open navigation")}
         aria-controls="primary-sidebar"
         aria-expanded={mobileOpen}
         ref={menuButton}
@@ -91,49 +106,49 @@ export function AppShell({ user, children }: AppShellProps) {
           <button
             className="mobile-close"
             onClick={() => setMobileOpen(false)}
-            aria-label="Close navigation"
+            aria-label={t("Close navigation")}
             type="button"
             ref={closeButton}
           >
             <X size={18} />
           </button>
         </div>
-        <nav className="primary-nav" aria-label="Primary navigation">
+        <nav className="primary-nav" aria-label={t("Primary navigation")}>
           <NavLink to="/overview" onClick={() => setMobileOpen(false)}>
             <Gauge size={18} />
-            Overview
+            {t("Overview")}
           </NavLink>
           <NavLink to="/dashboards" onClick={() => setMobileOpen(false)}>
             <LayoutDashboard size={18} />
-            Dashboards
+            {t("Dashboards")}
           </NavLink>
           {canAuthor && (
-            <div className="nav-group" aria-label="Authoring">
-              <span className="nav-group-label">Authoring</span>
+            <div className="nav-group" aria-label={t("Authoring")}>
+              <span className="nav-group-label">{t("Authoring")}</span>
               <NavLink to="/datasets" onClick={() => setMobileOpen(false)}>
                 <Database size={18} />
-                Datasets
+                {t("Datasets")}
               </NavLink>
               <NavLink to="/charts" onClick={() => setMobileOpen(false)}>
                 <BarChart3 size={18} />
-                Charts
+                {t("Charts")}
               </NavLink>
             </div>
           )}
           {isAdmin && (
-            <div className="nav-group" aria-label="Administration">
-              <span className="nav-group-label">Administration</span>
+            <div className="nav-group" aria-label={t("Administration")}>
+              <span className="nav-group-label">{t("Administration")}</span>
               <NavLink to="/connections" onClick={() => setMobileOpen(false)}>
                 <Gauge size={18} />
-                Connections
+                {t("Connections")}
               </NavLink>
               <NavLink to="/access" onClick={() => setMobileOpen(false)}>
                 <Users size={18} />
-                Access
+                {t("Access")}
               </NavLink>
               <NavLink to="/governance" onClick={() => setMobileOpen(false)}>
                 <ShieldCheck size={18} />
-                Governance
+                {t("Governance")}
               </NavLink>
             </div>
           )}
@@ -141,16 +156,16 @@ export function AppShell({ user, children }: AppShellProps) {
         <div className="sidebar-foot">
           <span className="environment-dot" />
           <div>
-            <strong>Snapshot analytics</strong>
-            <span>Source-safe by design</span>
+            <strong>{t("Snapshot analytics")}</strong>
+            <span>{t("Source-safe by design")}</span>
           </div>
         </div>
       </aside>
       <div className="workspace">
         <header className="topbar">
           <div className="topbar-context">
-            <span>Workspace</span>
-            <strong>Analytics</strong>
+            <span>{t("Workspace")}</span>
+            <strong>{t("Analytics")}</strong>
           </div>
           <div className="profile-wrap">
             <button
@@ -159,25 +174,46 @@ export function AppShell({ user, children }: AppShellProps) {
               type="button"
               aria-expanded={profileOpen}
               aria-controls="profile-menu"
-              aria-label={`Open profile menu for ${user.display_name}`}
+              aria-label={t("Open profile menu for {name}", { name: user.display_name })}
             >
               <span className="avatar">{initials(user.display_name)}</span>
               <span className="profile-copy">
                 <strong>{user.display_name}</strong>
-                <small>{humanRole(user.role)}</small>
+                <small>{humanRole(user.role, t)}</small>
               </span>
               <ChevronDown size={16} />
             </button>
             {profileOpen && (
               <div className="profile-menu" id="profile-menu">
                 <p>{user.email}</p>
+                <label className="profile-language">
+                  <span>{t("Interface language")}</span>
+                  <select
+                    value={locale}
+                    disabled={language.isPending}
+                    onChange={(event) => {
+                      const nextLocale = event.target.value as InterfaceLocale;
+                      setLocale(nextLocale);
+                      language.mutate(nextLocale);
+                    }}
+                  >
+                    <option value="en">{t("English")}</option>
+                    <option value="ru">{t("Russian")}</option>
+                  </select>
+                  {language.isPending && <small>{t("Saving language…")}</small>}
+                  {language.isError && (
+                    <small className="profile-error" role="alert">
+                      {problemMessage(language.error)}
+                    </small>
+                  )}
+                </label>
                 <button
                   type="button"
                   onClick={() => signOut.mutate()}
                   disabled={signOut.isPending}
                 >
                   <LogOut size={16} />
-                  {signOut.isPending ? "Signing out…" : "Sign out"}
+                  {signOut.isPending ? t("Signing out…") : t("Sign out")}
                 </button>
               </div>
             )}
@@ -189,14 +225,14 @@ export function AppShell({ user, children }: AppShellProps) {
   );
 }
 
-function routeName(pathname: string): string {
-  if (pathname.startsWith("/dashboards")) return "Dashboards";
-  if (pathname.startsWith("/datasets")) return "Datasets";
-  if (pathname.startsWith("/charts")) return "Charts";
-  if (pathname.startsWith("/connections")) return "Connections";
-  if (pathname.startsWith("/access")) return "Access";
-  if (pathname.startsWith("/governance")) return "Governance";
-  return "Overview";
+function routeName(pathname: string, t: (message: string) => string): string {
+  if (pathname.startsWith("/dashboards")) return t("Dashboards");
+  if (pathname.startsWith("/datasets")) return t("Datasets");
+  if (pathname.startsWith("/charts")) return t("Charts");
+  if (pathname.startsWith("/connections")) return t("Connections");
+  if (pathname.startsWith("/access")) return t("Access");
+  if (pathname.startsWith("/governance")) return t("Governance");
+  return t("Overview");
 }
 
 function initials(name: string): string {
@@ -207,6 +243,9 @@ function initials(name: string): string {
     .join("");
 }
 
-function humanRole(role: string): string {
-  return role.charAt(0).toUpperCase() + role.slice(1);
+function humanRole(role: string, t: (message: string) => string): string {
+  if (role === "admin") return t("Administrator");
+  if (role === "analyst") return t("Analyst");
+  if (role === "viewer") return t("Viewer");
+  return role;
 }

@@ -9,6 +9,7 @@ import {
   type FilterDraft,
   type FilterOperator,
 } from "../lib/datasetQuery";
+import { useI18n } from "../lib/i18n";
 
 interface DatasetFilterBarProps {
   columns: DatasetColumn[];
@@ -27,6 +28,7 @@ export function DatasetFilterBar({
   onApply,
   onClear,
 }: DatasetFilterBarProps) {
+  const { t } = useI18n();
   const filterable = columns.filter((column) => column.filter_operators.length > 0);
 
   function updateDraft(id: string, change: Partial<FilterDraft>) {
@@ -34,11 +36,11 @@ export function DatasetFilterBar({
   }
 
   return (
-    <section className="filter-panel" aria-label="Dataset filters">
+    <section className="filter-panel" aria-label={t("Dataset filters")}>
       <header>
         <div>
           <span className="panel-icon"><Filter size={16} /></span>
-          <div><strong>Filters</strong><small>Draft changes apply only when you confirm them.</small></div>
+          <div><strong>{t("Filters")}</strong><small>{t("Draft changes apply only when you confirm them.")}</small></div>
         </div>
         <button
           className="button secondary small"
@@ -46,11 +48,11 @@ export function DatasetFilterBar({
           disabled={filterable.length === 0}
           onClick={() => onChange([...drafts, newFilterDraft(filterable[0])])}
         >
-          <Plus size={15} /> Add filter
+          <Plus size={15} /> {t("Add filter")}
         </button>
       </header>
       {drafts.length === 0 ? (
-        <p className="filter-hint">No filters applied. Add one to narrow the current snapshot.</p>
+        <p className="filter-hint">{t("No filters applied. Add one to narrow the current snapshot.")}</p>
       ) : (
         <div className="filter-rows">
           {drafts.map((draft) => {
@@ -59,9 +61,9 @@ export function DatasetFilterBar({
             return (
               <div className="filter-row" key={draft.id}>
                 <label>
-                  <span>Column</span>
+                  <span>{t("Column")}</span>
                   <select
-                    aria-label="Filter column"
+                    aria-label={t("Filter column")}
                     value={draft.fieldId}
                     onChange={(event) => {
                       const nextColumn = columns.find((candidate) => candidate.field_id === event.target.value);
@@ -79,37 +81,37 @@ export function DatasetFilterBar({
                   </select>
                 </label>
                 <label>
-                  <span>Condition</span>
+                  <span>{t("Condition")}</span>
                   <select
-                    aria-label="Filter condition"
+                    aria-label={t("Filter condition")}
                     value={draft.operator}
                     onChange={(event) => updateDraft(draft.id, { operator: event.target.value as FilterOperator })}
                   >
-                    {column.filter_operators.map((operator) => <option key={operator} value={operator}>{operatorLabels[operator]}</option>)}
+                    {column.filter_operators.map((operator) => <option key={operator} value={operator}>{t(operatorLabels[operator])}</option>)}
                   </select>
                 </label>
                 {!noValue && (
                   <label className="filter-value">
-                    <span>{draft.operator === "in" ? "Values separated by ;" : "Value"}</span>
+                    <span>{t(draft.operator === "in" ? "Values separated by ;" : "Value")}</span>
                     <input
-                      aria-label="Filter value"
+                      aria-label={t("Filter value")}
                       type={draft.operator === "in" ? "text" : inputType(column)}
                       value={draft.value}
                       step="any"
-                      placeholder={valuePlaceholder(column, draft.operator)}
+                      placeholder={t(valuePlaceholder(column, draft.operator))}
                       onChange={(event) => updateDraft(draft.id, { value: event.target.value })}
                     />
                   </label>
                 )}
                 {draft.operator === "between" && (
                   <label className="filter-value">
-                    <span>And</span>
+                    <span>{t("And")}</span>
                     <input
-                      aria-label="Second filter value"
+                      aria-label={t("Second filter value")}
                       type={inputType(column)}
                       value={draft.secondValue}
                       step="any"
-                      placeholder="End of range"
+                      placeholder={t("End of range")}
                       onChange={(event) => updateDraft(draft.id, { secondValue: event.target.value })}
                     />
                   </label>
@@ -117,7 +119,7 @@ export function DatasetFilterBar({
                 <button
                   className="icon-button bordered filter-remove"
                   type="button"
-                  aria-label={`Remove ${column.label} filter`}
+                  aria-label={t("Remove {column} filter", { column: column.label })}
                   onClick={() => onChange(drafts.filter((candidate) => candidate.id !== draft.id))}
                 >
                   <Trash2 size={16} />
@@ -129,8 +131,8 @@ export function DatasetFilterBar({
       )}
       {error && <p className="filter-error" role="alert">{error}</p>}
       <footer>
-        <button className="button secondary small" type="button" onClick={onClear} disabled={drafts.length === 0}>Clear all</button>
-        <button className="button primary small" type="button" onClick={onApply}>Apply filters</button>
+        <button className="button secondary small" type="button" onClick={onClear} disabled={drafts.length === 0}>{t("Clear all")}</button>
+        <button className="button primary small" type="button" onClick={onApply}>{t("Apply filters")}</button>
       </footer>
     </section>
   );

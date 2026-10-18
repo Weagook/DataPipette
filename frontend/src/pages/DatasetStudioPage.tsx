@@ -61,6 +61,7 @@ import {
   type RefreshScheduleInput,
 } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { useI18n } from "../lib/i18n";
 import { randomUuid } from "../lib/id";
 import { queryKeys } from "../lib/query";
 import {
@@ -99,6 +100,7 @@ export function DatasetStudioPage() {
 }
 
 function NewStudio() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -128,7 +130,7 @@ function NewStudio() {
   }
 
   const ready = definitionIsReady(definition);
-  const guidance = !name.trim()
+  const guidance = t(!name.trim()
     ? "Give the dataset a clear name"
     : !connectionId
       ? "Choose a PostgreSQL connection"
@@ -142,13 +144,13 @@ function NewStudio() {
               ? "Declare at least one SQL result field"
               : !ready
                 ? "Use unique non-empty relation aliases and output names"
-                : "Ready to create a private editable draft";
+                : "Ready to create a private editable draft");
 
   return (
     <div className="page-stack studio-page">
       <StudioHeading
-        title="New dataset"
-        subtitle="Private by default · visible only to you and administrators"
+        title={t("New dataset")}
+        subtitle={t("Private by default · visible only to you and administrators")}
       />
       {connections.isError && (
         <InlineError
@@ -156,15 +158,15 @@ function NewStudio() {
           onRetry={() => void connections.refetch()}
         />
       )}
-      <ol className="dataset-create-steps" aria-label="Dataset creation steps">
+      <ol className="dataset-create-steps" aria-label={t("Dataset creation steps")}>
         <li className={name.trim() && connectionId ? "complete" : "active"}>
-          <span>1</span><div><strong>Setup</strong><small>Name and connection</small></div>
+          <span>1</span><div><strong>{t("Setup")}</strong><small>{t("Name and connection")}</small></div>
         </li>
         <li className={definition ? "complete" : name.trim() && connectionId ? "active" : ""}>
-          <span>2</span><div><strong>Build</strong><small>Tables or SQL</small></div>
+          <span>2</span><div><strong>{t("Build")}</strong><small>{t("Tables or SQL")}</small></div>
         </li>
         <li className={ready && name.trim() ? "active" : ""}>
-          <span>3</span><div><strong>Create draft</strong><small>Then validate and preview</small></div>
+          <span>3</span><div><strong>{t("Create draft")}</strong><small>{t("Then validate and preview")}</small></div>
         </li>
       </ol>
       <section className="studio-create-card dataset-setup-card">
@@ -173,24 +175,24 @@ function NewStudio() {
             <Database size={20} />
           </span>
           <div>
-            <strong>1. Set up the dataset</strong>
+            <strong>{t("1. Set up the dataset")}</strong>
             <p>
-              Choose where the data comes from. Nothing reads business rows yet.
+              {t("Choose where the data comes from. Nothing reads business rows yet.")}
             </p>
           </div>
         </div>
         <div className="studio-form-grid">
           <label>
-            <span>Dataset name</span>
+            <span>{t("Dataset name")}</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Revenue by customer"
+              placeholder={t("Revenue by customer")}
               autoFocus
             />
           </label>
           <label>
-            <span>PostgreSQL connection</span>
+            <span>{t("PostgreSQL connection")}</span>
             <select
               value={connectionId}
               onChange={(event) => {
@@ -199,7 +201,7 @@ function NewStudio() {
               }}
               disabled={connections.isPending}
             >
-              <option value="">Select a connection</option>
+              <option value="">{t("Select a connection")}</option>
               {connections.data?.data.map((connection) => (
                 <option key={connection.id} value={connection.id}>
                   {connection.name} · {connection.database_name}
@@ -208,7 +210,7 @@ function NewStudio() {
             </select>
           </label>
         </div>
-        <div className="mode-cards" role="radiogroup" aria-label="Dataset mode">
+        <div className="mode-cards" role="radiogroup" aria-label={t("Dataset mode")}>
           <button
             className={mode === "visual" ? "selected" : ""}
             onClick={() => changeMode("visual")}
@@ -218,8 +220,8 @@ function NewStudio() {
           >
             <Table2 />
             <span>
-              <strong>Visual builder</strong>
-              <small>Choose tables and follow safe foreign-key joins.</small>
+              <strong>{t("Visual builder")}</strong>
+              <small>{t("Choose tables and follow safe foreign-key joins.")}</small>
             </span>
             <Check />
           </button>
@@ -232,9 +234,9 @@ function NewStudio() {
           >
             <Code2 />
             <span>
-              <strong>Advanced SQL</strong>
+              <strong>{t("Advanced SQL")}</strong>
               <small>
-                Write one read-only PostgreSQL SELECT or WITH query.
+                {t("Write one read-only PostgreSQL SELECT or WITH query.")}
               </small>
             </span>
             <Check />
@@ -246,8 +248,8 @@ function NewStudio() {
           {!connectionId && (
             <section className="studio-panel builder-empty-state">
               <Database />
-              <strong>Choose a connection to start building</strong>
-              <p>The source catalog and SQL editor stay scoped to that PostgreSQL connection.</p>
+              <strong>{t("Choose a connection to start building")}</strong>
+              <p>{t("The source catalog and SQL editor stay scoped to that PostgreSQL connection.")}</p>
             </section>
           )}
           {connectionId && mode === "visual" && !definition && (
@@ -264,12 +266,12 @@ function NewStudio() {
                 <div>
                   <span className="panel-icon"><Table2 /></span>
                   <span>
-                    <strong>2. Build the visual model</strong>
-                    <small>Select output columns, labels, formats, and related tables.</small>
+                    <strong>{t("2. Build the visual model")}</strong>
+                    <small>{t("Select output columns, labels, formats, and related tables.")}</small>
                   </span>
                 </div>
                 <button className="button secondary small" onClick={() => setDefinition(null)} type="button">
-                  Change first table
+                  {t("Change first table")}
                 </button>
               </header>
               <VisualEditor
@@ -285,8 +287,8 @@ function NewStudio() {
                 <div>
                   <span className="panel-icon"><Code2 /></span>
                   <span>
-                    <strong>2. Write the SQL definition</strong>
-                    <small>The original query stays editable in the saved draft.</small>
+                    <strong>{t("2. Write the SQL definition")}</strong>
+                    <small>{t("The original query stays editable in the saved draft.")}</small>
                   </span>
                 </div>
               </header>
@@ -319,7 +321,7 @@ function NewStudio() {
           type="button"
         >
           {create.isPending ? <LoaderCircle className="spin" /> : <Plus />}{" "}
-          Create dataset
+          {t("Create dataset")}
         </button>
       </div>
     </div>
@@ -333,6 +335,7 @@ function ExistingStudio({
   datasetId: string;
   user: CurrentUser;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<StudioTab>("build");
   const [name, setName] = useState("");
@@ -373,7 +376,7 @@ function ExistingStudio({
   const save = useMutation({
     mutationFn: async () => {
       if (!definition || !dataset.data)
-        throw new Error("The draft is not ready.");
+        throw new Error(t("The draft is not ready."));
       if (name.trim() !== dataset.data.name)
         await renameDataset(datasetId, name.trim());
       if (JSON.stringify(definition) !== JSON.stringify(savedDefinition))
@@ -506,10 +509,13 @@ function ExistingStudio({
     <div className="page-stack studio-page">
       <StudioHeading
         title={name || dataset.data.name}
-        subtitle={`Draft revision ${draft.data.draft.revision} · ${definition.kind === "visual" ? "Visual model" : "Advanced SQL"}`}
+        subtitle={t("Draft revision {revision} · {mode}", {
+          revision: draft.data.draft.revision,
+          mode: t(definition.kind === "visual" ? "Visual model" : "Advanced SQL"),
+        })}
       />
       <div className="studio-commandbar">
-        <nav aria-label="Dataset workflow">
+        <nav aria-label={t("Dataset workflow")}>
           {(["build", "check", "preview", "publish"] as StudioTab[]).map(
             (item, index) => (
               <button
@@ -519,21 +525,21 @@ function ExistingStudio({
                 type="button"
               >
                 <span>{index + 1}</span>
-                {
+                {t(
                   {
                     build: "Build",
                     check: "Validate",
                     preview: "Preview",
                     publish: "Publish",
-                  }[item]
-                }
+                  }[item],
+                )}
               </button>
             ),
           )}
         </nav>
         <div>
           <span className={dirty ? "unsaved" : "saved"}>
-            {dirty ? "Unsaved changes" : "Saved"}
+            {t(dirty ? "Unsaved changes" : "Saved")}
           </span>
           <button
             className="button primary small"
@@ -546,8 +552,7 @@ function ExistingStudio({
             onClick={() => save.mutate()}
             type="button"
           >
-            {save.isPending ? <LoaderCircle className="spin" /> : <Save />} Save
-            draft
+            {save.isPending ? <LoaderCircle className="spin" /> : <Save />} {t("Save draft")}
           </button>
         </div>
       </div>
@@ -609,18 +614,19 @@ function StudioHeading({
   title: string;
   subtitle: string;
 }) {
+  const { t } = useI18n();
   return (
     <header className="page-heading dataset-titlebar">
       <div>
         <Link className="back-link" to="/datasets">
-          <ArrowLeft size={15} /> Datasets
+          <ArrowLeft size={15} /> {t("Datasets")}
         </Link>
-        <span className="eyebrow">Dataset Studio</span>
+        <span className="eyebrow">{t("Dataset Studio")}</span>
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
       <span className="trust-pill">
-        <ShieldCheck size={16} /> Governed workflow
+        <ShieldCheck size={16} /> {t("Governed workflow")}
       </span>
     </header>
   );
@@ -637,6 +643,7 @@ function CreationReadiness({
   mode: "visual" | "sql";
   definition: DatasetDefinition | null;
 }) {
+  const { t } = useI18n();
   const aliases =
     definition?.kind === "visual"
       ? definition.source.relations.map((relation) => relation.alias.trim())
@@ -654,24 +661,24 @@ function CreationReadiness({
     fieldNames.every(Boolean) &&
     new Set(fieldNames).size === fieldNames.length;
   return (
-    <section className="creation-readiness" aria-label="Creation readiness">
+    <section className="creation-readiness" aria-label={t("Creation readiness")}>
       <header>
         <FileCheck2 />
         <div>
-          <strong>Draft readiness</strong>
-          <small>Complete these before creating the dataset.</small>
+          <strong>{t("Draft readiness")}</strong>
+          <small>{t("Complete these before creating the dataset.")}</small>
         </div>
       </header>
       <ul>
-        <ReadinessItem ready={Boolean(name.trim())} label="Dataset named" />
-        <ReadinessItem ready={Boolean(connectionId)} label="Connection selected" />
+        <ReadinessItem ready={Boolean(name.trim())} label={t("Dataset named")} />
+        <ReadinessItem ready={Boolean(connectionId)} label={t("Connection selected")} />
         <ReadinessItem
           ready={Boolean(sourceReady)}
-          label={mode === "visual" ? "First table selected" : "SQL query written"}
+          label={t(mode === "visual" ? "First table selected" : "SQL query written")}
         />
-        <ReadinessItem ready={fieldsReady} label="Output fields valid" />
+        <ReadinessItem ready={fieldsReady} label={t("Output fields valid")} />
       </ul>
-      <p>Creation saves a private JSON draft. It does not query or publish source rows.</p>
+      <p>{t("Creation saves a private JSON draft. It does not query or publish source rows.")}</p>
     </section>
   );
 }
@@ -700,6 +707,7 @@ function BuildWorkspace({
   definition: DatasetDefinition;
   onDefinitionChange: (value: DatasetDefinition) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="studio-layout">
       <main className="studio-main">
@@ -712,15 +720,15 @@ function BuildWorkspace({
               <span>
                 <strong>
                   {definition.kind === "visual"
-                    ? "Visual model"
-                    : "Advanced SQL"}
+                    ? t("Visual model")
+                    : t("Advanced SQL")}
                 </strong>
-                <small>Saved as a versioned, editable definition</small>
+                <small>{t("Saved as a versioned, editable definition")}</small>
               </span>
             </div>
           </header>
           <label className="studio-name">
-            <span>Dataset name</span>
+            <span>{t("Dataset name")}</span>
             <input
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
@@ -742,10 +750,9 @@ function BuildWorkspace({
         <div className="studio-note">
           <Braces />
           <div>
-            <strong>Stable draft contract</strong>
+            <strong>{t("Stable draft contract")}</strong>
             <p>
-              Relation, field, and join IDs stay stable while you edit. This is
-              the JSON the API stores and reopens.
+              {t("Relation, field, and join IDs stay stable while you edit. This is the JSON the API stores and reopens.")}
             </p>
           </div>
         </div>
@@ -753,7 +760,7 @@ function BuildWorkspace({
           className="button secondary wide"
           to={`/datasets/${datasetId}/table`}
         >
-          <Eye size={16} /> Open published table
+          <Eye size={16} /> {t("Open published table")}
         </Link>
       </aside>
     </div>
@@ -769,6 +776,7 @@ function CatalogStarter({
   onChoose: (detail: CatalogRelation) => void;
   chosen?: { schema: string; name: string };
 }) {
+  const { t } = useI18n();
   return (
     <section className="studio-panel catalog-starter">
       <header>
@@ -777,19 +785,19 @@ function CatalogStarter({
             <Database />
           </span>
           <span>
-            <strong>Choose the first table</strong>
-            <small>Live catalog metadata; no business rows are read.</small>
+            <strong>{t("Choose the first table")}</strong>
+            <small>{t("Live catalog metadata; no business rows are read.")}</small>
           </span>
         </div>
       </header>
       <CatalogPicker
         connectionId={connectionId}
         onChoose={onChoose}
-        buttonLabel="Use table"
+        buttonLabel={t("Use table")}
       />
       {chosen && (
         <p className="selection-confirm">
-          <Check /> Selected {chosen.schema}.{chosen.name}
+          <Check /> {t("Selected")} {chosen.schema}.{chosen.name}
         </p>
       )}
     </section>
@@ -805,6 +813,7 @@ function CatalogPicker({
   onChoose: (detail: CatalogRelation) => void;
   buttonLabel: string;
 }) {
+  const { t } = useI18n();
   const [schema, setSchema] = useState("");
   const [relation, setRelation] = useState("");
   const schemas = useQuery({
@@ -832,12 +841,12 @@ function CatalogPicker({
     <div className="catalog-picker">
       <div className="catalog-selects">
         <label>
-          <span>Schema</span>
+          <span>{t("Schema")}</span>
           <select
             value={schema}
             onChange={(event) => setSchema(event.target.value)}
           >
-            <option value="">Select schema</option>
+            <option value="">{t("Select schema")}</option>
             {schemas.data?.data.map((item) => (
               <option value={item.name} key={item.name}>
                 {item.name}
@@ -847,13 +856,13 @@ function CatalogPicker({
         </label>
         <ChevronRight />
         <label>
-          <span>Table or view</span>
+          <span>{t("Table or view")}</span>
           <select
             value={relation}
             onChange={(event) => setRelation(event.target.value)}
             disabled={!schema}
           >
-            <option value="">Select relation</option>
+            <option value="">{t("Select relation")}</option>
             {relations.data?.data.map((item) => (
               <option
                 value={item.name}
@@ -872,8 +881,10 @@ function CatalogPicker({
               {detail.data.schema_name}.{detail.data.name}
             </strong>
             <small>
-              {detail.data.columns.length} columns · primary key{" "}
-              {detail.data.primary_key.join(", ") || "not declared"}
+              {t("{count} columns · primary key {key}", {
+                count: detail.data.columns.length,
+                key: detail.data.primary_key.join(", ") || t("not declared"),
+              })}
             </small>
           </div>
           <div className="catalog-columns">
@@ -884,7 +895,7 @@ function CatalogPicker({
               </span>
             ))}
             {detail.data.columns.length > 8 && (
-              <span>+{detail.data.columns.length - 8} more</span>
+              <span>{t("+{count} more", { count: detail.data.columns.length - 8 })}</span>
             )}
           </div>
           <button
@@ -904,8 +915,7 @@ function CatalogPicker({
             )}
           />
           <p>
-            Ask an administrator to retest this connection and confirm that
-            PostgreSQL accepts traffic from the DatePipette server.
+            {t("Ask an administrator to retest this connection and confirm that PostgreSQL accepts traffic from the DatePipette server.")}
           </p>
         </div>
       )}
@@ -922,6 +932,7 @@ function VisualEditor({
   definition: VisualDefinition;
   onChange: (value: DatasetDefinition) => void;
 }) {
+  const { t } = useI18n();
   const [adding, setAdding] = useState(false);
   const [joinError, setJoinError] = useState("");
   async function addJoined(detail: CatalogRelation) {
@@ -943,7 +954,7 @@ function VisualEditor({
       );
       if (!suggestion) {
         setJoinError(
-          "No visible foreign-key relationship connects this table to the current model.",
+          t("No visible foreign-key relationship connects this table to the current model."),
         );
         return;
       }
@@ -963,7 +974,7 @@ function VisualEditor({
             <span>{index === 0 ? <Database /> : <Link2 />}</span>
             <div>
               <input
-                aria-label={`Alias for ${relation.schema}.${relation.name}`}
+                aria-label={t("Alias for {relation}", { relation: `${relation.schema}.${relation.name}` })}
                 value={relation.alias}
                 onChange={(event) =>
                   onChange({
@@ -988,7 +999,7 @@ function VisualEditor({
               ) && (
                 <button
                   className="icon-button"
-                  aria-label={`Remove table ${relation.schema}.${relation.name}`}
+                  aria-label={t("Remove table {relation}", { relation: `${relation.schema}.${relation.name}` })}
                   onClick={() =>
                     onChange({
                       ...definition,
@@ -1019,19 +1030,18 @@ function VisualEditor({
           onClick={() => setAdding((value) => !value)}
           type="button"
         >
-          <Plus /> Add joined table
+          <Plus /> {t("Add joined table")}
         </button>
       </div>
       {adding && (
         <div className="join-picker">
           <p>
-            <Link2 /> Only tables connected by a visible foreign key can be
-            added.
+            <Link2 /> {t("Only tables connected by a visible foreign key can be added.")}
           </p>
           <CatalogPicker
             connectionId={connectionId}
             onChoose={(detail) => void addJoined(detail)}
-            buttonLabel="Find relationship"
+            buttonLabel={t("Find relationship")}
           />
           {joinError && <InlineError message={joinError} />}
         </div>
@@ -1041,8 +1051,8 @@ function VisualEditor({
       )}
       <section className="source-columns-section">
         <div className="field-header">
-          <span>Source columns</span>
-          <small>Choose which columns become dataset output fields</small>
+          <span>{t("Source columns")}</span>
+          <small>{t("Choose which columns become dataset output fields")}</small>
         </div>
         <div className="source-column-groups">
           {definition.source.relations.map((relation) => (
@@ -1068,27 +1078,28 @@ function JoinEditor({
   definition: VisualDefinition;
   onChange: (value: DatasetDefinition) => void;
 }) {
+  const { t } = useI18n();
   const relationNames = new Map(
     definition.source.relations.map((relation) => [relation.id, relation.alias]),
   );
   return (
     <section className="join-editor">
       <div className="field-header">
-        <span>Relationships</span>
-        <small>Foreign-key suggestions become explicit editable joins</small>
+        <span>{t("Relationships")}</span>
+        <small>{t("Foreign-key suggestions become explicit editable joins")}</small>
       </div>
       {definition.joins?.map((join) => (
         <article key={join.id}>
           <div className="join-path">
             <Link2 />
             <strong>{relationNames.get(join.left_relation_id)}</strong>
-            <span>to</span>
+            <span>{t("to")}</span>
             <strong>{relationNames.get(join.right_relation_id)}</strong>
           </div>
           <label>
-            <span>Join type</span>
+            <span>{t("Join type")}</span>
             <select
-              aria-label={`Join type for ${relationNames.get(join.right_relation_id)}`}
+              aria-label={t("Join type for {relation}", { relation: relationNames.get(join.right_relation_id) ?? "" })}
               value={join.type}
               onChange={(event) =>
                 onChange({
@@ -1131,6 +1142,7 @@ function SourceColumnSelector({
   definition: VisualDefinition;
   onChange: (value: DatasetDefinition) => void;
 }) {
+  const { t } = useI18n();
   const detail = useQuery({
     queryKey: queryKeys.catalogRelation(
       connectionId,
@@ -1152,7 +1164,7 @@ function SourceColumnSelector({
           <strong>{relation.alias}</strong>
           <small>{relation.schema}.{relation.name}</small>
         </div>
-        <span>{selected.size} selected</span>
+        <span>{t("{count} selected", { count: selected.size })}</span>
       </header>
       {detail.isPending && <div className="column-picker-skeleton skeleton" />}
       {detail.isError && <InlineError message={problemMessage(detail.error)} />}
@@ -1183,7 +1195,7 @@ function SourceColumnSelector({
               />
               <span>
                 <strong>{column.name}</strong>
-                <small>{column.data_type}{column.nullable ? " · nullable" : ""}</small>
+                <small>{column.data_type}{column.nullable ? ` · ${t("nullable")}` : ""}</small>
               </span>
             </label>
           );
@@ -1200,6 +1212,7 @@ function FieldEditor({
   definition: VisualDefinition;
   onChange: (value: DatasetDefinition) => void;
 }) {
+  const { t } = useI18n();
   const relations = new Map(
     definition.source.relations.map((relation) => [
       relation.id,
@@ -1209,8 +1222,8 @@ function FieldEditor({
   return (
     <div className="field-editor">
       <div className="field-header">
-        <span>Output fields</span>
-        <small>{definition.fields.length} selected</small>
+        <span>{t("Output fields")}</span>
+        <small>{t("{count} selected", { count: definition.fields.length })}</small>
       </div>
       {definition.fields.map((field) => (
         <div className="field-row" key={field.id}>
@@ -1221,7 +1234,7 @@ function FieldEditor({
             </small>
           </div>
           <label>
-            <span>Output name</span>
+            <span>{t("Output name")}</span>
             <input
               value={field.name}
               onChange={(event) =>
@@ -1237,7 +1250,7 @@ function FieldEditor({
             />
           </label>
           <label>
-            <span>Label</span>
+            <span>{t("Label")}</span>
             <input
               value={field.display.label}
               onChange={(event) =>
@@ -1259,7 +1272,7 @@ function FieldEditor({
             />
           </label>
           <label>
-            <span>Format</span>
+            <span>{t("Format")}</span>
             <select
               value={field.display.format ?? ""}
               onChange={(event) =>
@@ -1282,7 +1295,7 @@ function FieldEditor({
             >
               {FORMATS.map((format) => (
                 <option key={format.value} value={format.value}>
-                  {format.label}
+                  {t(format.label)}
                 </option>
               ))}
             </select>
@@ -1308,11 +1321,11 @@ function FieldEditor({
                 })
               }
             />
-            <span>Visible</span>
+            <span>{t("Visible")}</span>
           </label>
           <button
             className="icon-button"
-            aria-label={`Remove ${field.name}`}
+            aria-label={t("Remove {name}", { name: field.name })}
             onClick={() =>
               onChange({
                 ...definition,
@@ -1340,10 +1353,11 @@ function SqlEditor({
   onChange: (value: DatasetDefinition) => void;
   autoFocus?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div className="sql-editor">
       <label>
-        <span>Read-only PostgreSQL query</span>
+        <span>{t("Read-only PostgreSQL query")}</span>
         <textarea
           autoFocus={autoFocus}
           spellCheck={false}
@@ -1355,12 +1369,11 @@ function SqlEditor({
         />
       </label>
       <div className="sql-hint">
-        <ShieldCheck /> Use schema-qualified table names. Only one SELECT or
-        WITH statement is accepted; validation uses EXPLAIN without ANALYZE.
+        <ShieldCheck /> {t("Use schema-qualified table names. Only one SELECT or WITH statement is accepted; validation uses EXPLAIN without ANALYZE.")}
       </div>
       <div className="field-editor">
         <div className="field-header">
-          <span>Declared output fields</span>
+          <span>{t("Declared output fields")}</span>
           <button
             className="button secondary small"
             onClick={() =>
@@ -1374,13 +1387,13 @@ function SqlEditor({
             }
             type="button"
           >
-            <Plus /> Add field
+            <Plus /> {t("Add field")}
           </button>
         </div>
         {definition.fields.map((field) => (
           <div className="field-row sql-field" key={field.id}>
             <label>
-              <span>SQL result name</span>
+              <span>{t("SQL result name")}</span>
               <input
                 value={field.name}
                 onChange={(event) =>
@@ -1396,7 +1409,7 @@ function SqlEditor({
               />
             </label>
             <label>
-              <span>Display label</span>
+              <span>{t("Display label")}</span>
               <input
                 value={field.display.label}
                 onChange={(event) =>
@@ -1418,7 +1431,7 @@ function SqlEditor({
               />
             </label>
             <label>
-              <span>Format</span>
+              <span>{t("Format")}</span>
               <select
                 value={field.display.format ?? ""}
                 onChange={(event) =>
@@ -1441,7 +1454,7 @@ function SqlEditor({
               >
                 {FORMATS.map((format) => (
                   <option key={format.value} value={format.value}>
-                    {format.label}
+                    {t(format.label)}
                   </option>
                 ))}
               </select>
@@ -1467,11 +1480,11 @@ function SqlEditor({
                   })
                 }
               />
-              <span>Visible</span>
+              <span>{t("Visible")}</span>
             </label>
             <button
               className="icon-button"
-              aria-label={`Remove ${field.name}`}
+              aria-label={t("Remove {name}", { name: field.name })}
               onClick={() =>
                 onChange({
                   ...definition,
@@ -1492,11 +1505,12 @@ function SqlEditor({
 }
 
 function JsonInspector({ definition }: { definition: DatasetDefinition }) {
+  const { t } = useI18n();
   return (
     <details className="json-inspector">
       <summary>
         <span>
-          <Braces /> Saved JSON definition
+          <Braces /> {t("Saved JSON definition")}
         </span>
         <ChevronRight />
       </summary>
@@ -1518,6 +1532,7 @@ function ValidationWorkspace({
   onValidate: () => void;
   isAdmin: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div className="studio-layout">
       <main className="studio-main">
@@ -1528,10 +1543,9 @@ function ValidationWorkspace({
                 <FileCheck2 />
               </span>
               <span>
-                <strong>Query Safety validation</strong>
+                <strong>{t("Query Safety validation")}</strong>
                 <small>
-                  Catalog integrity and PostgreSQL planner evidence, without
-                  executing the query.
+                  {t("Catalog integrity and PostgreSQL planner evidence, without executing the query.")}
                 </small>
               </span>
             </div>
@@ -1541,14 +1555,13 @@ function ValidationWorkspace({
               onClick={onValidate}
               type="button"
             >
-              {pending ? <LoaderCircle className="spin" /> : <Play />} Validate
-              draft
+              {pending ? <LoaderCircle className="spin" /> : <Play />} {t("Validate draft")}
             </button>
           </header>
           {dirty && (
             <StudioNotice
               kind="warning"
-              text="Save the current draft before validating it."
+              text={t("Save the current draft before validating it.")}
             />
           )}
           {validation ? (
@@ -1556,8 +1569,8 @@ function ValidationWorkspace({
           ) : (
             <div className="empty-state compact">
               <FileCheck2 />
-              <strong>No validation for this revision</strong>
-              <p>Run validation before previewing or publishing.</p>
+              <strong>{t("No validation for this revision")}</strong>
+              <p>{t("Run validation before previewing or publishing.")}</p>
             </div>
           )}
         </section>
@@ -1566,11 +1579,9 @@ function ValidationWorkspace({
         <div className="studio-note">
           <ShieldCheck />
           <div>
-            <strong>Read-only inspection</strong>
+            <strong>{t("Read-only inspection")}</strong>
             <p>
-              DatePipette uses EXPLAIN, catalog statistics, index visibility,
-              and configured safety thresholds. It never runs EXPLAIN ANALYZE
-              here.
+              {t("DatePipette uses EXPLAIN, catalog statistics, index visibility, and configured safety thresholds. It never runs EXPLAIN ANALYZE here.")}
             </p>
           </div>
         </div>
@@ -1578,10 +1589,9 @@ function ValidationWorkspace({
           <div className="studio-note">
             <AlertTriangle />
             <div>
-              <strong>Administrator override</strong>
+              <strong>{t("Administrator override")}</strong>
               <p>
-                Blocked policy findings can be overridden with an audited reason
-                through the API. Structural errors cannot be overridden.
+                {t("Blocked policy findings can be overridden with an audited reason through the API. Structural errors cannot be overridden.")}
               </p>
             </div>
           </div>
@@ -1592,6 +1602,7 @@ function ValidationWorkspace({
 }
 
 function ValidationReport({ validation }: { validation: DatasetValidation }) {
+  const { t } = useI18n();
   return (
     <div className="validation-report">
       <div className={`validation-summary ${validation.state}`}>
@@ -1599,27 +1610,29 @@ function ValidationReport({ validation }: { validation: DatasetValidation }) {
           {validation.state === "valid" ? <Check /> : <AlertTriangle />}
         </span>
         <div>
-          <strong>{validation.state.replaceAll("_", " ")}</strong>
+          <strong>{t(validation.state.replaceAll("_", " "))}</strong>
           <p>
-            Revision {validation.validated_revision} · policy{" "}
-            {validation.policy_revision} ·{" "}
-            {formatDateTime(validation.validated_at)}
+            {t("Revision {revision} · policy {policy} · {date}", {
+              revision: validation.validated_revision,
+              policy: validation.policy_revision,
+              date: formatDateTime(validation.validated_at),
+            })}
           </p>
         </div>
       </div>
       {validation.plan && (
         <div className="plan-metrics">
           <Metric
-            label="Estimated rows"
+            label={t("Estimated rows")}
             value={validation.plan.estimated_rows.toLocaleString()}
           />
           <Metric
-            label="Planner cost"
+            label={t("Planner cost")}
             value={validation.plan.total_cost.toLocaleString()}
           />
-          <Metric label="Joins" value={String(validation.plan.join_count)} />
+          <Metric label={t("Joins")} value={String(validation.plan.join_count)} />
           <Metric
-            label="Largest scan"
+            label={t("Largest scan")}
             value={validation.plan.max_sequential_scan_rows.toLocaleString()}
           />
         </div>
@@ -1627,7 +1640,7 @@ function ValidationReport({ validation }: { validation: DatasetValidation }) {
       <div className="finding-list">
         {validation.findings.length === 0 ? (
           <p className="all-clear">
-            <Check /> No safety findings.
+            <Check /> {t("No safety findings.")}
           </p>
         ) : (
           validation.findings.map((finding, index) => (
@@ -1640,21 +1653,21 @@ function ValidationReport({ validation }: { validation: DatasetValidation }) {
                 <strong>{labelCode(finding.code)}</strong>
                 <p>
                   {finding.observed_value !== null
-                    ? `Observed ${finding.observed_value.toLocaleString()}`
-                    : "Review the referenced source definition."}
+                    ? t("Observed {value}", { value: finding.observed_value.toLocaleString() })
+                    : t("Review the referenced source definition.")}
                   {finding.threshold_value !== null
-                    ? ` · threshold ${finding.threshold_value.toLocaleString()}`
+                    ? ` · ${t("threshold {value}", { value: finding.threshold_value.toLocaleString() })}`
                     : ""}
                 </p>
               </div>
-              <span>{finding.severity}</span>
+              <span>{t(finding.severity)}</span>
             </article>
           ))
         )}
       </div>
       {validation.recommendations.length > 0 && (
         <div className="recommendation-list">
-          <strong>Recommended review</strong>
+          <strong>{t("Recommended review")}</strong>
           {validation.recommendations.map((item, index) => (
             <p key={`${item.code}-${index}`}>
               <ChevronRight /> {labelCode(item.code)}
@@ -1680,6 +1693,7 @@ function PreviewWorkspace({
   pending: boolean;
   onPreview: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="studio-panel preview-panel">
       <header>
@@ -1688,10 +1702,9 @@ function PreviewWorkspace({
             <Eye />
           </span>
           <span>
-            <strong>Live bounded preview</strong>
+            <strong>{t("Live bounded preview")}</strong>
             <small>
-              Reads PostgreSQL only for this explicit preview; no snapshot is
-              created.
+              {t("Reads PostgreSQL only for this explicit preview; no snapshot is created.")}
             </small>
           </span>
         </div>
@@ -1701,24 +1714,23 @@ function PreviewWorkspace({
           onClick={onPreview}
           type="button"
         >
-          {pending ? <LoaderCircle className="spin" /> : <Play />} Preview 100
-          rows
+          {pending ? <LoaderCircle className="spin" /> : <Play />} {t("Preview 100 rows")}
         </button>
       </header>
       {disabled && (
         <StudioNotice
           kind="warning"
-          text="Save and successfully validate this exact revision first."
+          text={t("Save and successfully validate this exact revision first.")}
         />
       )}
       {preview ? (
         <>
           <div className="preview-meta">
-            <span>{preview.returned_rows} rows returned</span>
-            <span>Policy revision {preview.policy_revision}</span>
+            <span>{t("{count} rows returned", { count: preview.returned_rows })}</span>
+            <span>{t("Policy revision {revision}", { revision: preview.policy_revision })}</span>
             {preview.truncated && (
               <span className="warning">
-                Bounded preview ·{" "}
+                {t("Bounded preview")} ·{" "}
                 {preview.truncation_reason?.replaceAll("_", " ")}
               </span>
             )}
@@ -1752,8 +1764,8 @@ function PreviewWorkspace({
       ) : (
         <div className="empty-state compact">
           <Eye />
-          <strong>Preview is intentionally explicit</strong>
-          <p>Validation does not execute your business query.</p>
+          <strong>{t("Preview is intentionally explicit")}</strong>
+          <p>{t("Validation does not execute your business query.")}</p>
         </div>
       )}
     </section>
@@ -1783,6 +1795,7 @@ function PublishWorkspace({
   onImpact: () => void;
   onPublish: () => void;
 }) {
+  const { t } = useI18n();
   const ready = !dirty && valid && impact?.ready_for_publication;
   return (
     <div className="studio-layout">
@@ -1796,12 +1809,11 @@ function PublishWorkspace({
               <span>
                 <strong>
                   {dataset.active_version_id
-                    ? "Publish changes"
-                    : "First publication"}
+                    ? t("Publish changes")
+                    : t("First publication")}
                 </strong>
                 <small>
-                  Builds an immutable Parquet snapshot in the background, then
-                  activates it atomically.
+                  {t("Builds an immutable Parquet snapshot in the background, then activates it atomically.")}
                 </small>
               </span>
             </div>
@@ -1810,11 +1822,11 @@ function PublishWorkspace({
             <article className={valid && !dirty ? "done" : ""}>
               <span>{valid && !dirty ? <Check /> : "1"}</span>
               <div>
-                <strong>Validated revision</strong>
+                <strong>{t("Validated revision")}</strong>
                 <p>
-                  {valid && !dirty
+                  {t(valid && !dirty
                     ? "The saved draft passed Query Safety."
-                    : "Save and validate the exact draft revision."}
+                    : "Save and validate the exact draft revision.")}
                 </p>
               </div>
             </article>
@@ -1829,11 +1841,14 @@ function PublishWorkspace({
             >
               <span>{impact?.ready_for_publication ? <Check /> : "2"}</span>
               <div>
-                <strong>Schema impact</strong>
+                <strong>{t("Schema impact")}</strong>
                 <p>
                   {impact
-                    ? `${impact.changes.length} changes · ${impact.breaking_change_count} breaking`
-                    : "Compare stable fields with the active published contract."}
+                    ? t("{changes} changes · {breaking} breaking", {
+                        changes: impact.changes.length,
+                        breaking: impact.breaking_change_count,
+                      })
+                    : t("Compare stable fields with the active published contract.")}
                 </p>
               </div>
               <button
@@ -1847,7 +1862,7 @@ function PublishWorkspace({
                 ) : (
                   <FileCheck2 />
                 )}{" "}
-                Analyze
+                {t("Analyze")}
               </button>
             </article>
             <article
@@ -1861,11 +1876,16 @@ function PublishWorkspace({
             >
               <span>{run?.state === "succeeded" ? <Check /> : "3"}</span>
               <div>
-                <strong>Build and activate snapshot</strong>
+                <strong>{t("Build and activate snapshot")}</strong>
                 <p>
                   {run
-                    ? `Run ${run.state}${run.actual_rows !== null ? ` · ${run.actual_rows.toLocaleString()} rows` : ""}`
-                    : "Readers keep the last good snapshot until this completes."}
+                    ? t("Run {state}{rows}", {
+                        state: t(run.state),
+                        rows: run.actual_rows !== null
+                          ? ` · ${t("{count} rows", { count: run.actual_rows.toLocaleString() })}`
+                          : "",
+                      })
+                    : t("Readers keep the last good snapshot until this completes.")}
                 </p>
               </div>
               <button
@@ -1885,38 +1905,37 @@ function PublishWorkspace({
                   <RefreshCw />
                 )}{" "}
                 {dataset.active_version_id
-                  ? "Publish update"
-                  : "Publish dataset"}
+                  ? t("Publish update")
+                  : t("Publish dataset")}
               </button>
             </article>
           </div>
           {impact && !impact.ready_for_publication && (
             <StudioNotice
               kind="danger"
-              text="Breaking changes affect saved dependencies. Resolve them before publication."
+              text={t("Breaking changes affect saved dependencies. Resolve them before publication.")}
             />
           )}
           {run?.error_code && (
             <StudioNotice
               kind="danger"
-              text={`Publication failed safely: ${run.error_code}. The previous snapshot remains active.`}
+              text={t("Publication failed safely: {code}. The previous snapshot remains active.", { code: run.error_code })}
             />
           )}
           {run?.state === "succeeded" && (
             <div className="publish-success">
               <Check />
               <div>
-                <strong>Snapshot activated</strong>
+                <strong>{t("Snapshot activated")}</strong>
                 <p>
-                  The published table is ready. A fresh editable draft has been
-                  created automatically.
+                  {t("The published table is ready. A fresh editable draft has been created automatically.")}
                 </p>
               </div>
               <Link
                 className="button secondary small"
                 to={`/datasets/${datasetId}/table`}
               >
-                Open data <ChevronRight />
+                {t("Open data")} <ChevronRight />
               </Link>
             </div>
           )}
@@ -1932,10 +1951,9 @@ function PublishWorkspace({
         <div className="studio-note">
           <ShieldCheck />
           <div>
-            <strong>Last-known-good guarantee</strong>
+            <strong>{t("Last-known-good guarantee")}</strong>
             <p>
-              A failed refresh never replaces a working snapshot. Readers see
-              stale data with safe error metadata.
+              {t("A failed refresh never replaces a working snapshot. Readers see stale data with safe error metadata.")}
             </p>
           </div>
         </div>
@@ -1951,6 +1969,7 @@ function SchedulePanel({
   datasetId: string;
   published: boolean;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const schedule = useQuery({
     queryKey: queryKeys.refreshSchedule(datasetId),
@@ -1991,8 +2010,8 @@ function SchedulePanel({
     return (
       <section className="schedule-card disabled">
         <Clock3 />
-        <strong>Refresh schedule</strong>
-        <p>Available after the first successful publication.</p>
+        <strong>{t("Refresh schedule")}</strong>
+        <p>{t("Available after the first successful publication.")}</p>
       </section>
     );
   const absent =
@@ -2004,8 +2023,8 @@ function SchedulePanel({
         <div>
           <Clock3 />
           <span>
-            <strong>Refresh schedule</strong>
-            <small>{schedule.data?.timezone ?? "Installation timezone"}</small>
+            <strong>{t("Refresh schedule")}</strong>
+            <small>{schedule.data?.timezone ?? t("Installation timezone")}</small>
           </span>
         </div>
         <label className="switch">
@@ -2018,34 +2037,34 @@ function SchedulePanel({
         </label>
       </header>
       <label>
-        <span>Cadence</span>
+        <span>{t("Cadence")}</span>
         <select
           value={kind}
           onChange={(event) =>
             setKind(event.target.value as "interval" | "daily")
           }
         >
-          <option value="interval">Fixed interval</option>
-          <option value="daily">Daily time</option>
+          <option value="interval">{t("Fixed interval")}</option>
+          <option value="daily">{t("Daily time")}</option>
         </select>
       </label>
       {kind === "interval" ? (
         <label>
-          <span>Every</span>
+          <span>{t("Every")}</span>
           <select
             value={interval}
             onChange={(event) => setInterval(Number(event.target.value))}
           >
-            <option value={15}>15 minutes</option>
-            <option value={60}>1 hour</option>
-            <option value={360}>6 hours</option>
-            <option value={1440}>24 hours</option>
-            <option value={10080}>7 days</option>
+            <option value={15}>{t("15 minutes")}</option>
+            <option value={60}>{t("1 hour")}</option>
+            <option value={360}>{t("6 hours")}</option>
+            <option value={1440}>{t("24 hours")}</option>
+            <option value={10080}>{t("7 days")}</option>
           </select>
         </label>
       ) : (
         <label>
-          <span>At</span>
+          <span>{t("At")}</span>
           <input
             type="time"
             value={dailyTime}
@@ -2054,7 +2073,7 @@ function SchedulePanel({
         </label>
       )}
       {schedule.data?.next_run_at && (
-        <p>Next run {formatDateTime(schedule.data.next_run_at)}</p>
+        <p>{t("Next run {date}", { date: formatDateTime(schedule.data.next_run_at) })}</p>
       )}
       {schedule.error && !absent && (
         <InlineError message={problemMessage(schedule.error)} />
@@ -2066,7 +2085,7 @@ function SchedulePanel({
         type="button"
       >
         {save.isPending ? <LoaderCircle className="spin" /> : <Save />}{" "}
-        {absent ? "Create schedule" : "Save schedule"}
+        {t(absent ? "Create schedule" : "Save schedule")}
       </button>
       {save.isError && <InlineError message={problemMessage(save.error)} />}
     </section>

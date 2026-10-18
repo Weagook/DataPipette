@@ -5,7 +5,12 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from datepipette.domain.identity import AuthenticatedSession, User, UserCredentials
+from datepipette.domain.identity import (
+    AuthenticatedSession,
+    InterfaceLocale,
+    User,
+    UserCredentials,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +60,15 @@ class AuthenticationStore(Protocol):
         occurred_at: datetime,
         request_id: str,
     ) -> None: ...
+
+    async def update_locale(
+        self,
+        *,
+        user_id: UUID,
+        locale: InterfaceLocale,
+        occurred_at: datetime,
+        request_id: str,
+    ) -> User: ...
 
 
 class LoginRateLimiter(Protocol):

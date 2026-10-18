@@ -3498,6 +3498,15 @@
         "title": "ImpactFieldResponse",
         "type": "object"
       },
+      "InterfaceLocale": {
+        "description": "Human-facing language preference for the official client.",
+        "enum": [
+          "en",
+          "ru"
+        ],
+        "title": "InterfaceLocale",
+        "type": "string"
+      },
       "IssuedApiTokenResponse": {
         "properties": {
           "created_at": {
@@ -5395,6 +5404,18 @@
         "title": "UpdateConnectionRequest",
         "type": "object"
       },
+      "UpdateCurrentUserPreferencesRequest": {
+        "properties": {
+          "locale": {
+            "$ref": "#/components/schemas/InterfaceLocale"
+          }
+        },
+        "required": [
+          "locale"
+        ],
+        "title": "UpdateCurrentUserPreferencesRequest",
+        "type": "object"
+      },
       "UpdateDashboardRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5542,6 +5563,9 @@
             ],
             "title": "Last Login At"
           },
+          "locale": {
+            "$ref": "#/components/schemas/InterfaceLocale"
+          },
           "role": {
             "$ref": "#/components/schemas/SystemRole"
           },
@@ -5562,7 +5586,8 @@
           "status",
           "last_login_at",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "locale"
         ],
         "title": "UserAdminResponse",
         "type": "object"
@@ -5601,6 +5626,9 @@
             "title": "Id",
             "type": "string"
           },
+          "locale": {
+            "$ref": "#/components/schemas/InterfaceLocale"
+          },
           "role": {
             "title": "Role",
             "type": "string"
@@ -5610,7 +5638,8 @@
           "id",
           "email",
           "display_name",
-          "role"
+          "role",
+          "locale"
         ],
         "title": "UserResponse",
         "type": "object"
@@ -6312,6 +6341,90 @@
           }
         ],
         "summary": "Read Current User",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/me/preferences": {
+      "patch": {
+        "operationId": "update_current_user_preferences_api_v1_auth_me_preferences_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCurrentUserPreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Update Current User Preferences",
         "tags": [
           "authentication"
         ]

@@ -60,6 +60,7 @@ import {
 } from "../lib/dashboardLayout";
 import { formatDateTime } from "../lib/format";
 import { randomUuid } from "../lib/id";
+import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 const typeLabels = {
@@ -213,6 +214,7 @@ interface DashboardEditorProps {
 }
 
 function DashboardEditor(props: DashboardEditorProps) {
+  const { t } = useI18n();
   const [chartSearch, setChartSearch] = useState("");
   const [layoutNotice, setLayoutNotice] = useState("");
   const charts = useQuery({
@@ -241,7 +243,7 @@ function DashboardEditor(props: DashboardEditorProps) {
   ) {
     const next = updateItem(props.definition, item.id, change);
     if (!next) {
-      setLayoutNotice("That position would overlap another tile or leave the 12-column grid.");
+      setLayoutNotice(t("That position would overlap another tile or leave the 12-column grid."));
       return;
     }
     setLayoutNotice("");
@@ -250,7 +252,7 @@ function DashboardEditor(props: DashboardEditorProps) {
 
   function add(chartId: string) {
     if (itemsOf(props.definition).length >= 50) {
-      setLayoutNotice("A dashboard can contain at most 50 visualizations.");
+      setLayoutNotice(t("A dashboard can contain at most 50 visualizations."));
       return;
     }
     props.onDefinitionChange(addChart(props.definition, chartId, randomUuid()));
@@ -281,23 +283,23 @@ function DashboardEditor(props: DashboardEditorProps) {
       <header className="page-heading dashboard-studio-heading">
         <div>
           <Link className="back-link" to="/dashboards">
-            <ArrowLeft size={16} /> All dashboards
+            <ArrowLeft size={16} /> {t("All dashboards")}
           </Link>
-          <span className="eyebrow">Private workspace</span>
-          <h1>{props.dashboardId ? "Compose the dashboard" : "Create a dashboard"}</h1>
+          <span className="eyebrow">{t("Private workspace")}</span>
+          <h1>{t(props.dashboardId ? "Compose the dashboard" : "Create a dashboard")}</h1>
           <p>
-            Arrange governed charts from multiple datasets. The saved 12-column layout is the same document every client reads.
+            {t("Arrange governed charts from multiple datasets. The saved 12-column layout is the same document every client reads.")}
           </p>
         </div>
         <div className="heading-actions">
           {props.dashboardId && (
             <Link className="button secondary" to={`/dashboards/${props.dashboardId}`}>
-              <Eye size={16} /> Viewer preview
+              <Eye size={16} /> {t("Viewer preview")}
             </Link>
           )}
           <button className="button primary" onClick={props.onSave} disabled={!canSave} type="button">
             {props.savePending ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}
-            {props.dashboardId ? "Save layout" : "Create dashboard"}
+            {t(props.dashboardId ? "Save layout" : "Create dashboard")}
           </button>
         </div>
       </header>
@@ -305,25 +307,25 @@ function DashboardEditor(props: DashboardEditorProps) {
       <div className="dashboard-studio-statusbar">
         <span className={props.dirty ? "unsaved" : "saved"}>
           {props.dirty ? <span className="status-dot" /> : <Check size={14} />}
-          {props.dirty ? "Unsaved changes" : "Saved"}
+          {t(props.dirty ? "Unsaved changes" : "Saved")}
         </span>
-        <span><Lock size={14} /> Private until explicitly shared</span>
-        {props.revision && <span>Revision {props.revision}</span>}
-        {props.updatedAt && <span>Updated {formatDateTime(props.updatedAt)}</span>}
+        <span><Lock size={14} /> {t("Private until explicitly shared")}</span>
+        {props.revision && <span>{t("Revision {revision}", { revision: props.revision })}</span>}
+        {props.updatedAt && <span>{t("Updated {date}", { date: formatDateTime(props.updatedAt) })}</span>}
       </div>
 
       <section className="dashboard-studio-name">
         <label>
-          <span>Dashboard name</span>
+          <span>{t("Dashboard name")}</span>
           <input
             value={props.name}
             onChange={(event) => props.onNameChange(event.target.value)}
-            placeholder="Executive revenue overview"
+            placeholder={t("Executive revenue overview")}
             maxLength={100}
           />
         </label>
-        <div><strong>{itemsOf(props.definition).length}</strong><span>visualizations</span></div>
-        <div><strong>{new Set(itemsOf(props.definition).map((item) => chartById.get(item.chart_id)?.dataset_id)).size}</strong><span>datasets</span></div>
+        <div><strong>{itemsOf(props.definition).length}</strong><span>{t("visualizations")}</span></div>
+        <div><strong>{new Set(itemsOf(props.definition).map((item) => chartById.get(item.chart_id)?.dataset_id)).size}</strong><span>{t("datasets")}</span></div>
       </section>
 
       {props.saveError != null && <InlineError message={problemMessage(props.saveError)} />}
@@ -332,16 +334,16 @@ function DashboardEditor(props: DashboardEditorProps) {
       <div className="dashboard-studio-workspace">
         <section className="layout-workbench">
           <header>
-            <div><span className="step-number">01</span><span><strong>Layout canvas</strong><small>Drag a tile or use its exact movement and sizing controls.</small></span></div>
+            <div><span className="step-number">01</span><span><strong>{t("Layout canvas")}</strong><small>{t("Drag a tile or use its exact movement and sizing controls.")}</small></span></div>
             <button className="button secondary small" type="button" onClick={() => props.onDefinitionChange(compactLayout(props.definition))} disabled={itemsOf(props.definition).length === 0}>
-              <Minimize2 size={15} /> Compact
+              <Minimize2 size={15} /> {t("Compact")}
             </button>
           </header>
           <div
             className="layout-canvas"
             onDragOver={(event) => event.preventDefault()}
             onDrop={dropItem}
-            aria-label="Dashboard layout canvas"
+            aria-label={t("Dashboard layout canvas")}
           >
             <div className="layout-columns" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <i key={index} />)}</div>
             {itemsOf(props.definition).map((item) => (
@@ -354,36 +356,36 @@ function DashboardEditor(props: DashboardEditorProps) {
               />
             ))}
             {itemsOf(props.definition).length === 0 && (
-              <div className="layout-empty"><LayoutDashboard size={30} /><strong>Start with a saved chart</strong><p>Add one from the palette. New dashboards remain private.</p></div>
+              <div className="layout-empty"><LayoutDashboard size={30} /><strong>{t("Start with a saved chart")}</strong><p>{t("Add one from the palette. New dashboards remain private.")}</p></div>
             )}
           </div>
         </section>
 
         <aside className="chart-palette">
-          <header><span className="step-number">02</span><span><strong>Chart palette</strong><small>Only charts owned by this dashboard owner are eligible.</small></span></header>
-          <label className="search-field"><Search size={16} /><span className="sr-only">Search chart palette</span><input value={chartSearch} onChange={(event) => setChartSearch(event.target.value)} placeholder="Search saved charts" /></label>
+          <header><span className="step-number">02</span><span><strong>{t("Chart palette")}</strong><small>{t("Only charts owned by this dashboard owner are eligible.")}</small></span></header>
+          <label className="search-field"><Search size={16} /><span className="sr-only">{t("Search chart palette")}</span><input value={chartSearch} onChange={(event) => setChartSearch(event.target.value)} placeholder={t("Search saved charts")} /></label>
           {charts.isError && <InlineError message={problemMessage(charts.error)} />}
           <div className="palette-list">
             {charts.isPending && [0, 1, 2].map((value) => <div className="palette-card skeleton" key={value} />)}
             {availableCharts.map((chart) => (
               <article className="palette-card" key={chart.id}>
                 <span className="palette-chart-icon"><BarChart3 size={17} /></span>
-                <span><strong>{chart.name}</strong><small>{typeLabels[chart.definition.chart_type]} · dataset {shortId(chart.dataset_id)}</small></span>
-                <button className="icon-button bordered" type="button" onClick={() => add(chart.id)} disabled={itemChartIds.has(chart.id)} aria-label={`${itemChartIds.has(chart.id) ? "Added" : "Add"} ${chart.name}`}>
+                <span><strong>{chart.name}</strong><small>{t(typeLabels[chart.definition.chart_type])} · {t("dataset")} {shortId(chart.dataset_id)}</small></span>
+                <button className="icon-button bordered" type="button" onClick={() => add(chart.id)} disabled={itemChartIds.has(chart.id)} aria-label={t("{action} {name}", { action: t(itemChartIds.has(chart.id) ? "Added" : "Add"), name: chart.name })}>
                   {itemChartIds.has(chart.id) ? <Check size={16} /> : <Plus size={16} />}
                 </button>
               </article>
             ))}
-            {!charts.isPending && availableCharts.length === 0 && <div className="compact-empty"><BarChart3 /> No matching owned charts</div>}
+            {!charts.isPending && availableCharts.length === 0 && <div className="compact-empty"><BarChart3 /> {t("No matching owned charts")}</div>}
           </div>
-          <Link className="button secondary wide" to="/charts/new"><Plus size={15} /> Create another chart</Link>
+          <Link className="button secondary wide" to="/charts/new"><Plus size={15} /> {t("Create another chart")}</Link>
         </aside>
       </div>
 
       {props.dashboardId ? (
         <SharingPanel dashboardId={props.dashboardId} user={props.user} />
       ) : (
-        <section className="sharing-locked"><Lock size={18} /><div><strong>Sharing unlocks after creation</strong><p>Save the private dashboard first, then grant view access to a person or group.</p></div></section>
+        <section className="sharing-locked"><Lock size={18} /><div><strong>{t("Sharing unlocks after creation")}</strong><p>{t("Save the private dashboard first, then grant view access to a person or group.")}</p></div></section>
       )}
     </div>
   );
@@ -400,6 +402,7 @@ function LayoutTile({
   onChange: (change: Partial<Pick<DashboardItem, "x" | "y" | "width" | "height">>) => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <article
       className="layout-tile"
@@ -410,21 +413,21 @@ function LayoutTile({
       }}
       style={{ gridColumn: `${item.x + 1} / span ${item.width}`, gridRow: `${item.y + 1} / span ${item.height}` }}
     >
-      <header><GripVertical size={16} /><span><strong>{chart?.name ?? "Unavailable chart"}</strong><small>{chart ? typeLabels[chart.definition.chart_type] : shortId(item.chart_id)}</small></span><button className="icon-button" type="button" onClick={onRemove} aria-label={`Remove ${chart?.name ?? "chart"}`}><Trash2 size={15} /></button></header>
-      <div className="tile-placeholder"><BarChart3 /><span>{chart?.definition.measures.length ?? 0} saved measure{chart?.definition.measures.length === 1 ? "" : "s"}</span></div>
+      <header><GripVertical size={16} /><span><strong>{chart?.name ?? t("Unavailable chart")}</strong><small>{chart ? t(typeLabels[chart.definition.chart_type]) : shortId(item.chart_id)}</small></span><button className="icon-button" type="button" onClick={onRemove} aria-label={t("Remove {name}", { name: chart?.name ?? t("chart") })}><Trash2 size={15} /></button></header>
+      <div className="tile-placeholder"><BarChart3 /><span>{t("{count} saved measures", { count: chart?.definition.measures.length ?? 0 })}</span></div>
       <footer>
-        <div className="tile-control-group" aria-label={`Move ${chart?.name ?? "chart"}`}>
-          <button type="button" onClick={() => onChange({ x: item.x - 1 })} aria-label="Move left"><ArrowLeft /></button>
-          <button type="button" onClick={() => onChange({ y: Math.max(0, item.y - 1) })} aria-label="Move up"><ArrowUp /></button>
-          <button type="button" onClick={() => onChange({ y: item.y + 1 })} aria-label="Move down"><ArrowDown /></button>
-          <button type="button" onClick={() => onChange({ x: item.x + 1 })} aria-label="Move right"><ArrowRight /></button>
+        <div className="tile-control-group" aria-label={t("Move {name}", { name: chart?.name ?? t("chart") })}>
+          <button type="button" onClick={() => onChange({ x: item.x - 1 })} aria-label={t("Move left")}><ArrowLeft /></button>
+          <button type="button" onClick={() => onChange({ y: Math.max(0, item.y - 1) })} aria-label={t("Move up")}><ArrowUp /></button>
+          <button type="button" onClick={() => onChange({ y: item.y + 1 })} aria-label={t("Move down")}><ArrowDown /></button>
+          <button type="button" onClick={() => onChange({ x: item.x + 1 })} aria-label={t("Move right")}><ArrowRight /></button>
         </div>
-        <div className="tile-control-group size" aria-label={`Resize ${chart?.name ?? "chart"}`}>
-          <button type="button" onClick={() => onChange({ width: Math.max(1, item.width - 1) })} aria-label="Decrease width"><Minimize2 /></button>
+        <div className="tile-control-group size" aria-label={t("Resize {name}", { name: chart?.name ?? t("chart") })}>
+          <button type="button" onClick={() => onChange({ width: Math.max(1, item.width - 1) })} aria-label={t("Decrease width")}><Minimize2 /></button>
           <span>{item.width}×{item.height}</span>
-          <button type="button" onClick={() => onChange({ width: Math.min(12, item.width + 1) })} aria-label="Increase width"><Maximize2 /></button>
-          <button type="button" onClick={() => onChange({ height: Math.max(1, item.height - 1) })} aria-label="Decrease height">H−</button>
-          <button type="button" onClick={() => onChange({ height: Math.min(100, item.height + 1) })} aria-label="Increase height">H+</button>
+          <button type="button" onClick={() => onChange({ width: Math.min(12, item.width + 1) })} aria-label={t("Increase width")}><Maximize2 /></button>
+          <button type="button" onClick={() => onChange({ height: Math.max(1, item.height - 1) })} aria-label={t("Decrease height")}>H−</button>
+          <button type="button" onClick={() => onChange({ height: Math.min(100, item.height + 1) })} aria-label={t("Increase height")}>H+</button>
         </div>
       </footer>
     </article>
@@ -432,6 +435,7 @@ function LayoutTile({
 }
 
 function SharingPanel({ dashboardId, user }: { dashboardId: string; user: CurrentUser }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [principalType, setPrincipalType] = useState<GrantPrincipalType>("user");
   const [principalId, setPrincipalId] = useState("");
@@ -457,25 +461,25 @@ function SharingPanel({ dashboardId, user }: { dashboardId: string; user: Curren
 
   return (
     <section className="sharing-panel">
-      <header><div><span className="step-number">03</span><span><strong>Share view access</strong><small>Recipients can read only saved dashboard items; row data and chart authoring remain concealed.</small></span></div><span className="private-pill"><Lock size={13} /> Private by default</span></header>
+      <header><div><span className="step-number">03</span><span><strong>{t("Share view access")}</strong><small>{t("Recipients can read only saved dashboard items; row data and chart authoring remain concealed.")}</small></span></div><span className="private-pill"><Lock size={13} /> {t("Private by default")}</span></header>
       <div className="sharing-grid">
         <form onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
-          <label><span>Recipient type</span><select value={principalType} onChange={(event) => { setPrincipalType(event.target.value as GrantPrincipalType); setPrincipalId(""); }}><option value="user">Person</option><option value="group">Group</option></select></label>
-          <label><span>{principalType === "user" ? "Person" : "Group"}</span>
+          <label><span>{t("Recipient type")}</span><select value={principalType} onChange={(event) => { setPrincipalType(event.target.value as GrantPrincipalType); setPrincipalId(""); }}><option value="user">{t("Person")}</option><option value="group">{t("Group")}</option></select></label>
+          <label><span>{t(principalType === "user" ? "Person" : "Group")}</span>
             {user.role === "admin" ? (
-              <select value={principalId} onChange={(event) => setPrincipalId(event.target.value)}><option value="">Select a recipient</option>{directory?.filter((value) => principalType === "group" || ("status" in value && value.status === "active")).map((value) => <option key={value.id} value={value.id}>{"display_name" in value ? `${value.display_name} · ${value.email}` : value.name}</option>)}</select>
+              <select value={principalId} onChange={(event) => setPrincipalId(event.target.value)}><option value="">{t("Select a recipient")}</option>{directory?.filter((value) => principalType === "group" || ("status" in value && value.status === "active")).map((value) => <option key={value.id} value={value.id}>{"display_name" in value ? `${value.display_name} · ${value.email}` : value.name}</option>)}</select>
             ) : (
               <input value={principalId} onChange={(event) => setPrincipalId(event.target.value)} placeholder={`${principalType} UUID`} />
             )}
           </label>
-          <button className="button primary" type="submit" disabled={!principalId || create.isPending}>{create.isPending ? <LoaderCircle className="spin" size={15} /> : <Share2 size={15} />} Grant view access</button>
+          <button className="button primary" type="submit" disabled={!principalId || create.isPending}>{create.isPending ? <LoaderCircle className="spin" size={15} /> : <Share2 size={15} />} {t("Grant view access")}</button>
           {create.isError && <InlineError message={problemMessage(create.error)} />}
         </form>
         <div className="grant-list">
-          <strong>Who can view</strong>
+          <strong>{t("Who can view")}</strong>
           {grants.isError && <InlineError message={problemMessage(grants.error)} />}
           {grants.data?.map((grant) => <GrantRow key={grant.id} grant={grant} name={names.get(grant.principal_id)} onRevoke={() => revoke.mutate(grant.id)} pending={revoke.isPending} />)}
-          {!grants.isPending && grants.data?.length === 0 && <div className="compact-empty"><Lock /> Owner and administrators only</div>}
+          {!grants.isPending && grants.data?.length === 0 && <div className="compact-empty"><Lock /> {t("Owner and administrators only")}</div>}
         </div>
       </div>
     </section>
@@ -483,8 +487,9 @@ function SharingPanel({ dashboardId, user }: { dashboardId: string; user: Curren
 }
 
 function GrantRow({ grant, name, onRevoke, pending }: { grant: DashboardGrant; name?: string; onRevoke: () => void; pending: boolean }) {
+  const { t } = useI18n();
   const Icon = grant.principal_type === "group" ? UsersRound : UserRound;
-  return <article className="grant-row"><span><Icon size={16} /></span><div><strong>{name ?? `${grant.principal_type} ${shortId(grant.principal_id)}`}</strong><small>Can view saved aggregate items</small></div><button className="button secondary small" type="button" onClick={onRevoke} disabled={pending}>Revoke</button></article>;
+  return <article className="grant-row"><span><Icon size={16} /></span><div><strong>{name ?? `${grant.principal_type} ${shortId(grant.principal_id)}`}</strong><small>{t("Can view saved aggregate items")}</small></div><button className="button secondary small" type="button" onClick={onRevoke} disabled={pending}>{t("Revoke")}</button></article>;
 }
 
 function shortId(value: string): string {

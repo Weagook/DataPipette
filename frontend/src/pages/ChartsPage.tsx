@@ -12,6 +12,7 @@ import { Link, Navigate, useOutletContext } from "react-router-dom";
 import { InlineError } from "../components/Status";
 import { listCharts, problemMessage, type CurrentUser } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 const typeLabels = {
@@ -23,6 +24,7 @@ const typeLabels = {
 } as const;
 
 export function ChartsPage() {
+  const { t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const [search, setSearch] = useState("");
   const charts = useInfiniteQuery({
@@ -47,25 +49,25 @@ export function ChartsPage() {
     <div className="page-stack">
       <header className="page-heading split-heading">
         <div>
-          <span className="eyebrow">Saved analytics</span>
-          <h1>Charts</h1>
-          <p>Turn published datasets into governed, reusable visual answers.</p>
+          <span className="eyebrow">{t("Saved analytics")}</span>
+          <h1>{t("Charts")}</h1>
+          <p>{t("Turn published datasets into governed, reusable visual answers.")}</p>
         </div>
         <Link className="button primary" to="/charts/new">
-          <Plus size={17} /> New chart
+          <Plus size={17} /> {t("New chart")}
         </Link>
       </header>
       <div className="collection-toolbar">
         <label className="search-field">
           <Search size={17} />
-          <span className="sr-only">Search charts</span>
+          <span className="sr-only">{t("Search charts")}</span>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search charts"
+            placeholder={t("Search charts")}
           />
         </label>
-        <span>{values.length} visible</span>
+        <span>{t("{count} visible", { count: values.length })}</span>
       </div>
       {charts.isError && (
         <InlineError
@@ -73,7 +75,7 @@ export function ChartsPage() {
           onRetry={() => void charts.refetch()}
         />
       )}
-      <section className="chart-collection" aria-label="Charts">
+      <section className="chart-collection" aria-label={t("Charts")}>
         {charts.isPending &&
           [0, 1, 2, 3, 4, 5].map((item) => (
             <div className="saved-chart-card skeleton" key={item} />
@@ -94,18 +96,19 @@ export function ChartsPage() {
             <div className="saved-chart-copy">
               <span className="chart-type-pill">
                 <BarChart3 size={13} />
-                {typeLabels[chart.definition.chart_type]}
+                {t(typeLabels[chart.definition.chart_type])}
               </span>
               <h2>{chart.name}</h2>
               <p>
-                {chart.definition.measures.length} measure
-                {chart.definition.measures.length === 1 ? "" : "s"} · revision{" "}
-                {chart.revision}
+                {t("{count} measures · revision {revision}", {
+                  count: chart.definition.measures.length,
+                  revision: chart.revision,
+                })}
               </p>
             </div>
             <footer>
               <time dateTime={chart.updated_at}>
-                Updated {formatDateTime(chart.updated_at)}
+                {t("Updated {date}", { date: formatDateTime(chart.updated_at) })}
               </time>
               <ArrowRight size={17} />
             </footer>
@@ -115,11 +118,11 @@ export function ChartsPage() {
       {!charts.isPending && values.length === 0 && (
         <div className="empty-state">
           <BarChart3 />
-          <strong>{search ? "No matching charts" : "No charts yet"}</strong>
+          <strong>{t(search ? "No matching charts" : "No charts yet")}</strong>
           <p>
             {search
-              ? "Try a different name."
-              : "Create a visual answer from a published dataset."}
+              ? t("Try a different name.")
+              : t("Create a visual answer from a published dataset.")}
           </p>
         </div>
       )}
@@ -130,7 +133,7 @@ export function ChartsPage() {
           disabled={charts.isFetchingNextPage}
           type="button"
         >
-          {charts.isFetchingNextPage ? "Loading…" : "Load more"}
+          {t(charts.isFetchingNextPage ? "Loading…" : "Load more")}
         </button>
       )}
     </div>

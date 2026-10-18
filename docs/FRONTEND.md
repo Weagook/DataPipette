@@ -63,7 +63,7 @@ Viewer navigation deliberately omits detailed datasets, charts, source connectio
 
 Each slice must end in a usable workflow backed only by documented API operations. Placeholder controls must not perform simulated production behavior.
 
-Slices 1 through 6 are implemented. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
+Slices 1 through 6 are implemented. The interface defaults to English and can be switched immediately to Russian from the signed-in profile menu. The choice is persisted on the user through the public preference API and restored with the browser session; API codes, audit action names, identifiers, SQL, and source-object names remain invariant. Dataset exploration deliberately keeps filter edits local until Apply, translates semicolon-separated values to the public typed `in` operator, and resets cursor history whenever the query shape or active snapshot changes. Exports capture the currently applied columns, filters, sorting, and snapshot; their durable job history can issue a fresh short-lived download link until the stored artifact expires.
 
 The administrator-only Governance area exposes the complete managed Query Safety policy rather than a lossy subset. Updates replace the policy with CSRF protection and its current opaque ETag, retain unsaved values when the server rejects a stale revision, and surface the new revision after success. Its audit explorer keeps draft filters separate from applied filters, requests exact actor/action/outcome/resource/request/time constraints, resets cursor history on every filter change, and renders event details as inert formatted JSON.
 
@@ -102,6 +102,7 @@ The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal
 
 - TanStack Query owns remote cache and request lifecycle; React owns only ephemeral interaction state.
 - Session restoration gates protected routes. A `401` clears cached protected data and returns to login without exposing raw server text.
+- The authenticated user projection is the source of truth for interface locale. A profile change updates the UI optimistically, persists through a CSRF-protected mutation, and rolls back if the API rejects it; browser storage is not used.
 - Each dashboard item has its own query, retry control, and failure boundary. One chart never blocks the rest of the dashboard.
 - Capacity exhaustion respects `Retry-After`; automatic retry remains bounded and visible.
 - Stale snapshot data remains renderable with a persistent warning and safe refresh-error metadata.

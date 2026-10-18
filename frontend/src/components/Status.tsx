@@ -1,5 +1,7 @@
 import { AlertCircle, LoaderCircle, RotateCcw } from "lucide-react";
 
+import { useI18n } from "../lib/i18n";
+
 interface FullPageStatusProps {
   label: string;
   detail?: string;
@@ -43,11 +45,12 @@ export function InlineError({
   message: string;
   onRetry?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="inline-state error-state" role="alert">
       <AlertCircle size={22} />
       <div>
-        <strong>Could not load this view</strong>
+        <strong>{t("Could not load this view")}</strong>
         <p>{message}</p>
       </div>
       {onRetry && (
@@ -55,7 +58,7 @@ export function InlineError({
           className="icon-button"
           onClick={onRetry}
           type="button"
-          aria-label="Retry"
+          aria-label={t("Retry")}
         >
           <RotateCcw size={17} />
         </button>

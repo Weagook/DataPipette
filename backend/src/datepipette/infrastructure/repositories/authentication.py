@@ -12,6 +12,7 @@ from datepipette.domain.identity import (
     AccountStatus,
     AccountType,
     AuthenticatedSession,
+    InterfaceLocale,
     SystemRole,
     User,
     UserCredentials,
@@ -30,6 +31,7 @@ def to_user(model: UserModel) -> User:
         created_at=model.created_at,
         updated_at=model.updated_at,
         account_type=AccountType(model.account_type),
+        locale=InterfaceLocale(model.locale),
     )
 
 
@@ -222,3 +224,36 @@ class SqlAlchemyAuthenticationStore:
                     details={},
                 )
             )
+
+    async def update_locale(
+        self,
+        *,
+        user_id: UUID,
+        locale: InterfaceLocale,
+        occurred_at: datetime,
+        request_id: str,
+    ) -> User:
+        async with self._session_factory() as session, session.begin():
+            model = await session.get(UserModel, user_id, with_for_update=True)
+            if model is None:
+                raise RuntimeError("Authenticated user no longer exists")
+            changed = model.locale != locale.value
+            if changed:
+                model.locale = locale.value
+                model.updated_at = occurred_at
+                session.add(
+                    AuditEventModel(
+                        id=uuid4(),
+                        occurred_at=occurred_at,
+                        actor_type=AuditActorType.USER.value,
+                        actor_id=user_id,
+                        action="identity.locale_updated",
+                        outcome=AuditOutcome.SUCCESS.value,
+                        resource_type="user",
+                        resource_id=user_id,
+                        request_id=request_id,
+                        details={"locale": locale.value},
+                    )
+                )
+            await session.flush()
+            return to_user(model)
