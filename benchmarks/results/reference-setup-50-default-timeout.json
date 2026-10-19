@@ -1,0 +1,43 @@
+{
+  "dataset": {
+    "field_count": 50,
+    "row_count": 5000000
+  },
+  "environment": {
+    "application_cpu_count": 4,
+    "application_memory_gib": 7.8,
+    "postgresql_version": "17.11",
+    "source_heap_mebibytes": 2056,
+    "source_index_mebibytes": 282,
+    "source_total_mebibytes": 2338
+  },
+  "failure": {
+    "attempt_count": 2,
+    "first_attempt_error_code": "source_unavailable",
+    "first_attempt_task_duration_seconds": 1811.582,
+    "refresh_statement_timeout_seconds": 1800,
+    "retry_cancelled_by_operator": true,
+    "snapshot_published": false,
+    "terminal_state": "cancelled"
+  },
+  "notes": [
+    "The first attempt exceeded the default refresh statement timeout.",
+    "The automatically scheduled retry was cancelled through the supported API to avoid repeating an already measured workload.",
+    "No installation-wide safety limit was changed for the benchmark."
+  ],
+  "recorded_at": "2026-10-18T19:25:52Z",
+  "schema_version": 1,
+  "source_generation": {
+    "analyze_seconds": 1.762,
+    "customer_count": 100000,
+    "event_count": 5000000,
+    "index_seconds": [
+      4.182,
+      2.692,
+      14.212
+    ],
+    "insert_seconds": 44.012,
+    "invalid_rows": 0,
+    "primary_key_seconds": 12.555
+  }
+}
