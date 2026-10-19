@@ -273,6 +273,18 @@ def _record_batch_from_rows(
     return pa.RecordBatch.from_arrays(arrays, schema=schema)
 
 
+def _append_rows(
+    writer: pq.ParquetWriter,
+    rows: Sequence[Sequence[Any]],
+    *,
+    schema: pa.Schema,
+    adapters: tuple[_ColumnAdapter, ...],
+) -> int:
+    batch = _record_batch_from_rows(rows, schema=schema, adapters=adapters)
+    writer.write_batch(batch)
+    return int(batch.num_rows)
+
+
 class ParquetSnapshotExecutor:
     def __init__(
         self,
@@ -433,21 +445,28 @@ class ParquetSnapshotExecutor:
                     async with source.cursor(name=cursor_name, binary=True) as cursor:
                         _raise_if_cancelled(cancellation)
                         await cursor.execute(compile_dataset_select(context.definition))
-                        while True:
+                        rows = await cursor.fetchmany(self._batch_rows)
+                        while rows:
                             _raise_if_cancelled(cancellation)
-                            rows = await cursor.fetchmany(self._batch_rows)
-                            _raise_if_cancelled(cancellation)
-                            if not rows:
-                                break
-                            batch = _record_batch_from_rows(
-                                rows,
-                                schema=schema,
-                                adapters=adapters,
-                            )
-                            if row_count + batch.num_rows > self._maximum_rows:
+                            if row_count + len(rows) > self._maximum_rows:
                                 raise RefreshRowLimitExceededError
-                            writer.write_batch(batch)
-                            row_count += batch.num_rows
+                            next_rows = asyncio.create_task(cursor.fetchmany(self._batch_rows))
+                            try:
+                                written_rows = await asyncio.to_thread(
+                                    _append_rows,
+                                    writer,
+                                    rows,
+                                    schema=schema,
+                                    adapters=adapters,
+                                )
+                                rows = await next_rows
+                            except BaseException:
+                                next_rows.cancel()
+                                with suppress(asyncio.CancelledError, psycopg.Error):
+                                    await next_rows
+                                raise
+                            row_count += written_rows
+                            _raise_if_cancelled(cancellation)
                 except psycopg.errors.QueryCanceled:
                     _raise_if_cancelled(cancellation)
                     raise
