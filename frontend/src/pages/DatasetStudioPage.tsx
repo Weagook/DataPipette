@@ -126,11 +126,6 @@ function NewStudio() {
     },
   });
 
-  useEffect(() => {
-    if (!connectionId && connections.data?.data[0])
-      setConnectionId(connections.data.data[0].id);
-  }, [connectionId, connections.data]);
-
   function changeMode(next: "visual" | "canvas" | "sql") {
     setMode(next);
     setDefinition((current) => {
@@ -279,6 +274,7 @@ function NewStudio() {
           )}
           {connectionId && mode !== "sql" && !definition && (
             <CatalogStarter
+              key={connectionId}
               connectionId={connectionId}
               onChoose={(detail) =>
                 setDefinition(visualDefinitionFromRelation(detail))
@@ -904,6 +900,16 @@ function CatalogPicker({
     queryFn: () => getCatalogRelation(connectionId, schema, relation),
     enabled: Boolean(schema && relation),
   });
+  const catalogError = schemas.error ?? relations.error ?? detail.error;
+  const retryCatalog = () => {
+    if (schemas.error) void schemas.refetch();
+    else if (relations.error) void relations.refetch();
+    else if (detail.error) void detail.refetch();
+  };
+  useEffect(() => {
+    setSchema("");
+    setRelation("");
+  }, [connectionId]);
   useEffect(() => {
     if (!schema && schemas.data?.data[0]) setSchema(schemas.data.data[0].name);
   }, [schema, schemas.data]);
@@ -918,8 +924,11 @@ function CatalogPicker({
           <select
             value={schema}
             onChange={(event) => setSchema(event.target.value)}
+            disabled={schemas.isPending}
           >
-            <option value="">{t("Select schema")}</option>
+            <option value="">
+              {t(schemas.isPending ? "Loading…" : "Select schema")}
+            </option>
             {schemas.data?.data.map((item) => (
               <option value={item.name} key={item.name}>
                 {item.name}
@@ -933,9 +942,11 @@ function CatalogPicker({
           <select
             value={relation}
             onChange={(event) => setRelation(event.target.value)}
-            disabled={!schema}
+            disabled={!schema || relations.isPending}
           >
-            <option value="">{t("Select relation")}</option>
+            <option value="">
+              {t(relations.isPending ? "Loading…" : "Select relation")}
+            </option>
             {relations.data?.data.map((item) => (
               <option
                 value={item.name}
@@ -980,12 +991,11 @@ function CatalogPicker({
           </button>
         </div>
       )}
-      {(schemas.error || relations.error || detail.error) && (
+      {catalogError && (
         <div className="catalog-picker-error">
           <InlineError
-            message={problemMessage(
-              schemas.error ?? relations.error ?? detail.error,
-            )}
+            message={problemMessage(catalogError)}
+            onRetry={retryCatalog}
           />
           <p>
             {t("Ask an administrator to retest this connection and confirm that PostgreSQL accepts traffic from the DatePipette server.")}
