@@ -5,7 +5,6 @@ description = "API-first analytics platform for PostgreSQL"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 dependencies = [
-    "adbc-driver-postgresql>=1.9,<2",
     "alembic>=1.14,<2",
     "boto3>=1.35,<2",
     "celery[redis]>=5.6,<6",
