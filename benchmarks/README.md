@@ -10,6 +10,8 @@ This directory contains the reproducible workload for the DatePipette MVP perfor
 
 The accepted reference target is a 5-million-row, 50-column snapshot on a 4 CPU / 8 GB DatePipette node, 20 active interactive clients, and two admitted heavy background jobs. One environment cannot prove universal production capacity, so every published result must include hardware, storage topology, configuration, dataset shape, run duration, success/capacity responses, and known limitations.
 
+The first measured baseline is published in [`REPORT_2026-10-19.md`](REPORT_2026-10-19.md). It records a failed 50-column acceptance run and a successful 20-column diagnostic run; keep that distinction explicit when comparing future results.
+
 ## Safety boundary
 
 `sql/prepare_source.sql` drops and recreates only the dedicated `datepipette_benchmark` schema. Never rename that schema to an existing business schema. The API harness creates resources named `Reference PostgreSQL benchmark` and `Reference 5M x 50`; it never prints credentials and reads all secrets from process environment variables.
@@ -21,9 +23,13 @@ The fixture account needs `CONNECT`, `CREATE`, and `TEMP` on the benchmark datab
 The following evaluation-stack command reuses the PostgreSQL client already present in the metadata container. It copies no credentials and prompts for the source password interactively:
 
 ```bash
+export BENCHMARK_SOURCE_HOST='private-postgresql-endpoint'
+export BENCHMARK_SOURCE_USER='benchmark-user'
+export BENCHMARK_SOURCE_DATABASE='benchmark-database'
 docker cp benchmarks/sql/prepare_source.sql datepipette-metadata-db-1:/tmp/prepare_source.sql
 docker exec -it datepipette-metadata-db-1 \
-  psql -h 10.174.80.4 -p 5432 -U datepippet -d datepippet \
+  psql -h "$BENCHMARK_SOURCE_HOST" -p 5432 \
+  -U "$BENCHMARK_SOURCE_USER" -d "$BENCHMARK_SOURCE_DATABASE" \
   -v row_count=5000000 -v customer_count=100000 \
   -f /tmp/prepare_source.sql
 ```
@@ -46,6 +52,8 @@ export DATEPIPETTE_BENCHMARK_SOURCE_PASSWORD
 python3 benchmarks/datepipette_benchmark.py setup \
   --output benchmarks/results/reference-setup.json
 ```
+
+Use `--field-count 20` only for width-isolation diagnostics. Omitting it preserves the accepted 50-column workload.
 
 The setup command is intentionally API-only. It tests the source connection, creates or reuses the named dataset, records Query Safety evidence, applies an explicit administrator override only if the accepted 5-million-row workload is blocked, previews 100 rows, requests a durable refresh, waits for its terminal state, and records worker metrics.
 
@@ -71,13 +79,13 @@ python3 benchmarks/datepipette_benchmark.py load \
   --output benchmarks/results/interactive-c20.json
 ```
 
-Each virtual client owns one persistent HTTP connection and continuously rotates through five public row-query shapes:
+Each virtual client owns one persistent HTTP connection and continuously rotates through the public row-query shapes supported by the published snapshot:
 
 - indexed point lookup;
 - categorical filter plus timestamp sort;
 - date and numeric range filters;
-- text `contains` scan;
-- 50-column page.
+- text `contains` scan when the selected width includes its source field;
+- a page projecting all selected benchmark fields.
 
 The report separates successful latency from `503` admission responses. Capacity rejection is an expected governed outcome and must never be hidden in aggregate latency.
 
@@ -110,7 +118,8 @@ Source cleanup is deliberately separate from normal runs and affects only the sy
 ```bash
 docker cp benchmarks/sql/drop_source.sql datepipette-metadata-db-1:/tmp/drop_source.sql
 docker exec -it datepipette-metadata-db-1 \
-  psql -h 10.174.80.4 -p 5432 -U datepippet -d datepippet \
+  psql -h "$BENCHMARK_SOURCE_HOST" -p 5432 \
+  -U "$BENCHMARK_SOURCE_USER" -d "$BENCHMARK_SOURCE_DATABASE" \
   -f /tmp/drop_source.sql
 ```
 

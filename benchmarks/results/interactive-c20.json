@@ -1,0 +1,60 @@
+{
+  "concurrency": 20,
+  "dataset_id": "56f13ad8-f88b-428a-a75b-a3414634ea44",
+  "duration_seconds": 120.0,
+  "errors": [],
+  "field_count": 20,
+  "recorded_at": "2026-10-18T20:09:02.352664+00:00",
+  "schema_version": 1,
+  "snapshot_id": "b3880606-7c7f-452a-bd55-4bc24af03abd",
+  "snapshot_row_count": 5000000,
+  "summary": {
+    "attempted": 848,
+    "requests_per_second": 1.467,
+    "scenarios": {
+      "categorical_filter": {
+        "attempted": 212,
+        "p50_ms": 4846.173,
+        "p95_ms": 5382.222,
+        "p99_ms": 5406.531,
+        "succeeded": 33
+      },
+      "date_and_amount_range": {
+        "attempted": 213,
+        "p50_ms": 4792.21,
+        "p95_ms": 5205.42,
+        "p99_ms": 5562.312,
+        "succeeded": 51
+      },
+      "point_lookup": {
+        "attempted": 213,
+        "p50_ms": 4735.261,
+        "p95_ms": 5219.235,
+        "p99_ms": 5536.382,
+        "succeeded": 55
+      },
+      "wide_page": {
+        "attempted": 210,
+        "p50_ms": 5060.717,
+        "p95_ms": 5978.478,
+        "p99_ms": 5985.762,
+        "succeeded": 37
+      }
+    },
+    "status_counts": {
+      "200": 176,
+      "503": 672
+    },
+    "succeeded": 176,
+    "success_rate": 0.207547,
+    "successful_latency_ms": {
+      "max": 5985.762,
+      "mean": 4841.239,
+      "min": 2779.935,
+      "p50": 4815.104,
+      "p95": 5406.531,
+      "p99": 5978.478
+    }
+  },
+  "warmup_seconds": 15.0
+}

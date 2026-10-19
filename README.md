@@ -11,7 +11,7 @@
 
 DatePipette turns governed PostgreSQL data into reusable datasets, explorable tables, charts, dashboards, and exports. Analysts can work visually without writing SQL, advanced users can author read-only SQL datasets, and developers can use the backend as a standalone BI core through the same public API that powers the official React application.
 
-> **Status: functional pre-alpha.** The end-to-end evaluation stack is implemented and runnable, but DatePipette is not yet a production release. Backup and restore procedures, general API rate limiting, operational telemetry, capacity benchmarks, and release-candidate security hardening remain on the roadmap.
+> **Status: functional pre-alpha.** The end-to-end evaluation stack is implemented and runnable, but DatePipette is not yet a production release. A reproducible performance baseline is published; optimization against it, backup and restore procedures, general API rate limiting, operational telemetry, and release-candidate security hardening remain on the roadmap.
 
 ## Why DatePipette?
 

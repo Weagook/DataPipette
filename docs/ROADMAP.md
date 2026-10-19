@@ -52,7 +52,8 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Read-only index/query recommendations and estimate-versus-actual execution metrics; DatePipette never applies source DDL
 - [x] Filtered, paginated administrator audit-event API
 - Administrator audit UI (frontend phase)
-- Performance benchmark at the approved baseline
+- [x] Reproducible reference benchmark and first measured baseline report
+- Meet the approved 5M × 50 / 20-active-client target; the current measured baseline is documented but does not pass
 
 ## Phase 3 — Exploration and export
 
