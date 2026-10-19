@@ -24,6 +24,7 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.compute as pc  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 from adbc_driver_manager import dbapi as adbc_dbapi
+from psycopg import sql
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from datepipette.application.connection_access import (
@@ -361,6 +362,27 @@ def _coerce_arrow_batch(
     return pa.RecordBatch.from_arrays(arrays, schema=schema)
 
 
+def _compile_snapshot_query(
+    definition: DatasetDefinition,
+    adapters: tuple[_ColumnAdapter, ...],
+) -> str:
+    projections: list[sql.Composable] = []
+    for adapter in adapters:
+        identifier = sql.Identifier(adapter.name)
+        if adapter.convert is not _identity or pa.types.is_decimal(adapter.arrow_type):
+            projections.append(sql.SQL("{}::text AS {}").format(identifier, identifier))
+        else:
+            projections.append(identifier)
+    return (
+        sql.SQL('SELECT {} FROM ({}) AS "_datepipette_snapshot_source"')
+        .format(
+            sql.SQL(", ").join(projections),
+            compile_dataset_select(definition),
+        )
+        .as_string()
+    )
+
+
 def _stream_arrow_snapshot(
     staging_path: Path,
     *,
@@ -576,7 +598,7 @@ class ParquetSnapshotExecutor:
         row_count = 0
         try:
             _raise_if_cancelled(cancellation)
-            query = compile_dataset_select(context.definition).as_string()
+            query = _compile_snapshot_query(context.definition, adapters)
             thread_cancellation = threading.Event()
             cancel_handle = _AdbcCancelHandle()
             stream_task = asyncio.create_task(
