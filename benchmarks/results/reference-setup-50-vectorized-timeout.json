@@ -1,0 +1,57 @@
+{
+  "dataset": {
+    "field_count": 50,
+    "row_count": 5000000
+  },
+  "diagnostics": {
+    "binary_copy_500k": {
+      "completed": false,
+      "elapsed_seconds_lower_bound": 300,
+      "operator_cancelled": true
+    },
+    "csv_copy_500k": {
+      "completed": false,
+      "elapsed_seconds": 279.01,
+      "operator_cancelled": true
+    },
+    "postgres_explain_500k": {
+      "actual_rows": 500000,
+      "execution_ms": 177.505,
+      "shared_hit_blocks": 148,
+      "shared_read_blocks": 26171
+    }
+  },
+  "environment": {
+    "application_cpu_count": 4,
+    "application_memory_gib": 7.8,
+    "postgres_primary_shared_buffers": "1GB",
+    "postgresql_version": "17.11",
+    "refresh_statement_timeout_seconds": 1800
+  },
+  "failure": {
+    "attempt_count": 3,
+    "attempt_task_duration_seconds": [
+      1811.556,
+      1808.232,
+      1811.538
+    ],
+    "error_code": "source_unavailable",
+    "snapshot_published": false,
+    "terminal_state": "failed"
+  },
+  "implementation": {
+    "parquet_dictionary_encoding": false,
+    "postgres_result_format": "binary",
+    "revision": "22f4123",
+    "row_to_arrow_conversion": "column-vectorized",
+    "source_fetch_and_parquet_write": "pipelined"
+  },
+  "notes": [
+    "The accepted timeout and workload were not changed.",
+    "All three refresh attempts crossed the source statement deadline and no partial snapshot was published.",
+    "A server-side EXPLAIN ANALYZE showed that scanning 500,000 rows was fast; transferring the same wide result remained slow in both CSV and PostgreSQL binary COPY diagnostics.",
+    "The COPY diagnostics were cancelled after establishing lower bounds and did not write retained output files."
+  ],
+  "recorded_at": "2026-10-20T01:11:50+05:00",
+  "schema_version": 1
+}

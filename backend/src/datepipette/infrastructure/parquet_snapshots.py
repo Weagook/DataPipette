@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -123,6 +123,8 @@ def _json_default(value: Any) -> str:
 def _json_text(value: Any) -> str | None:
     if value is None:
         return None
+    if isinstance(value, str):
+        value = json.loads(value)
     return json.dumps(
         value,
         default=_json_default,
@@ -165,13 +167,12 @@ def _adapter(
         "numeric",
         "decimal",
         "money",
-        "text",
-        "name",
-        "citext",
         "uuid",
-    } or _CHARACTER.fullmatch(normalized):
+    }:
         arrow_type = pa.string()
         converter = _text
+    elif normalized in {"text", "name", "citext"} or _CHARACTER.fullmatch(normalized):
+        arrow_type = pa.string()
     elif normalized == "date":
         arrow_type = pa.date32()
     elif timestamp_match := _TIMESTAMP.fullmatch(normalized):
@@ -247,6 +248,43 @@ def _schema_document(adapters: tuple[_ColumnAdapter, ...]) -> dict[str, Any]:
             for item in adapters
         ],
     }
+
+
+def _record_batch_from_rows(
+    rows: Sequence[Sequence[Any]],
+    *,
+    schema: pa.Schema,
+    adapters: tuple[_ColumnAdapter, ...],
+) -> pa.RecordBatch:
+    """Build one Arrow batch without a Python callback for every native cell."""
+
+    if any(len(row) != len(adapters) for row in rows):
+        raise ValueError("Source refresh column count changed")
+    arrays: list[pa.Array] = []
+    columns = zip(*rows, strict=True)
+    for adapter, values in zip(adapters, columns, strict=True):
+        source_values = values if adapter.convert is _identity else map(adapter.convert, values)
+        array = pa.array(
+            source_values,
+            type=adapter.arrow_type,
+            from_pandas=False,
+        )
+        if not adapter.nullable and array.null_count:
+            raise ValueError("Non-nullable source field returned null")
+        arrays.append(array)
+    return pa.RecordBatch.from_arrays(arrays, schema=schema)
+
+
+def _append_rows(
+    writer: pq.ParquetWriter,
+    rows: Sequence[Sequence[Any]],
+    *,
+    schema: pa.Schema,
+    adapters: tuple[_ColumnAdapter, ...],
+) -> int:
+    batch = _record_batch_from_rows(rows, schema=schema, adapters=adapters)
+    writer.write_batch(batch)
+    return int(batch.num_rows)
 
 
 class ParquetSnapshotExecutor:
@@ -391,6 +429,7 @@ class ParquetSnapshotExecutor:
                 schema,
                 version="2.6",
                 compression="zstd",
+                use_dictionary=False,
                 write_statistics=True,
                 write_page_checksum=True,
             )
@@ -406,36 +445,31 @@ class ParquetSnapshotExecutor:
                     _cancel_source_when_requested(source, cancellation)
                 )
                 try:
-                    async with source.cursor(name=cursor_name) as cursor:
+                    async with source.cursor(name=cursor_name, binary=True) as cursor:
                         _raise_if_cancelled(cancellation)
                         await cursor.execute(compile_dataset_select(context.definition))
-                        while True:
+                        rows = await cursor.fetchmany(self._batch_rows)
+                        while rows:
                             _raise_if_cancelled(cancellation)
-                            rows = await cursor.fetchmany(self._batch_rows)
-                            _raise_if_cancelled(cancellation)
-                            if not rows:
-                                break
-                            if any(len(row) != len(adapters) for row in rows):
-                                raise ValueError("Source refresh column count changed")
-                            arrays = [
-                                pa.array(
-                                    [
-                                        adapter.convert(row[index])
-                                        for row in rows
-                                        if adapter.nullable or row[index] is not None
-                                    ],
-                                    type=adapter.arrow_type,
-                                    from_pandas=False,
-                                )
-                                for index, adapter in enumerate(adapters)
-                            ]
-                            if any(len(array) != len(rows) for array in arrays):
-                                raise ValueError("Non-nullable source field returned null")
-                            batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
-                            if row_count + batch.num_rows > self._maximum_rows:
+                            if row_count + len(rows) > self._maximum_rows:
                                 raise RefreshRowLimitExceededError
-                            writer.write_batch(batch)
-                            row_count += batch.num_rows
+                            next_rows = asyncio.create_task(cursor.fetchmany(self._batch_rows))
+                            try:
+                                written_rows = await asyncio.to_thread(
+                                    _append_rows,
+                                    writer,
+                                    rows,
+                                    schema=schema,
+                                    adapters=adapters,
+                                )
+                                rows = await next_rows
+                            except BaseException:
+                                next_rows.cancel()
+                                with suppress(asyncio.CancelledError, psycopg.Error):
+                                    await next_rows
+                                raise
+                            row_count += written_rows
+                            _raise_if_cancelled(cancellation)
                 except psycopg.errors.QueryCanceled:
                     _raise_if_cancelled(cancellation)
                     raise
