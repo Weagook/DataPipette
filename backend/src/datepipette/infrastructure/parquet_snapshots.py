@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -165,13 +165,12 @@ def _adapter(
         "numeric",
         "decimal",
         "money",
-        "text",
-        "name",
-        "citext",
         "uuid",
-    } or _CHARACTER.fullmatch(normalized):
+    }:
         arrow_type = pa.string()
         converter = _text
+    elif normalized in {"text", "name", "citext"} or _CHARACTER.fullmatch(normalized):
+        arrow_type = pa.string()
     elif normalized == "date":
         arrow_type = pa.date32()
     elif timestamp_match := _TIMESTAMP.fullmatch(normalized):
@@ -247,6 +246,31 @@ def _schema_document(adapters: tuple[_ColumnAdapter, ...]) -> dict[str, Any]:
             for item in adapters
         ],
     }
+
+
+def _record_batch_from_rows(
+    rows: Sequence[Sequence[Any]],
+    *,
+    schema: pa.Schema,
+    adapters: tuple[_ColumnAdapter, ...],
+) -> pa.RecordBatch:
+    """Build one Arrow batch without a Python callback for every native cell."""
+
+    if any(len(row) != len(adapters) for row in rows):
+        raise ValueError("Source refresh column count changed")
+    arrays: list[pa.Array] = []
+    columns = zip(*rows, strict=True)
+    for adapter, values in zip(adapters, columns, strict=True):
+        source_values = values if adapter.convert is _identity else map(adapter.convert, values)
+        array = pa.array(
+            source_values,
+            type=adapter.arrow_type,
+            from_pandas=False,
+        )
+        if not adapter.nullable and array.null_count:
+            raise ValueError("Non-nullable source field returned null")
+        arrays.append(array)
+    return pa.RecordBatch.from_arrays(arrays, schema=schema)
 
 
 class ParquetSnapshotExecutor:
@@ -415,23 +439,11 @@ class ParquetSnapshotExecutor:
                             _raise_if_cancelled(cancellation)
                             if not rows:
                                 break
-                            if any(len(row) != len(adapters) for row in rows):
-                                raise ValueError("Source refresh column count changed")
-                            arrays = [
-                                pa.array(
-                                    [
-                                        adapter.convert(row[index])
-                                        for row in rows
-                                        if adapter.nullable or row[index] is not None
-                                    ],
-                                    type=adapter.arrow_type,
-                                    from_pandas=False,
-                                )
-                                for index, adapter in enumerate(adapters)
-                            ]
-                            if any(len(array) != len(rows) for array in arrays):
-                                raise ValueError("Non-nullable source field returned null")
-                            batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
+                            batch = _record_batch_from_rows(
+                                rows,
+                                schema=schema,
+                                adapters=adapters,
+                            )
                             if row_count + batch.num_rows > self._maximum_rows:
                                 raise RefreshRowLimitExceededError
                             writer.write_batch(batch)
