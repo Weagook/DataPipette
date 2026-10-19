@@ -430,7 +430,7 @@ class ParquetSnapshotExecutor:
                     _cancel_source_when_requested(source, cancellation)
                 )
                 try:
-                    async with source.cursor(name=cursor_name) as cursor:
+                    async with source.cursor(name=cursor_name, binary=True) as cursor:
                         _raise_if_cancelled(cancellation)
                         await cursor.execute(compile_dataset_select(context.definition))
                         while True:
