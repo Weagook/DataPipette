@@ -386,6 +386,7 @@ def _stream_arrow_snapshot(
         schema,
         version="2.6",
         compression="zstd",
+        use_dictionary=False,
         write_statistics=True,
         write_page_checksum=True,
     )
