@@ -5,7 +5,7 @@
 
 ## Context
 
-DatePipette already stores field labels, visibility, and display formats in each dataset definition and supports bounded typed snapshot queries. However, a shared client with `view_rows` cannot read an owner's draft or immutable version document, so it has no authorized way to discover field UUIDs and the active published table configuration before issuing its first query. Returning only the selected columns after a query is circular and risks making the official frontend depend on privileged authoring APIs.
+DataPipette already stores field labels, visibility, and display formats in each dataset definition and supports bounded typed snapshot queries. However, a shared client with `view_rows` cannot read an owner's draft or immutable version document, so it has no authorized way to discover field UUIDs and the active published table configuration before issuing its first query. Returning only the selected columns after a query is circular and risks making the official frontend depend on privileged authoring APIs.
 
 The editable draft may differ from the active snapshot. Exploration must follow the last successfully published definition so a failed or incomplete edit cannot change what readers see.
 

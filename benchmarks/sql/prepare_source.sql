@@ -10,10 +10,10 @@
 
 \timing on
 
-DROP SCHEMA IF EXISTS datepipette_benchmark CASCADE;
-CREATE SCHEMA datepipette_benchmark;
+DROP SCHEMA IF EXISTS datapipette_benchmark CASCADE;
+CREATE SCHEMA datapipette_benchmark;
 
-CREATE TABLE datepipette_benchmark.customers (
+CREATE TABLE datapipette_benchmark.customers (
     customer_id bigint PRIMARY KEY,
     customer_name text NOT NULL,
     segment text NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE datepipette_benchmark.customers (
     signup_date date NOT NULL
 );
 
-INSERT INTO datepipette_benchmark.customers (
+INSERT INTO datapipette_benchmark.customers (
     customer_id,
     customer_name,
     segment,
@@ -36,7 +36,7 @@ SELECT
     DATE '2020-01-01' + ((value - 1) % 1461)::integer
 FROM generate_series(1, :customer_count) AS series(value);
 
-CREATE TABLE datepipette_benchmark.events (
+CREATE TABLE datapipette_benchmark.events (
     event_id bigint NOT NULL,
     customer_id bigint NOT NULL,
     occurred_at timestamptz NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE datepipette_benchmark.events (
 
 SET synchronous_commit = off;
 
-INSERT INTO datepipette_benchmark.events
+INSERT INTO datapipette_benchmark.events
 SELECT
     value AS event_id,
     ((value - 1) % :customer_count) + 1 AS customer_id,
@@ -146,28 +146,28 @@ SELECT
     'Synthetic benchmark event class ' || (value % 100)
 FROM generate_series(1, :row_count) AS series(value);
 
-ALTER TABLE datepipette_benchmark.events
+ALTER TABLE datapipette_benchmark.events
     ADD CONSTRAINT events_pkey PRIMARY KEY (event_id);
-ALTER TABLE datepipette_benchmark.events
+ALTER TABLE datapipette_benchmark.events
     ADD CONSTRAINT events_customer_fk
     FOREIGN KEY (customer_id)
-    REFERENCES datepipette_benchmark.customers(customer_id)
+    REFERENCES datapipette_benchmark.customers(customer_id)
     NOT VALID;
 
-CREATE INDEX events_customer_id_idx ON datepipette_benchmark.events(customer_id);
-CREATE INDEX events_occurred_at_idx ON datepipette_benchmark.events(occurred_at);
-CREATE INDEX events_category_idx ON datepipette_benchmark.events(category);
+CREATE INDEX events_customer_id_idx ON datapipette_benchmark.events(customer_id);
+CREATE INDEX events_occurred_at_idx ON datapipette_benchmark.events(occurred_at);
+CREATE INDEX events_category_idx ON datapipette_benchmark.events(category);
 
-ANALYZE datepipette_benchmark.customers;
-ANALYZE datepipette_benchmark.events;
+ANALYZE datapipette_benchmark.customers;
+ANALYZE datapipette_benchmark.events;
 
 SELECT
     count(*) AS event_rows,
     count(*) FILTER (WHERE event_id IS NULL) AS invalid_rows
-FROM datepipette_benchmark.events;
+FROM datapipette_benchmark.events;
 
 SELECT
-    pg_size_pretty(pg_total_relation_size('datepipette_benchmark.events')) AS events_total,
-    pg_size_pretty(pg_relation_size('datepipette_benchmark.events')) AS events_heap,
-    pg_size_pretty(pg_indexes_size('datepipette_benchmark.events')) AS events_indexes,
-    pg_size_pretty(pg_total_relation_size('datepipette_benchmark.customers')) AS customers_total;
+    pg_size_pretty(pg_total_relation_size('datapipette_benchmark.events')) AS events_total,
+    pg_size_pretty(pg_relation_size('datapipette_benchmark.events')) AS events_heap,
+    pg_size_pretty(pg_indexes_size('datapipette_benchmark.events')) AS events_indexes,
+    pg_size_pretty(pg_total_relation_size('datapipette_benchmark.customers')) AS customers_total;

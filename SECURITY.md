@@ -2,7 +2,7 @@
 
 ## Project status
 
-DatePipette is pre-alpha and must not yet be used with production credentials or sensitive business data.
+DataPipette is pre-alpha and must not yet be used with production credentials or sensitive business data.
 
 ## Reporting a vulnerability
 

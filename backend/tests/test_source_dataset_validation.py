@@ -5,14 +5,14 @@ from uuid import uuid4
 
 import pytest
 
-from datepipette.domain.datasets import (
+from datapipette.domain.datasets import (
     DatasetRelationStatistics,
     DatasetValidationState,
     QuerySafetyPolicy,
     ValidationFindingCode,
     ValidationSeverity,
 )
-from datepipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
+from datapipette.infrastructure.dataset_validation import PsycopgSourceDatasetValidator
 
 
 def _explain(plan: dict[str, object]) -> tuple[object, ...]:

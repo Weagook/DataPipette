@@ -4,11 +4,11 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from datepipette.application.refresh_worker import (
+from datapipette.application.refresh_worker import (
     RefreshExecutionResult,
     RefreshWorkerService,
 )
-from datepipette.domain.refresh import (
+from datapipette.domain.refresh import (
     RefreshClaimOutcome,
     RefreshRun,
     RefreshRunState,

@@ -1,6 +1,6 @@
 # Official frontend
 
-The DatePipette web application is the reference client of the public API. It must make the complete governed analytics workflow understandable without adding business behavior that external clients cannot reproduce.
+The DataPipette web application is the reference client of the public API. It must make the complete governed analytics workflow understandable without adding business behavior that external clients cannot reproduce.
 
 ## Experience principles
 
@@ -98,7 +98,7 @@ This baseline is not a WCAG conformance claim or a substitute for assistive-tech
 
 ## Visual direction
 
-The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal data accents, restrained borders, and compact typography. Cards are used only to group meaningful state. Charts share one accessible categorical palette and reserve amber/red for freshness or failure, never decoration. The DatePipette pipette/flow mark is reused from the repository artwork rather than introducing a second identity.
+The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal data accents, restrained borders, and compact typography. Cards are used only to group meaningful state. Charts share one accessible categorical palette and reserve amber/red for freshness or failure, never decoration. The DataPipette pipette/flow mark is reused from the repository artwork rather than introducing a second identity.
 
 ## Server-state behavior
 

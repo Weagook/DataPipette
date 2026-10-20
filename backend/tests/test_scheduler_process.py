@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from datepipette import scheduler
-from datepipette.application.schedules import SchedulerTickResult
-from datepipette.application.storage_cleanup import CleanupTickResult
-from datepipette.config import Settings
+from datapipette import scheduler
+from datapipette.application.schedules import SchedulerTickResult
+from datapipette.application.storage_cleanup import CleanupTickResult
+from datapipette.config import Settings
 
 
 class StopScheduler(Exception):

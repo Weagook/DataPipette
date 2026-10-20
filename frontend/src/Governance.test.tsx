@@ -65,7 +65,7 @@ describe("governance administration", () => {
   });
 
   it("validates and replaces the complete policy with ETag and CSRF protection", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     let putRequest: Request | undefined;
     let putBody: Record<string, number> | undefined;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

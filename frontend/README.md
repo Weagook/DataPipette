@@ -1,4 +1,4 @@
-# DatePipette frontend
+# DataPipette frontend
 
 The official React application is a reference client of the same public API available to external integrations. The first vertical slice implements local-account sign-in, session restoration/logout, a responsive role-aware shell, dashboard discovery, and independent bar, line, pie/donut, and KPI rendering with explicit freshness and failure states.
 
@@ -10,7 +10,7 @@ Build the generated client once, install the locked frontend dependencies, start
 npm ci --prefix clients/typescript
 npm run build --prefix clients/typescript
 npm ci --prefix frontend
-uv run --package datepipette datepipette
+uv run --package datapipette datapipette
 npm run dev --prefix frontend
 ```
 

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from datepipette.application.service_accounts import (
+from datapipette.application.service_accounts import (
     ApiTokenAuthenticationService,
     ApiTokenNotFoundError,
     InvalidApiTokenError,
@@ -16,8 +16,8 @@ from datepipette.application.service_accounts import (
     ServiceAccountService,
     ServiceAccountUpdate,
 )
-from datepipette.domain.identity import AccountStatus, AccountType, SystemRole, User
-from datepipette.domain.service_accounts import (
+from datapipette.domain.identity import AccountStatus, AccountType, SystemRole, User
+from datapipette.domain.service_accounts import (
     ApiToken,
     ApiTokenScope,
     AuthenticatedApiToken,

@@ -5,11 +5,11 @@
 
 ## Context
 
-DatePipette must provide a standalone UI and a backend that other products can use independently. The project needs clear boundaries without the operational cost of early microservices. A portfolio repository should also be straightforward to run and review.
+DataPipette must provide a standalone UI and a backend that other products can use independently. The project needs clear boundaries without the operational cost of early microservices. A portfolio repository should also be straightforward to run and review.
 
 ## Decision
 
-DatePipette will use one monorepo with independently buildable backend and frontend applications. The backend is the product core and exposes all official capabilities through a public REST API. Backend domain modules begin as a modular monolith, while API, worker, and scheduler processes may be deployed independently.
+DataPipette will use one monorepo with independently buildable backend and frontend applications. The backend is the product core and exposes all official capabilities through a public REST API. Backend domain modules begin as a modular monolith, while API, worker, and scheduler processes may be deployed independently.
 
 ## Consequences
 

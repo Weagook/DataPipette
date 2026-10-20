@@ -3,7 +3,7 @@ import { ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react"
 import { useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import brandArtwork from "../../../docs/assets/datepipette-hero-minimal.svg";
+import brandArtwork from "../../../docs/assets/datapipette-hero-minimal.svg";
 import { Brand } from "../components/Brand";
 import { login, problemMessage } from "../lib/api";
 import { useI18n } from "../lib/i18n";
@@ -44,7 +44,7 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
-      <section className="login-story" aria-label={t("DatePipette product introduction")}>
+      <section className="login-story" aria-label={t("DataPipette product introduction")}>
         <div className="login-brand"><Brand /></div>
         <div className="story-copy">
           <span className="eyebrow light">{t("Governed analytics workspace")}</span>
@@ -64,7 +64,7 @@ export function LoginPage() {
         <form className="login-form" onSubmit={submit}>
           <div>
             <span className="eyebrow">{t("Welcome back")}</span>
-            <h2>{t("Sign in to DatePipette")}</h2>
+            <h2>{t("Sign in to DataPipette")}</h2>
             <p>{t("Use your local workspace account.")}</p>
           </div>
           <label>
@@ -105,7 +105,7 @@ export function LoginPage() {
             {signIn.isPending ? t("Signing in…") : t("Open workspace")}
             {!signIn.isPending && <ArrowRight size={17} />}
           </button>
-          <p className="login-security">{t("Your password is sent only to this DatePipette installation and is never stored in the browser.")}</p>
+          <p className="login-security">{t("Your password is sent only to this DataPipette installation and is never stored in the browser.")}</p>
         </form>
       </section>
     </main>

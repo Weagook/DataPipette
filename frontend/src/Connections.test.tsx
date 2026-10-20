@@ -16,7 +16,7 @@ const connection = {
   host: "warehouse.internal",
   port: 5432,
   database_name: "analytics",
-  username: "datepipette_reader",
+  username: "datapipette_reader",
   ssl_mode: "verify-full",
   has_password: true,
   has_ca_certificate: true,
@@ -41,7 +41,7 @@ function renderApp(path: string) {
 
 describe("connection administration", () => {
   it("creates a source while keeping its credentials out of returned state", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     let body: Record<string, unknown> | undefined;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
@@ -62,19 +62,19 @@ describe("connection administration", () => {
     fireEvent.change(screen.getByLabelText("Connection name"), { target: { value: "Production warehouse" } });
     fireEvent.change(screen.getByLabelText("Host"), { target: { value: "warehouse.internal" } });
     fireEvent.change(screen.getByLabelText("Database"), { target: { value: "analytics" } });
-    fireEvent.change(screen.getByLabelText("PostgreSQL role"), { target: { value: "datepipette_reader" } });
+    fireEvent.change(screen.getByLabelText("PostgreSQL role"), { target: { value: "datapipette_reader" } });
     fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "one-time-secret" } });
     fireEvent.change(screen.getByLabelText(/^CA certificate/), { target: { value: "-----BEGIN CERTIFICATE-----\nfixture" } });
     fireEvent.click(screen.getByRole("button", { name: "Create connection" }));
 
     expect(await screen.findByRole("heading", { name: "Production warehouse" })).toBeVisible();
-    expect(body).toMatchObject({ host: "warehouse.internal", database_name: "analytics", username: "datepipette_reader", password: "one-time-secret", ssl_mode: "verify-full" });
+    expect(body).toMatchObject({ host: "warehouse.internal", database_name: "analytics", username: "datapipette_reader", password: "one-time-secret", ssl_mode: "verify-full" });
     expect(JSON.stringify(connection)).not.toContain("one-time-secret");
     expect(screen.getByLabelText(/^Replace password/)).toHaveValue("");
   });
 
   it("tests the source, inspects a relation, and grants exact table scope", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     let grantBody: unknown;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);

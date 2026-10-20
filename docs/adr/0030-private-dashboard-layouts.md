@@ -5,7 +5,7 @@
 
 ## Context
 
-DatePipette needs a durable backend contract for a drag-and-resize dashboard editor before the frontend is built. A dashboard may arrange charts backed by different datasets, but it must not become a second query language or imply a cross-dataset join. Concurrent browser tabs must not silently overwrite each other, and a saved layout must not retain references to missing or another owner's private charts.
+DataPipette needs a durable backend contract for a drag-and-resize dashboard editor before the frontend is built. A dashboard may arrange charts backed by different datasets, but it must not become a second query language or imply a cross-dataset join. Concurrent browser tabs must not silently overwrite each other, and a saved layout must not retain references to missing or another owner's private charts.
 
 ## Decision
 

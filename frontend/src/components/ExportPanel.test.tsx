@@ -6,7 +6,7 @@ import { ExportPanel } from "./ExportPanel";
 
 describe("export downloads", () => {
   it("starts an explicit same-origin browser download from a fresh capability", async () => {
-    document.cookie = "datepipette_csrf=test-csrf";
+    document.cookie = "datapipette_csrf=test-csrf";
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {

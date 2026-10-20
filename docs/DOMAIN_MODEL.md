@@ -162,7 +162,7 @@ queued -> running -> succeeded
                   -> failed
 ```
 
-Each job is bound to the active immutable snapshot at creation and stores selected field UUIDs plus the typed temporary filters and sorts needed to reproduce the request. Metadata PostgreSQL is authoritative; Redis carries only the export UUID. A successful job records its durable storage backend, immutable private object key, media metadata, size, checksum, and eventual purge time. The completed file becomes logically unavailable 24 hours after success. Automatic cleanup removes it after an additional delivery grace while retaining job history. Five-minute encrypted download capabilities can be reissued before expiry without regenerating the file. Local capabilities stream through DatePipette; S3-backed capabilities resolve to equally short-lived presigned private-object URLs after object verification.
+Each job is bound to the active immutable snapshot at creation and stores selected field UUIDs plus the typed temporary filters and sorts needed to reproduce the request. Metadata PostgreSQL is authoritative; Redis carries only the export UUID. A successful job records its durable storage backend, immutable private object key, media metadata, size, checksum, and eventual purge time. The completed file becomes logically unavailable 24 hours after success. Automatic cleanup removes it after an additional delivery grace while retaining job history. Five-minute encrypted download capabilities can be reissued before expiry without regenerating the file. Local capabilities stream through DataPipette; S3-backed capabilities resolve to equally short-lived presigned private-object URLs after object verification.
 
 ### Audit event
 

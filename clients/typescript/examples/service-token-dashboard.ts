@@ -1,14 +1,14 @@
 import {
   createServiceTokenClient,
-  DatePipetteApiError,
+  DataPipetteApiError,
   unwrap,
-} from "@datepipette/api-client";
+} from "@datapipette/api-client";
 
-const baseUrl = process.env.DATEPIPETTE_BASE_URL ?? "http://127.0.0.1:8000";
-const token = process.env.DATEPIPETTE_API_TOKEN;
+const baseUrl = process.env.DATAPIPETTE_BASE_URL ?? "http://127.0.0.1:8000";
+const token = process.env.DATAPIPETTE_API_TOKEN;
 
 if (!token) {
-  throw new Error("Set DATEPIPETTE_API_TOKEN to a dashboards:read service token.");
+  throw new Error("Set DATAPIPETTE_API_TOKEN to a dashboards:read service token.");
 }
 
 const client = createServiceTokenClient({ baseUrl, token });
@@ -43,7 +43,7 @@ try {
     console.log(item.id, result.data.rows);
   }
 } catch (error) {
-  if (error instanceof DatePipetteApiError) {
+  if (error instanceof DataPipetteApiError) {
     console.error(error.code, error.detail, { requestId: error.requestId });
     process.exit(1);
   }

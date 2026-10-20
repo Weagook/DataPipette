@@ -2,7 +2,7 @@
 
 ## Contract
 
-The DatePipette backend is a public product surface. The official frontend and external integrations use the same API contract.
+The DataPipette backend is a public product surface. The official frontend and external integrations use the same API contract.
 
 - Base path: `/api/v1`
 - Transport: HTTPS in production
@@ -63,7 +63,7 @@ Final endpoint names must be tested for consistency before implementation. Actio
 
 - Browser clients create opaque server-side sessions with `POST /api/v1/auth/sessions`.
 - Session and CSRF token plaintext exists only in the browser; metadata PostgreSQL stores SHA-256 digests.
-- The `datepipette_session` cookie is HTTP-only and the `datepipette_csrf` cookie is readable by the official frontend. Both are `SameSite=Strict`; production always adds `Secure`.
+- The `datapipette_session` cookie is HTTP-only and the `datapipette_csrf` cookie is readable by the official frontend. Both are `SameSite=Strict`; production always adds `Secure`.
 - State-changing requests copy the CSRF cookie into `X-CSRF-Token`. The API verifies the cookie, header, and digest bound to the authenticated session.
 - `GET /api/v1/auth/me` resolves the current principal and includes the persisted interface `locale` (`en` or `ru`). `PATCH /api/v1/auth/me/preferences` changes that user's locale and requires the session-bound CSRF cookie/header pair. `DELETE /api/v1/auth/sessions/current` revokes the session.
 - External systems use `Authorization: Bearer <token>`.
@@ -142,7 +142,7 @@ Secret-envelope and connection-test decisions are recorded in [ADR-0007](adr/000
 - An absent object and an object hidden by source privileges produce the same `404 catalog_object_not_found` response. Source failures produce a redacted `502 source_catalog_unavailable` response.
 - Catalog requests read the source directly and do not persist or cache source metadata.
 
-The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-catalog.md); DatePipette scope enforcement is recorded in [ADR-0017](adr/0017-scoped-connection-access.md).
+The live-inspection boundary is recorded in [ADR-0008](adr/0008-live-postgresql-catalog.md); DataPipette scope enforcement is recorded in [ADR-0017](adr/0017-scoped-connection-access.md).
 
 ## Dataset drafts
 
@@ -183,8 +183,8 @@ Definition storage and versioning decisions are recorded in [ADR-0009](adr/0009-
 - A schedule is either `interval` with 5–10,080 minutes or `daily` with a timezone-naive `HH:MM` value interpreted in the returned installation `timezone`. Disabled schedules have `next_run_at: null`. Enabling requires an active published dataset and returns `409 dataset_not_published` otherwise.
 - Scheduled runs target the active published version, not the editable draft. Refresh-run resources expose `trigger_type` (`manual` or `scheduled`) and nullable `schedule_id`.
 - `POST /api/v1/datasets/{dataset_id}/refresh-runs` requires administrator or owner CSRF, the current draft ETag in `If-Match`, and an `Idempotency-Key` of at most 200 characters. The exact revision must have a current `valid` or `valid_with_warnings` validation artifact and the actor must still have source-relation access.
-- A refresh run captures `planner_estimated_rows` from that validation when an attempt starts. Terminal attempts expose `execution_duration_ms`, `actual_rows` when materialization produced a candidate snapshot, and `row_estimate_ratio` when a positive estimate and actual count are both available. These values come from the requested refresh itself; DatePipette does not run `EXPLAIN ANALYZE` or a separate count query.
-- A successful request returns `202`, the durable run resource, `Location`, the draft `ETag`, and `X-DatePipette-Coalesced`. The latter is `true` when this request reused an existing run.
+- A refresh run captures `planner_estimated_rows` from that validation when an attempt starts. Terminal attempts expose `execution_duration_ms`, `actual_rows` when materialization produced a candidate snapshot, and `row_estimate_ratio` when a positive estimate and actual count are both available. These values come from the requested refresh itself; DataPipette does not run `EXPLAIN ANALYZE` or a separate count query.
+- A successful request returns `202`, the durable run resource, `Location`, the draft `ETag`, and `X-DataPipette-Coalesced`. The latter is `true` when this request reused an existing run.
 - Idempotency is scoped to actor and dataset. Retrying the same key returns the same run. A different key coalesces into the one queued run when possible; metadata PostgreSQL retains each hashed request mapping.
 - At most one run is `running` and one is `queued` per dataset. A queued successor waits when another run is active. Duplicate Celery delivery does not restart a running or terminal run.
 - If Redis publication fails, the API returns `503 refresh_dispatch_unavailable` with `Location` and `Retry-After`. Retrying with the same key republishes the same saved run.
@@ -216,7 +216,7 @@ The query and cursor rationale is recorded in [ADR-0014](adr/0014-typed-snapshot
 ## Dataset exports
 
 - `POST /api/v1/datasets/{dataset_id}/exports` requires CSRF, an `Idempotency-Key`, and both `view_rows` and `export` dataset permissions. It accepts `csv` or `xlsx` plus the same bounded field UUID, typed filter, and sort vocabulary used by snapshot row queries; cursors and page size do not apply.
-- Creation returns `202`, `Location`, `X-DatePipette-Idempotent-Replay`, and a durable job bound to the active snapshot at request time. Retrying the same actor/dataset/key returns the same job.
+- Creation returns `202`, `Location`, `X-DataPipette-Idempotent-Replay`, and a durable job bound to the active snapshot at request time. Retrying the same actor/dataset/key returns the same job.
 - `GET /api/v1/datasets/{dataset_id}/exports` returns at most 100 newest jobs; `GET .../{export_id}` returns durable state, applied policy revision, safe error code, timestamps, row count, bytes, checksum, and logical expiry. Non-administrators with `export` see only their own jobs.
 - `POST .../{export_id}/download-link` requires `export` and, for non-administrators, ownership of that export job. It returns a relative five-minute capability URL only for a successful unexpired job and may be called repeatedly without regenerating the artifact.
 - `GET /api/v1/export-downloads?token=...` requires the encrypted capability rather than a session. It returns an attachment from local storage, proxies a verified temporary copy from private-network S3-compatible storage, or returns a `307` to an equally short-lived presigned URL when that URL is browser-reachable. Invalid capabilities are concealed as `404`; expired exports return `410`; unavailable or corrupt storage returns a redacted `503`.
@@ -265,7 +265,7 @@ Use `application/problem+json` following Problem Details semantics. Each error h
 
 ```json
 {
-  "type": "https://docs.datepipette.dev/problems/dataset-invalid",
+  "type": "https://docs.datapipette.dev/problems/dataset-invalid",
   "title": "Dataset is invalid",
   "status": 409,
   "code": "dataset_invalid",
@@ -355,7 +355,7 @@ Mutable resources use optimistic concurrency, such as an opaque revision or ETag
 - `clients/typescript` is generated from the committed `docs/openapi.json`; generated request/response types are not edited or duplicated by hand.
 - `npm run generate:check --prefix clients/typescript` regenerates into a temporary location and fails on byte-level drift. Any intentional API change commits both OpenAPI and the reviewed TypeScript schema.
 - Browser and bearer constructors are separate. Browser mode includes cookies and keeps CSRF explicit; bearer mode accepts one caller-owned secret and never falls back to cookies.
-- `DatePipetteApiError` preserves safe Problem Details and `X-Request-ID`. The client does not expose raw backend failures, persist credentials, retry mutations, or weaken endpoint authorization.
+- `DataPipetteApiError` preserves safe Problem Details and `X-Request-ID`. The client does not expose raw backend failures, persist credentials, retry mutations, or weaken endpoint authorization.
 - The package is independently buildable and currently private to the monorepo. npm publication and semantic-version release automation require a later compatibility decision.
 
 The generation boundary is recorded in [ADR-0034](adr/0034-generated-typescript-api-client.md).

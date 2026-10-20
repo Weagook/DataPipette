@@ -25,7 +25,7 @@ Preview and refresh have different latency and result-shape expectations. Previe
 - Administrators can reduce source exposure without redeploying or restarting API and worker processes.
 - Preview clients can associate returned business rows with the exact policy revision that governed execution.
 - Failed oversized refreshes preserve stale-if-error behavior: a prior active snapshot remains readable, while first publication remains unavailable with a safe error.
-- The refresh row guard is streaming and memory-bounded, but PostgreSQL may produce one additional fetch batch before DatePipette detects the excess. Statement timeout and the read-only source role remain independent defenses.
+- The refresh row guard is streaming and memory-bounded, but PostgreSQL may produce one additional fetch batch before DataPipette detects the excess. Statement timeout and the read-only source role remain independent defenses.
 - Together with ADR-0038 and ADR-0039, the runtime portion of QSA-004 now covers source, interactive analytical, export, and shared heavy-worker execution boundaries.
 
 ## Alternatives considered

@@ -9,7 +9,7 @@ The MVP is complete when a new single-company installation can connect a Postgre
 1. An administrator creates a local account and a read-only PostgreSQL connection.
 2. The administrator grants an analyst access to selected source schemas or tables.
 3. The analyst creates a private visual dataset from one or more tables.
-4. DatePipette suggests joins from foreign keys; the analyst confirms `INNER JOIN` or `LEFT JOIN` relationships.
+4. DataPipette suggests joins from foreign keys; the analyst confirms `INNER JOIN` or `LEFT JOIN` relationships.
 5. The analyst validates and previews a draft.
 6. Publishing starts a background refresh and streams the result into Parquet.
 7. A completed snapshot becomes active atomically.

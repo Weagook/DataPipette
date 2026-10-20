@@ -2,11 +2,11 @@
 
 ## Vision
 
-DatePipette is a simple, embeddable BI engine for teams whose business data lives in PostgreSQL. It turns a visual dataset definition or an advanced SQL query into a governed snapshot that can be browsed, exported, visualized, and embedded through a public API.
+DataPipette is a simple, embeddable BI engine for teams whose business data lives in PostgreSQL. It turns a visual dataset definition or an advanced SQL query into a governed snapshot that can be browsed, exported, visualized, and embedded through a public API.
 
 ## Product shape
 
-DatePipette is both:
+DataPipette is both:
 
 - a standalone web application for analysts, administrators, and dashboard viewers; and
 - a headless backend that external products can integrate through the same public API used by the official frontend.
@@ -15,7 +15,7 @@ The backend is the product core. No essential product behavior may exist only in
 
 ## Initial audience
 
-DatePipette initially targets single-company deployments such as CRM products, internal banking systems, and other operational platforms backed by PostgreSQL.
+DataPipette initially targets single-company deployments such as CRM products, internal banking systems, and other operational platforms backed by PostgreSQL.
 
 ### Administrator
 
@@ -31,7 +31,7 @@ Views shared dashboards and aggregated chart results without gaining automatic a
 
 ### Integrating developer
 
-Uses a service account and scoped API token to embed DatePipette capabilities in another application.
+Uses a service account and scoped API token to embed DataPipette capabilities in another application.
 
 ## Core jobs to be done
 
@@ -69,11 +69,11 @@ Errors are represented as states and structured API responses. A stale successfu
 
 ### Incremental scope
 
-DatePipette will prefer a complete vertical slice over a broad collection of incomplete features.
+DataPipette will prefer a complete vertical slice over a broad collection of incomplete features.
 
 ## Initial non-goals
 
-- Multi-tenant SaaS within one DatePipette installation
+- Multi-tenant SaaS within one DataPipette installation
 - Data sources other than PostgreSQL
 - Cross-connection joins
 - Dataset-on-dataset dependencies

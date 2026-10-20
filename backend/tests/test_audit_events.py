@@ -8,14 +8,14 @@ from uuid import uuid4
 
 import pytest
 
-from datepipette.application.audit_events import (
+from datapipette.application.audit_events import (
     AuditAdministratorRequiredError,
     AuditEventFilter,
     AuditEventService,
     InvalidAuditCursorError,
 )
-from datepipette.domain.audit import AuditActorType, AuditEvent, AuditOutcome
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datapipette.domain.audit import AuditActorType, AuditEvent, AuditOutcome
+from datapipette.domain.identity import AccountStatus, SystemRole, User
 
 NOW = datetime(2026, 10, 14, 12, tzinfo=UTC)
 

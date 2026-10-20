@@ -5,13 +5,13 @@
 
 ## Context
 
-DatePipette's backend and generated TypeScript client already expose the MVP capabilities, but the product needs a reference application that demonstrates those capabilities without becoming a second source of business rules. Building every editor simultaneously would create broad scaffolding with weak workflows. The first UI slice must establish navigation, session security, remote-state conventions, visual language, accessibility, and a useful end-to-end role boundary.
+DataPipette's backend and generated TypeScript client already expose the MVP capabilities, but the product needs a reference application that demonstrates those capabilities without becoming a second source of business rules. Building every editor simultaneously would create broad scaffolding with weak workflows. The first UI slice must establish navigation, session security, remote-state conventions, visual language, accessibility, and a useful end-to-end role boundary.
 
 Dashboard reading is the smallest valuable cross-role workflow. It exercises browser sessions, Viewer authorization, shared resources, independent analytical queries, chart presentation, freshness, stale fallback, capacity failures, and responsive layout. The existing constrained dashboard-item response did not expose saved chart name/type, so a Viewer client could obtain aggregate rows but could not faithfully render the intended visualization without forbidden direct chart access.
 
 ## Decision
 
-- Add an independently buildable Vite/React/TypeScript application under `frontend/` and consume `@datepipette/api-client` as the only request and DTO contract.
+- Add an independently buildable Vite/React/TypeScript application under `frontend/` and consume `@datapipette/api-client` as the only request and DTO contract.
 - Use TanStack Query for server state, React Router for route state, Apache ECharts for saved visualizations, and small React-local state for transient interaction. Do not add a second global state store.
 - Deliver the UI as complete vertical slices. The first slice implements local session login/restoration/logout, a responsive role-aware shell, dashboard collection/detail, and independent bar, line, pie/donut, and KPI states.
 - Keep browser credentials in secure cookies. Read the CSRF cookie only at mutation time; never persist passwords, session secrets, or bearer tokens in browser storage.

@@ -261,7 +261,7 @@ function DashboardEditor(props: DashboardEditorProps) {
 
   function dropItem(event: DragEvent<HTMLElement>) {
     event.preventDefault();
-    const itemId = event.dataTransfer.getData("text/datepipette-item");
+    const itemId = event.dataTransfer.getData("text/datapipette-item");
     const item = itemsOf(props.definition).find((value) => value.id === itemId);
     if (!item) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -408,7 +408,7 @@ function LayoutTile({
       className="layout-tile"
       draggable
       onDragStart={(event) => {
-        event.dataTransfer.setData("text/datepipette-item", item.id);
+        event.dataTransfer.setData("text/datapipette-item", item.id);
         event.dataTransfer.effectAllowed = "move";
       }}
       style={{ gridColumn: `${item.x + 1} / span ${item.width}`, gridRow: `${item.y + 1} / span ${item.height}` }}

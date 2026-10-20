@@ -5,9 +5,9 @@ import asyncio
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
-from datepipette.config import Settings
-from datepipette.infrastructure.database import create_database_engine
-from datepipette.infrastructure.interactive_admission import (
+from datapipette.config import Settings
+from datapipette.infrastructure.database import create_database_engine
+from datapipette.infrastructure.interactive_admission import (
     PostgresInteractiveQueryAdmission,
 )
 

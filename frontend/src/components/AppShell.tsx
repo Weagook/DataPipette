@@ -58,7 +58,7 @@ export function AppShell({ user, children }: AppShellProps) {
   const pageName = routeName(location.pathname, t);
 
   useEffect(() => {
-    document.title = `${pageName} · DatePipette`;
+    document.title = `${pageName} · DataPipette`;
   }, [pageName]);
 
   useEffect(() => {

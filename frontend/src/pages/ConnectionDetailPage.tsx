@@ -196,7 +196,7 @@ function ConnectionWorkspace({ connection, form, onFormChange, onSave, savePendi
             <Field label={t("Host")}><input required value={form.host} onChange={(e) => onFormChange({ ...form, host: e.target.value })} placeholder="db.internal.example" /></Field>
             <Field label={t("Port")}><input required type="number" min="1" max="65535" value={form.port} onChange={(e) => onFormChange({ ...form, port: e.target.value })} /></Field>
             <Field label={t("Database")}><input required value={form.databaseName} onChange={(e) => onFormChange({ ...form, databaseName: e.target.value })} placeholder="analytics" /></Field>
-            <Field label={t("PostgreSQL role")}><input required autoComplete="username" value={form.username} onChange={(e) => onFormChange({ ...form, username: e.target.value })} placeholder="datepipette_reader" /></Field>
+            <Field label={t("PostgreSQL role")}><input required autoComplete="username" value={form.username} onChange={(e) => onFormChange({ ...form, username: e.target.value })} placeholder="datapipette_reader" /></Field>
             <Field label={t(connection ? "Replace password" : "Password")} hint={t(connection ? "Leave empty to keep the encrypted password." : "Sent once and never returned.")}>
               <input required={!connection} type="password" autoComplete="new-password" value={form.password} onChange={(e) => onFormChange({ ...form, password: e.target.value })} placeholder={t(connection ? "Keep existing password" : "Source password")} />
             </Field>
@@ -239,7 +239,7 @@ function ConnectionWorkspace({ connection, form, onFormChange, onSave, savePendi
         <aside className="connection-security-card">
           <LockKeyhole size={23} />
           <h2>{t("Secret-safe by default")}</h2>
-          <p>{t("DatePipette stores encrypted credentials, sends no source secrets to Redis, and returns only safe connection-test codes.")}</p>
+          <p>{t("DataPipette stores encrypted credentials, sends no source secrets to Redis, and returns only safe connection-test codes.")}</p>
           <ul><li>{t("Use a dedicated read-only PostgreSQL role.")}</li><li>{t("Prefer Verify full outside local development.")}</li><li>{t("Grant only the catalog scope an analyst needs.")}</li></ul>
         </aside>
       </div>
@@ -291,7 +291,7 @@ function CatalogAndAccess({ connection }: { connection: Connection }) {
 
   return (
     <section className="catalog-access-section">
-      <header className="section-heading"><div><span className="eyebrow">{t("Live source boundary")}</span><h2>{t("Catalog & access")}</h2><p>{t("Browse what the configured PostgreSQL role can see, then narrow it for DatePipette analysts.")}</p></div></header>
+      <header className="section-heading"><div><span className="eyebrow">{t("Live source boundary")}</span><h2>{t("Catalog & access")}</h2><p>{t("Browse what the configured PostgreSQL role can see, then narrow it for DataPipette analysts.")}</p></div></header>
       {(schemas.isError || relations.isError || detail.isError) && <InlineError message={problemMessage(schemas.error ?? relations.error ?? detail.error)} onRetry={() => void schemas.refetch()} />}
       <div className="catalog-access-grid">
         <div className="catalog-browser-card">

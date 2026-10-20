@@ -9,14 +9,14 @@ from uuid import uuid4
 
 import pytest
 
-from datepipette.application.dataset_validation import DatasetValidationService
-from datepipette.application.query_safety import (
+from datapipette.application.dataset_validation import DatasetValidationService
+from datapipette.application.query_safety import (
     ManagedQuerySafetyPolicy,
     QuerySafetyAdministratorRequiredError,
     QuerySafetyPolicyService,
 )
-from datepipette.domain.datasets import QuerySafetyPolicy
-from datepipette.domain.identity import AccountStatus, SystemRole, User
+from datapipette.domain.datasets import QuerySafetyPolicy
+from datapipette.domain.identity import AccountStatus, SystemRole, User
 
 NOW = datetime(2026, 10, 14, tzinfo=UTC)
 

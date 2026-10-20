@@ -1,10 +1,10 @@
-"""Export the canonical DatePipette OpenAPI document."""
+"""Export the canonical DataPipette OpenAPI document."""
 
 import json
 from pathlib import Path
 
-from datepipette.config import Settings
-from datepipette.main import create_app
+from datapipette.config import Settings
+from datapipette.main import create_app
 
 
 def main() -> None:

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 
-from datepipette.infrastructure.duckdb_runtime import (
+from datapipette.infrastructure.duckdb_runtime import (
     DuckDbQueryConcurrencyLimiter,
     InteractiveQueryAdmissionUnavailableError,
     InteractiveQueryCapacityExceededError,

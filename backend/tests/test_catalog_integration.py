@@ -10,20 +10,20 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text, update
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.config import Settings
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import AuditEventModel, PostgresConnectionModel
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.config import Settings
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import AuditEventModel, PostgresConnectionModel
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
-SOURCE_PASSWORD = "datepipette_dev_only"
+SOURCE_PASSWORD = "datapipette_dev_only"
 SCHEMA = "catalog_fixture"
-READER_ROLE = "datepipette_catalog_reader"
+READER_ROLE = "datapipette_catalog_reader"
 READER_PASSWORD = "catalog-reader-password"
 
 
@@ -121,7 +121,7 @@ async def _bootstrap_and_create_source_objects() -> None:
                 text(f"CREATE ROLE {READER_ROLE} LOGIN PASSWORD '{READER_PASSWORD}'")
             )
             await connection.execute(
-                text(f"GRANT CONNECT ON DATABASE datepipette TO {READER_ROLE}")
+                text(f"GRANT CONNECT ON DATABASE datapipette TO {READER_ROLE}")
             )
             await connection.execute(text(f"GRANT USAGE ON SCHEMA {SCHEMA} TO {READER_ROLE}"))
             await connection.execute(text(f"GRANT SELECT ON {SCHEMA}.orders TO {READER_ROLE}"))
@@ -182,7 +182,7 @@ def _create_connection(
     client: TestClient,
     *,
     name: str = "Catalog source",
-    username: str = "datepipette",
+    username: str = "datapipette",
     password: str = SOURCE_PASSWORD,
 ) -> str:
     response = client.post(
@@ -191,7 +191,7 @@ def _create_connection(
             "name": name,
             "host": "127.0.0.1",
             "port": 5432,
-            "database_name": "datepipette",
+            "database_name": "datapipette",
             "username": username,
             "password": password,
             "ssl_mode": "disable",

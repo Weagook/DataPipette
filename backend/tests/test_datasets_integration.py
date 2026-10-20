@@ -13,26 +13,26 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.application.connection_access import ConnectionAccessAuthorizer
-from datepipette.application.refresh_worker import RefreshWorkerService
-from datepipette.config import Settings
-from datepipette.infrastructure.crypto import AesGcmSecretCipher
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import (
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.application.connection_access import ConnectionAccessAuthorizer
+from datapipette.application.refresh_worker import RefreshWorkerService
+from datapipette.config import Settings
+from datapipette.infrastructure.crypto import AesGcmSecretCipher
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import (
     AuditEventModel,
     DatasetModel,
     DatasetRefreshRunModel,
     DatasetVersionModel,
 )
-from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.infrastructure.repositories.connection_access import (
+from datapipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
-from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
-from datepipette.main import create_app
+from datapipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
 ADMIN_EMAIL = "admin@example.com"

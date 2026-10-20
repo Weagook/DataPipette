@@ -4,7 +4,7 @@ interface BrandProps {
 
 export function Brand({ compact = false }: BrandProps) {
   return (
-    <div className="brand" aria-label="DatePipette">
+    <div className="brand" aria-label="DataPipette">
       <span className="brand-mark" aria-hidden="true">
         <i />
         <i />

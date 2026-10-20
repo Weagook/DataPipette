@@ -8,7 +8,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const schemaPath = resolve(packageRoot, "../../docs/openapi.json");
 const committedPath = resolve(packageRoot, "src/generated/schema.ts");
 const check = process.argv.includes("--check");
-const temporaryDirectory = check ? mkdtempSync(join(tmpdir(), "datepipette-client-")) : null;
+const temporaryDirectory = check ? mkdtempSync(join(tmpdir(), "datapipette-client-")) : null;
 const outputPath = temporaryDirectory ? join(temporaryDirectory, "schema.ts") : committedPath;
 const cliPath = resolve(packageRoot, "node_modules/openapi-typescript/bin/cli.js");
 

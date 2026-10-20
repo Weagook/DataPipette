@@ -41,13 +41,13 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: datepipette
-          POSTGRES_USER: datepipette
-          POSTGRES_PASSWORD: datepipette_dev_only
+          POSTGRES_DB: datapipette
+          POSTGRES_USER: datapipette
+          POSTGRES_PASSWORD: datapipette_dev_only
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U datepipette -d datepipette"
+          --health-cmd "pg_isready -U datapipette -d datapipette"
           --health-interval 2s
           --health-timeout 3s
           --health-retries 15
@@ -77,19 +77,19 @@ jobs:
         run: uv lock --check
 
       - name: Check formatting
-        run: uv run --package datepipette ruff format --check backend
+        run: uv run --package datapipette ruff format --check backend
 
       - name: Lint
-        run: uv run --package datepipette ruff check backend
+        run: uv run --package datapipette ruff check backend
 
       - name: Type check
-        run: uv run --package datepipette mypy
+        run: uv run --package datapipette mypy
 
       - name: Test benchmark tooling
         run: uv run python -m unittest discover -s benchmarks/tests
 
       - name: Apply migrations
-        run: uv run --package datepipette alembic -c backend/alembic.ini upgrade head
+        run: uv run --package datapipette alembic -c backend/alembic.ini upgrade head
 
       - name: Start S3-compatible test storage
         run: |
@@ -98,20 +98,20 @@ jobs:
           docker compose -f deploy/compose/compose.yaml run --rm minio-init
 
       - name: Check migration drift
-        run: uv run --package datepipette alembic -c backend/alembic.ini check
+        run: uv run --package datapipette alembic -c backend/alembic.ini check
 
       - name: Test
-        run: uv run --package datepipette pytest
+        run: uv run --package datapipette pytest
         env:
-          DATEPIPETTE_TEST_S3_ENDPOINT: http://127.0.0.1:9000
-          DATEPIPETTE_TEST_S3_BUCKET: datepipette
-          DATEPIPETTE_TEST_S3_ACCESS_KEY_ID: datepipette_minio
-          DATEPIPETTE_TEST_S3_SECRET_ACCESS_KEY: datepipette_minio_dev_only
+          DATAPIPETTE_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+          DATAPIPETTE_TEST_S3_BUCKET: datapipette
+          DATAPIPETTE_TEST_S3_ACCESS_KEY_ID: datapipette_minio
+          DATAPIPETTE_TEST_S3_SECRET_ACCESS_KEY: datapipette_minio_dev_only
 
       - name: Check migration graph
-        run: uv run --package datepipette alembic -c backend/alembic.ini heads
+        run: uv run --package datapipette alembic -c backend/alembic.ini heads
 
       - name: Check OpenAPI contract drift
         run: |
-          uv run --package datepipette python tools/export_openapi.py
+          uv run --package datapipette python tools/export_openapi.py
           git diff --exit-code -- docs/openapi.json

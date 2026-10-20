@@ -3,14 +3,14 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from datepipette.domain.dataset_impact import (
+from datapipette.domain.dataset_impact import (
     DatasetDependencyReference,
     DependencyResourceType,
     SchemaChangeCompatibility,
     SchemaChangeKind,
     compare_dataset_schema,
 )
-from datepipette.domain.datasets import (
+from datapipette.domain.datasets import (
     DatasetDraft,
     DatasetValidation,
     DatasetValidationState,

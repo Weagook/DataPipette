@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 import pyarrow as pa  # type: ignore[import-untyped]
 import pytest
 
-from datepipette.infrastructure.parquet_snapshots import (
+from datapipette.infrastructure.parquet_snapshots import (
     _adapter,
     _record_batch_from_rows,
 )

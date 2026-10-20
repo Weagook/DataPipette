@@ -13,7 +13,7 @@ const RECIPIENT_ID = "00000000-0000-4000-8000-000000000005";
 
 describe("dashboard studio", () => {
   it("creates a valid private layout and explicitly grants view access", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     let createBody: Record<string, unknown> | undefined;
     let grantBody: unknown;
     let createdDefinition: unknown;

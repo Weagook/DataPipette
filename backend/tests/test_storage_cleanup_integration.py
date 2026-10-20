@@ -9,10 +9,10 @@ from uuid import uuid4
 
 from sqlalchemy import select, text
 
-from datepipette.application.storage_cleanup import StorageCleanupService
-from datepipette.config import Settings
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import (
+from datapipette.application.storage_cleanup import StorageCleanupService
+from datapipette.config import Settings
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import (
     AuditEventModel,
     DatasetExportModel,
     DatasetModel,
@@ -22,11 +22,11 @@ from datepipette.infrastructure.models import (
     PostgresConnectionModel,
     UserModel,
 )
-from datepipette.infrastructure.object_storage import (
+from datapipette.infrastructure.object_storage import (
     LocalObjectStorage,
     ObjectStorageRegistry,
 )
-from datepipette.infrastructure.repositories.storage_cleanup import (
+from datapipette.infrastructure.repositories.storage_cleanup import (
     SqlAlchemyStorageCleanupStore,
 )
 

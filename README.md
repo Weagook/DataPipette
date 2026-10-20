@@ -1,21 +1,21 @@
-# DatePipette
+# DataPipette
 
-![DatePipette — precise data transformed into analytics](docs/assets/datepipette-hero-minimal.svg)
+![DataPipette — precise data transformed into analytics](docs/assets/datapipette-hero-minimal.svg)
 
-[![Backend](https://github.com/Weagook/DatePipette/actions/workflows/backend.yml/badge.svg)](https://github.com/Weagook/DatePipette/actions/workflows/backend.yml)
-[![Frontend](https://github.com/Weagook/DatePipette/actions/workflows/frontend.yml/badge.svg)](https://github.com/Weagook/DatePipette/actions/workflows/frontend.yml)
-[![TypeScript client](https://github.com/Weagook/DatePipette/actions/workflows/typescript-client.yml/badge.svg)](https://github.com/Weagook/DatePipette/actions/workflows/typescript-client.yml)
+[![Backend](https://github.com/Weagook/DataPipette/actions/workflows/backend.yml/badge.svg)](https://github.com/Weagook/DataPipette/actions/workflows/backend.yml)
+[![Frontend](https://github.com/Weagook/DataPipette/actions/workflows/frontend.yml/badge.svg)](https://github.com/Weagook/DataPipette/actions/workflows/frontend.yml)
+[![TypeScript client](https://github.com/Weagook/DataPipette/actions/workflows/typescript-client.yml/badge.svg)](https://github.com/Weagook/DataPipette/actions/workflows/typescript-client.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 **An API-first, snapshot-based business intelligence platform for PostgreSQL.**
 
-DatePipette turns governed PostgreSQL data into reusable datasets, explorable tables, charts, dashboards, and exports. Analysts can work visually without writing SQL, advanced users can author read-only SQL datasets, and developers can use the backend as a standalone BI core through the same public API that powers the official React application.
+DataPipette turns governed PostgreSQL data into reusable datasets, explorable tables, charts, dashboards, and exports. Analysts can work visually without writing SQL, advanced users can author read-only SQL datasets, and developers can use the backend as a standalone BI core through the same public API that powers the official React application.
 
-> **Status: functional pre-alpha.** The end-to-end evaluation stack is implemented and runnable, but DatePipette is not yet a production release. A reproducible performance baseline is published; optimization against it, backup and restore procedures, general API rate limiting, operational telemetry, and release-candidate security hardening remain on the roadmap.
+> **Status: functional pre-alpha.** The end-to-end evaluation stack is implemented and runnable, but DataPipette is not yet a production release. A reproducible performance baseline is published; optimization against it, backup and restore procedures, general API rate limiting, operational telemetry, and release-candidate security hardening remain on the roadmap.
 
-## Why DatePipette?
+## Why DataPipette?
 
-- **Built for operational PostgreSQL data.** Connect one or more PostgreSQL databases to a single-company DatePipette installation.
+- **Built for operational PostgreSQL data.** Connect one or more PostgreSQL databases to a single-company DataPipette installation.
 - **No-code, low-code, or SQL.** Build datasets with a guided form, a desktop node canvas, or one advanced read-only SQL statement.
 - **Source-friendly analytics.** Interactive tables, charts, dashboards, and exports read immutable Parquet snapshots instead of repeatedly querying the operational database.
 - **Governed by default.** Resources start private, access is granted deliberately, source credentials stay server-side, and expensive work is bounded by configurable safety policies.
@@ -41,7 +41,7 @@ DatePipette turns governed PostgreSQL data into reusable datasets, explorable ta
 
 1. An administrator connects PostgreSQL with a dedicated read-only account and controls which schemas or tables are visible.
 2. An analyst creates a private dataset using the Guided Visual Builder, Canvas Builder, or Advanced SQL.
-3. DatePipette validates the definition, inspects the PostgreSQL plan without executing it, and explains safety findings.
+3. DataPipette validates the definition, inspects the PostgreSQL plan without executing it, and explains safety findings.
 4. A bounded preview confirms the result before publication.
 5. A worker materializes the accepted result as an immutable Parquet snapshot and publishes it atomically.
 6. Users browse detailed rows, apply typed filters, export CSV/XLSX files, and build saved aggregate charts and dashboards from the snapshot.
@@ -54,21 +54,21 @@ If a later refresh fails, the last successful snapshot remains readable and the 
 The complete evaluation deployment requires only Git, Docker Engine, and Docker Compose v2. Python, Node.js, PostgreSQL, Redis, and MinIO run inside the stack.
 
 ```bash
-git clone git@github.com:Weagook/DatePipette.git
-cd DatePipette
+git clone git@github.com:Weagook/DataPipette.git
+cd DataPipette
 cp deploy/compose/.env.example .env
 chmod 600 .env
 ```
 
 Before starting, replace every development credential in `.env`. At minimum, configure:
 
-- `DATEPIPETTE_POSTGRES_PASSWORD`
-- `DATEPIPETTE_S3_ACCESS_KEY_ID`
-- `DATEPIPETTE_S3_SECRET_ACCESS_KEY`
-- `DATEPIPETTE_CONNECTION_ENCRYPTION_KEY`
-- `DATEPIPETTE_BOOTSTRAP_ADMIN_EMAIL`
-- `DATEPIPETTE_BOOTSTRAP_ADMIN_DISPLAY_NAME`
-- `DATEPIPETTE_BOOTSTRAP_ADMIN_PASSWORD`
+- `DATAPIPETTE_POSTGRES_PASSWORD`
+- `DATAPIPETTE_S3_ACCESS_KEY_ID`
+- `DATAPIPETTE_S3_SECRET_ACCESS_KEY`
+- `DATAPIPETTE_CONNECTION_ENCRYPTION_KEY`
+- `DATAPIPETTE_BOOTSTRAP_ADMIN_EMAIL`
+- `DATAPIPETTE_BOOTSTRAP_ADMIN_DISPLAY_NAME`
+- `DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD`
 
 Start or update the entire application with one command:
 
@@ -103,7 +103,7 @@ flowchart LR
 
 The FastAPI instances are stateless and can scale separately from workers. Metadata PostgreSQL owns durable product state, Redis transports background work, and S3-compatible storage owns production snapshots and exports. Interactive snapshot reads use bounded DuckDB queries; source PostgreSQL is contacted only for catalog inspection, validation, preview, and refresh.
 
-DatePipette is a modular monolith: the domain layer remains independent of FastAPI, Celery, SQLAlchemy, Redis, S3, and DuckDB, while infrastructure adapters implement the runtime boundaries. See [Architecture](docs/ARCHITECTURE.md) and the [ADR index](docs/adr/README.md) for the detailed model and accepted decisions.
+DataPipette is a modular monolith: the domain layer remains independent of FastAPI, Celery, SQLAlchemy, Redis, S3, and DuckDB, while infrastructure adapters implement the runtime boundaries. See [Architecture](docs/ARCHITECTURE.md) and the [ADR index](docs/adr/README.md) for the detailed model and accepted decisions.
 
 ## Technology stack
 
@@ -117,7 +117,7 @@ DatePipette is a modular monolith: the domain layer remains independent of FastA
 
 The backend is a product surface, not an implementation detail of the frontend. The reviewed contract is committed as [`docs/openapi.json`](docs/openapi.json), and CI fails if the generated client drifts from it.
 
-The reusable [`@datepipette/api-client`](clients/typescript/README.md) package provides typed browser-session and bearer-token clients. External systems authenticate through service accounts; each integration can hold independently revocable tokens with explicit scopes and optional expiration.
+The reusable [`@datapipette/api-client`](clients/typescript/README.md) package provides typed browser-session and bearer-token clients. External systems authenticate through service accounts; each integration can hold independently revocable tokens with explicit scopes and optional expiration.
 
 ## Repository layout
 
@@ -130,7 +130,7 @@ docs/                Product, architecture, security, API, deployment, and ADRs
 tools/               Contract generation and repository verification utilities
 ```
 
-DatePipette is a uv workspace. For host-based development, worker and scheduler commands, complete CI-equivalent checks, and contribution expectations, read [CONTRIBUTING.md](CONTRIBUTING.md).
+DataPipette is a uv workspace. For host-based development, worker and scheduler commands, complete CI-equivalent checks, and contribution expectations, read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Documentation
 
@@ -149,7 +149,7 @@ The [documentation index](docs/README.md) is the best entry point for the comple
 
 ## Current boundaries
 
-DatePipette currently targets a **single-company installation** whose business data lives in PostgreSQL. The following are intentionally not part of the current release:
+DataPipette currently targets a **single-company installation** whose business data lives in PostgreSQL. The following are intentionally not part of the current release:
 
 - multi-tenant SaaS within one installation;
 - data sources other than PostgreSQL;
@@ -170,8 +170,8 @@ Do not report vulnerabilities in a public issue. Follow the repository [security
 
 ## Contributing
 
-DatePipette is pre-alpha, so focused changes aligned with the approved product boundary are preferred over broad feature additions. Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change.
+DataPipette is pre-alpha, so focused changes aligned with the approved product boundary are preferred over broad feature additions. Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change.
 
 ## License
 
-DatePipette is distributed under the [Apache License 2.0](LICENSE).
+DataPipette is distributed under the [Apache License 2.0](LICENSE).

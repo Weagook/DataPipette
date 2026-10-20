@@ -18,14 +18,14 @@ from pydantic import SecretStr
 from redis.asyncio import Redis
 from sqlalchemy import select, text
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.config import Settings
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.interactive_admission import (
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.config import Settings
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.interactive_admission import (
     PostgresInteractiveQueryAdmission,
 )
-from datepipette.infrastructure.models import (
+from datapipette.infrastructure.models import (
     AuditEventModel,
     ChartFieldDependencyModel,
     DatasetModel,
@@ -35,8 +35,8 @@ from datepipette.infrastructure.models import (
     PostgresConnectionModel,
     UserModel,
 )
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 ADMIN_EMAIL = "chart-admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
@@ -66,8 +66,8 @@ async def _reset(settings: Settings) -> None:
 @pytest.fixture
 def chart_settings(tmp_path: Path) -> Settings:
     database_url = os.environ.get(
-        "DATEPIPETTE_TEST_DATABASE_URL",
-        "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette",
+        "DATAPIPETTE_TEST_DATABASE_URL",
+        "postgresql+psycopg://datapipette:datapipette_dev_only@localhost:5432/datapipette",
     )
     return Settings(
         environment="test",

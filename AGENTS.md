@@ -2,7 +2,7 @@
 
 ## Product
 
-DatePipette is an API-first, snapshot-based BI platform for PostgreSQL. The backend is a headless product core; the official frontend is a client of the same public API used by integrations.
+DataPipette is an API-first, snapshot-based BI platform for PostgreSQL. The backend is a headless product core; the official frontend is a client of the same public API used by integrations.
 
 The repository is currently pre-alpha and documentation-first. Do not describe planned behavior as implemented.
 

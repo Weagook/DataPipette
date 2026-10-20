@@ -6130,7 +6130,7 @@
     "securitySchemes": {
       "APIKeyCookie": {
         "in": "cookie",
-        "name": "datepipette_session",
+        "name": "datapipette_session",
         "type": "apiKey"
       },
       "HTTPBearer": {
@@ -6140,7 +6140,7 @@
     }
   },
   "info": {
-    "title": "DatePipette API",
+    "title": "DataPipette API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",

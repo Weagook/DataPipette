@@ -5,7 +5,7 @@
 
 ## Context
 
-DatePipette can publish immutable Parquet snapshots and expose a governed detailed-row contract, but it has no persistent analytical query that a frontend can render as a chart. Dataset schema impact already reserves chart dependency references; inventing those references before charts existed was intentionally deferred. The first chart slice must remain API-first, preserve dataset authorization, avoid source PostgreSQL during interactive reads, and provide deterministic bounded results.
+DataPipette can publish immutable Parquet snapshots and expose a governed detailed-row contract, but it has no persistent analytical query that a frontend can render as a chart. Dataset schema impact already reserves chart dependency references; inventing those references before charts existed was intentionally deferred. The first chart slice must remain API-first, preserve dataset authorization, avoid source PostgreSQL during interactive reads, and provide deterministic bounded results.
 
 ## Decision
 

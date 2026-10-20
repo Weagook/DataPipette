@@ -10,7 +10,7 @@ This document describes the intended security architecture. Vulnerability report
 Browser / external client
         | untrusted input
         v
-DatePipette API
+DataPipette API
         | authenticated and authorized operations
         +--> Metadata PostgreSQL
         +--> Redis
@@ -143,14 +143,14 @@ Dashboard-item queries accept only a dashboard ID and stable item ID; the backen
 
 - Export generation requires effective `view_rows` and `export` permissions.
 - Export history, job reads, and download-link issuance require effective `export`; non-administrators may access only export jobs they requested.
-- DatePipette download capabilities and generated S3 presigned URLs expire after five minutes; files expire after 24 hours.
+- DataPipette download capabilities and generated S3 presigned URLs expire after five minutes; files expire after 24 hours.
 - Storage buckets disallow public access.
 - CSV generation must mitigate formula injection for values beginning with spreadsheet control characters.
 - XLSX generation must preserve types and must not embed executable macros.
 - Implemented exports are bound to the immutable snapshot selected at creation; Celery receives only the export UUID and duplicate delivery cannot rerun a terminal job.
 - CSV and XLSX string cells beginning with spreadsheet formula/control prefixes are escaped with a leading apostrophe. Precision-sensitive decimal values remain text.
 - Download capabilities are issued only after dataset and job-ownership authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. A capability already issued before grant revocation remains valid until this short expiry. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
-- S3 download resolution verifies the private object before issuing a `307` redirect. When object storage is private to the deployment network, DatePipette instead downloads and verifies a unique temporary copy, sends it as an attachment, and removes it after the response. A redirect remains a bearer capability and is never treated as proof of authorization after its expiry.
+- S3 download resolution verifies the private object before issuing a `307` redirect. When object storage is private to the deployment network, DataPipette instead downloads and verifies a unique temporary copy, sends it as an attachment, and removes it after the response. A redirect remains a bearer capability and is never treated as proof of authorization after its expiry.
 - Physical export deletion waits until logical expiry plus a delivery grace. Snapshot deletion waits for supersession grace and the absence of queued, running, or unexpired export references.
 
 ## Audit

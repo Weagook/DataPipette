@@ -11,14 +11,14 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import text
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.config import Settings
-from datepipette.domain.audit import AuditActorType, AuditOutcome
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import AuditEventModel
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.config import Settings
+from datapipette.domain.audit import AuditActorType, AuditOutcome
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import AuditEventModel
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(
     environment="test",

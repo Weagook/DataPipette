@@ -2,7 +2,7 @@
 
 ## Architectural style
 
-DatePipette starts as a modular monolith with independently deployable process types:
+DataPipette starts as a modular monolith with independently deployable process types:
 
 - a stateless FastAPI application;
 - Celery workers for refresh, export, and cleanup jobs;
@@ -45,9 +45,9 @@ Snapshot reads: API or worker -> DuckDB -> Parquet storage
 ## Repository layout
 
 ```text
-DatePipette/
+DataPipette/
 ├── backend/
-│   ├── src/datepipette/
+│   ├── src/datapipette/
 │   │   ├── api/
 │   │   ├── application/
 │   │   ├── infrastructure/
@@ -115,7 +115,7 @@ Private versioned chart specifications, aggregate/type validation, timezone-awar
 
 ### Export
 
-Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, short-lived capability issuance, and automatic physical cleanup are implemented. After shared heavy-job admission, the worker validates the stored typed query against the captured snapshot schema, streams DuckDB batches into a local candidate under the captured timeout, rows, bytes, memory, threads, and temporary-disk policy, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Refresh and export resources retain their applied policy revision. Logical expiry is enforced after 24 hours. A valid DatePipette capability returns a local file, redirects to an equally short-lived externally reachable presigned object URL, or proxies a verified ephemeral copy when S3-compatible storage is private to the deployment network. Cleanup removes the artifact after expiry plus a delivery grace while retaining job history.
+Snapshot-bound asynchronous CSV/XLSX generation, durable job history, private local or S3-compatible artifact storage, short-lived capability issuance, and automatic physical cleanup are implemented. After shared heavy-job admission, the worker validates the stored typed query against the captured snapshot schema, streams DuckDB batches into a local candidate under the captured timeout, rows, bytes, memory, threads, and temporary-disk policy, neutralizes formula-like strings, and publishes the artifact through the configured storage adapter. Refresh and export resources retain their applied policy revision. Logical expiry is enforced after 24 hours. A valid DataPipette capability returns a local file, redirects to an equally short-lived externally reachable presigned object URL, or proxies a verified ephemeral copy when S3-compatible storage is private to the deployment network. Cleanup removes the artifact after expiry plus a delivery grace while retaining job history.
 
 ### Audit and operations
 
@@ -128,7 +128,7 @@ Audit events, structured logs, metrics, trace propagation, health checks, and ad
 | Metadata PostgreSQL | identities, ACLs, connections, dataset definitions, chart/dashboard config, jobs, audit events | snapshot rows, token plaintext, connection plaintext |
 | Redis | Celery transport, login-rate counters, ephemeral coordination/cache | authoritative job state, durable capacity ownership, metadata, large tabular results |
 | S3-compatible storage | Parquet snapshots and temporary export files | authoritative ACLs or secrets |
-| Source PostgreSQL | company business data | DatePipette metadata |
+| Source PostgreSQL | company business data | DataPipette metadata |
 
 ## Dataset publication flow
 

@@ -12,7 +12,7 @@ The optimized implementation preserves the refresh safety contract, but the 5M Ã
 - High-cardinality Parquet dictionary encoding is disabled.
 - All three accepted-workload attempts ended at the source deadline, published no snapshot, and removed their staging files.
 
-The experiment therefore does not justify a claim that DatePipette now satisfies the accepted refresh target. It does show that further Parquet micro-optimization is not the next evidence-led step on this particular test path.
+The experiment therefore does not justify a claim that DataPipette now satisfies the accepted refresh target. It does show that further Parquet micro-optimization is not the next evidence-led step on this particular test path.
 
 ## Compared revisions
 
@@ -52,7 +52,7 @@ The worker's task duration includes governed cancellation and cleanup around the
 
 ## Bottleneck isolation
 
-Two direct controls were run from the application node against the primary PostgreSQL node, outside DatePipette's Arrow and Parquet code.
+Two direct controls were run from the application node against the primary PostgreSQL node, outside DataPipette's Arrow and Parquet code.
 
 First, `EXPLAIN (ANALYZE, BUFFERS)` over the first 500,000 wide rows completed inside PostgreSQL in 177.505 ms. The sequential scan itself is not the dominant elapsed cost.
 
@@ -63,7 +63,7 @@ Second, client-side `COPY` of the same 500,000-row, 50-column projection to `/de
 | CSV `COPY` | 279.010 s | Cancelled after establishing the bound |
 | Binary `COPY` | >300 s | Cancelled after establishing the bound |
 
-No Arrow conversion, Parquet compression, object storage upload, or DatePipette API execution was present in those controls. The evidence points to result serialization/transport/client consumption along the PostgreSQL-to-application path, rather than table scanning or Parquet encoding alone. This is a diagnosis for this environment, not proof of a universal PostgreSQL limitation.
+No Arrow conversion, Parquet compression, object storage upload, or DataPipette API execution was present in those controls. The evidence points to result serialization/transport/client consumption along the PostgreSQL-to-application path, rather than table scanning or Parquet encoding alone. This is a diagnosis for this environment, not proof of a universal PostgreSQL limitation.
 
 The primary and replica are reachable directly at their private addresses. The configured endpoint used by the benchmark resolved consistently to the primary during five control connections, so replica rotation was not responsible for the three timeouts.
 

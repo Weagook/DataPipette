@@ -7,7 +7,7 @@
 
 The guided visual editor is efficient for a small join tree, but it does not communicate data flow spatially. Analysts also need an n8n-like desktop surface where tables, joins, projection, presentation, and output can be understood and rearranged as a graph. This editor must not introduce a second executable dataset format or make browser state authoritative. Existing visual definitions and external API clients must remain compatible.
 
-Reliable node dragging, transformed coordinates, keyboard selection, pan/zoom, minimap navigation, and edge hit testing are specialized interaction behavior. Reimplementing them with ad-hoc DOM and SVG logic would create a large accessibility and browser-compatibility surface unrelated to DatePipette's analytical domain.
+Reliable node dragging, transformed coordinates, keyboard selection, pan/zoom, minimap navigation, and edge hit testing are specialized interaction behavior. Reimplementing them with ad-hoc DOM and SVG logic would create a large accessibility and browser-compatibility surface unrelated to DataPipette's analytical domain.
 
 ## Decision
 

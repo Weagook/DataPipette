@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from datepipette.infrastructure.dataset_preview import json_safe_preview_value
+from datapipette.infrastructure.dataset_preview import json_safe_preview_value
 
 
 def test_preview_value_normalization_preserves_precision_and_structure() -> None:

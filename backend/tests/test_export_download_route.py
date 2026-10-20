@@ -5,8 +5,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from datepipette.api.routes.exports import router
-from datepipette.domain.exports import ExportDownload
+from datapipette.api.routes.exports import router
+from datapipette.domain.exports import ExportDownload
 
 
 class TemporaryDownloadService:
