@@ -1,1 +1,1 @@
-"""Reproducible DatePipette benchmark tooling."""
+"""Reproducible DataPipette benchmark tooling."""

@@ -5,7 +5,7 @@
 
 ## Context
 
-DatePipette already writes append-only security and governance events to metadata PostgreSQL, but an administrator previously needed direct database access to inspect them. Direct access is unsuitable for the official frontend and makes external operational tooling depend on private table structure. The read surface must remain bounded, preserve the existing redaction boundary, and avoid turning an audit read into an infinite sequence of new audit records.
+DataPipette already writes append-only security and governance events to metadata PostgreSQL, but an administrator previously needed direct database access to inspect them. Direct access is unsuitable for the official frontend and makes external operational tooling depend on private table structure. The read surface must remain bounded, preserve the existing redaction boundary, and avoid turning an audit read into an infinite sequence of new audit records.
 
 ## Decision
 

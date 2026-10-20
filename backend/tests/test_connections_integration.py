@@ -10,18 +10,18 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text, update
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.config import Settings
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import AuditEventModel, PostgresConnectionModel
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.config import Settings
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import AuditEventModel, PostgresConnectionModel
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
-SOURCE_PASSWORD = "datepipette_dev_only"
+SOURCE_PASSWORD = "datapipette_dev_only"
 TEST_CA_CERTIFICATE = "-----BEGIN CERTIFICATE-----\nZmFrZQ==\n-----END CERTIFICATE-----"
 
 
@@ -100,8 +100,8 @@ def _create(client: TestClient, name: str = "Local PostgreSQL") -> dict[str, obj
             "name": name,
             "host": "127.0.0.1",
             "port": 5432,
-            "database_name": "datepipette",
-            "username": "datepipette",
+            "database_name": "datapipette",
+            "username": "datapipette",
             "password": SOURCE_PASSWORD,
             "ssl_mode": "disable",
         },
@@ -125,8 +125,8 @@ def test_connection_crud_encrypts_secrets_and_tests_real_postgres() -> None:
             json={
                 "name": "Local PostgreSQL",
                 "host": "localhost",
-                "database_name": "datepipette",
-                "username": "datepipette",
+                "database_name": "datapipette",
+                "username": "datapipette",
                 "password": "different",
                 "ssl_mode": "disable",
             },
@@ -211,7 +211,7 @@ def test_connection_crud_encrypts_secrets_and_tests_real_postgres() -> None:
             await engine.dispose()
 
     encrypted, events = asyncio.run(inspect())
-    assert encrypted.startswith("v1.")
+    assert encrypted.startswith("v2.")
     assert SOURCE_PASSWORD not in encrypted
     assert SOURCE_PASSWORD not in repr(events)
     assert {event.action for event in events} >= {

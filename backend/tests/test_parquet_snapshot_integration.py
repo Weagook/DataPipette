@@ -16,45 +16,45 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.access_control import DatasetAccessAuthorizer
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.application.connection_access import ConnectionAccessAuthorizer
-from datepipette.application.refresh_runs import RefreshRunService
-from datepipette.application.refresh_worker import RefreshExecutionResult, RefreshWorkerService
-from datepipette.application.snapshot_queries import DatasetSnapshotQueryService
-from datepipette.config import Settings
-from datepipette.domain.refresh import RefreshClaimOutcome
-from datepipette.infrastructure.crypto import AesGcmSecretCipher
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.duckdb_snapshot_queries import (
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.access_control import DatasetAccessAuthorizer
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.application.connection_access import ConnectionAccessAuthorizer
+from datapipette.application.refresh_runs import RefreshRunService
+from datapipette.application.refresh_worker import RefreshExecutionResult, RefreshWorkerService
+from datapipette.application.snapshot_queries import DatasetSnapshotQueryService
+from datapipette.config import Settings
+from datapipette.domain.refresh import RefreshClaimOutcome
+from datapipette.infrastructure.crypto import AesGcmSecretCipher
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.duckdb_snapshot_queries import (
     DuckDbLocalSnapshotQueryExecutor,
 )
-from datepipette.infrastructure.models import (
+from datapipette.infrastructure.models import (
     AuditEventModel,
     DatasetSnapshotModel,
 )
-from datepipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
-from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.infrastructure.repositories.connection_access import (
+from datapipette.infrastructure.parquet_snapshots import LocalParquetSnapshotExecutor
+from datapipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
-from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
-from datepipette.infrastructure.repositories.query_safety import (
+from datapipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
+from datapipette.infrastructure.repositories.query_safety import (
     SqlAlchemyQuerySafetyPolicyStore,
 )
-from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
-from datepipette.infrastructure.repositories.snapshot_queries import (
+from datapipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
+from datapipette.infrastructure.repositories.snapshot_queries import (
     SqlAlchemySnapshotQueryStore,
 )
-from datepipette.infrastructure.snapshot_cursor import EncryptedSnapshotCursorCodec
-from datepipette.main import create_app
+from datapipette.infrastructure.snapshot_cursor import EncryptedSnapshotCursorCodec
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
-SOURCE_PASSWORD = "datepipette_dev_only"
+SOURCE_PASSWORD = "datapipette_dev_only"
 SCHEMA = "snapshot_fixture"
 
 
@@ -173,8 +173,8 @@ def _connection(client: TestClient) -> str:
             "name": "Snapshot source",
             "host": "localhost",
             "port": 5432,
-            "database_name": "datepipette",
-            "username": "datepipette",
+            "database_name": "datapipette",
+            "username": "datapipette",
             "password": SOURCE_PASSWORD,
             "ssl_mode": "disable",
         },

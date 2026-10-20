@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from datepipette.domain.datasets import (
+from datapipette.domain.datasets import (
     DatasetDefinitionKind,
     FieldDisplay,
     SqlDatasetDefinition,

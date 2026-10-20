@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from datepipette.config import Settings
+from datapipette.config import Settings
 
 PRODUCTION_KEY = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
 
@@ -15,7 +15,7 @@ def _production_settings(**values: Any) -> Settings:
         environment="production",
         connection_encryption_key=PRODUCTION_KEY,
         object_storage_backend="s3",
-        s3_bucket="datepipette",
+        s3_bucket="datapipette",
         s3_access_key_id="access-key",
         s3_secret_access_key="secret-key",
         **values,
@@ -23,13 +23,13 @@ def _production_settings(**values: Any) -> Settings:
 
 
 def test_settings_hide_connection_values_in_repr() -> None:
-    database_url = "postgresql+psycopg://sensitive-user:sensitive-password@db/datepipette"
+    database_url = "postgresql+psycopg://sensitive-user:sensitive-password@db/datapipette"
     redis_url = "redis://:sensitive-password@redis:6379/0"
 
     settings = Settings(
         metadata_database_url=database_url,
         redis_url=redis_url,
-        s3_bucket="datepipette",
+        s3_bucket="datapipette",
         s3_access_key_id="sensitive-access",
         s3_secret_access_key="sensitive-s3-secret",
     )
@@ -70,7 +70,7 @@ def test_s3_configuration_is_complete_and_production_safe() -> None:
     with pytest.raises(ValidationError, match="must use HTTPS"):
         _production_settings(s3_endpoint_url="http://minio:9000")
     assert _production_settings(s3_endpoint_url="https://objects.example").s3_bucket == (
-        "datepipette"
+        "datapipette"
     )
 
 

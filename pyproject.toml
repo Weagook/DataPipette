@@ -1,7 +1,7 @@
 [project]
-name = "datepipette-workspace"
+name = "datapipette-workspace"
 version = "0.1.0"
-description = "DatePipette monorepo workspace"
+description = "DataPipette monorepo workspace"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
@@ -19,7 +19,7 @@ src = ["backend/src"]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["datepipette"]
+known-first-party = ["datapipette"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -29,12 +29,12 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
-addopts = ["--strict-config", "--strict-markers", "--cov=datepipette", "--cov-report=term-missing", "--cov-fail-under=90"]
+addopts = ["--strict-config", "--strict-markers", "--cov=datapipette", "--cov-report=term-missing", "--cov-fail-under=90"]
 
 [tool.coverage.run]
 branch = true
 concurrency = ["thread", "greenlet"]
-source = ["datepipette"]
+source = ["datapipette"]
 
 [tool.coverage.report]
 show_missing = true

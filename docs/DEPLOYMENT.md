@@ -1,29 +1,50 @@
 # Evaluation deployment
 
-DatePipette ships a self-contained Docker Compose topology for evaluation on one machine. The host needs only Git, Docker Engine, and Docker Compose v2; Python, uv, Node.js, PostgreSQL, Redis, and MinIO are contained in the deployment.
+DataPipette ships a self-contained Docker Compose topology for evaluation on one machine. The host needs only Git, Docker Engine, and Docker Compose v2; Python, uv, Node.js, PostgreSQL, Redis, and MinIO are contained in the deployment.
 
 This topology is not yet the production reference architecture. It uses an embedded MinIO-compatible object store and an environment file as the source for local secrets, and it does not provision DNS, TLS certificates, backups, or external observability.
+
+## Upgrade from the former DatePipette name
+
+The pre-alpha product was renamed to DataPipette. New installations use the `DATAPIPETTE_` environment prefix, `datapipette` package and command names, and `datapipette_*` Compose volumes. An existing installation must retain its current database names, credentials, encryption key, S3 bucket, and physical volume names during the upgrade.
+
+Before pulling the rename, back up `.env` and the three persistent volumes. After pulling it, rename only the environment-variable keys from `DATEPIPETTE_` to `DATAPIPETTE_`; do not replace their values mechanically. Add these compatibility bindings for the volumes created by the former Compose project:
+
+```dotenv
+DATAPIPETTE_METADATA_VOLUME_NAME=datepipette_metadata-data
+DATAPIPETTE_REDIS_VOLUME_NAME=datepipette_redis-data
+DATAPIPETTE_MINIO_VOLUME_NAME=datepipette_minio-data
+```
+
+Stop the former project without deleting its volumes, then start DataPipette normally:
+
+```bash
+docker compose -p datepipette --env-file .env -f deploy/compose/compose.yaml down
+docker compose --env-file .env -f deploy/compose/compose.yaml up -d --build --wait
+```
+
+Stored PostgreSQL credentials remain decryptable through the versioned legacy envelope reader. Existing browser sessions, snapshot cursors, and short-lived export links are intentionally not migrated; users sign in again and can reissue those transient values. Metadata, datasets, snapshots, exports, users, grants, and saved source connections remain in place.
 
 ## First start
 
 Clone the private repository, copy the tracked template, restrict it to the current operating-system user, and replace every development credential:
 
 ```bash
-git clone git@github.com:Weagook/DatePipette.git
-cd DatePipette
+git clone git@github.com:Weagook/DataPipette.git
+cd DataPipette
 cp deploy/compose/.env.example .env
 chmod 600 .env
 ```
 
 At minimum, set unique values for:
 
-- `DATEPIPETTE_POSTGRES_PASSWORD`
-- `DATEPIPETTE_S3_ACCESS_KEY_ID`
-- `DATEPIPETTE_S3_SECRET_ACCESS_KEY`
-- `DATEPIPETTE_CONNECTION_ENCRYPTION_KEY`
-- `DATEPIPETTE_BOOTSTRAP_ADMIN_EMAIL`
-- `DATEPIPETTE_BOOTSTRAP_ADMIN_DISPLAY_NAME`
-- `DATEPIPETTE_BOOTSTRAP_ADMIN_PASSWORD`
+- `DATAPIPETTE_POSTGRES_PASSWORD`
+- `DATAPIPETTE_S3_ACCESS_KEY_ID`
+- `DATAPIPETTE_S3_SECRET_ACCESS_KEY`
+- `DATAPIPETTE_CONNECTION_ENCRYPTION_KEY`
+- `DATAPIPETTE_BOOTSTRAP_ADMIN_EMAIL`
+- `DATAPIPETTE_BOOTSTRAP_ADMIN_DISPLAY_NAME`
+- `DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD`
 
 Generate ordinary random secrets with `openssl rand -hex 32`. Generate the connection-encryption key as URL-safe base64 without padding from exactly 32 random bytes. For example, on a machine with Python:
 
@@ -48,7 +69,7 @@ The dependency graph performs the following work:
 5. starts the API, refresh/export worker, and durable scheduler;
 6. exposes the React SPA and same-origin `/api` through Nginx.
 
-Compose mounts `.env` read-only into the one-shot bootstrap container as a secret source, and the administration CLI reads only `DATEPIPETTE_BOOTSTRAP_ADMIN_PASSWORD` from it. The password is not included in the process command or ordinary container environment. Bootstrap is deliberately convergent rather than reconciling: every later `up` skips creation when an administrator exists and never changes that account's email, name, or password.
+Compose mounts `.env` read-only into the one-shot bootstrap container as a secret source, and the administration CLI reads only `DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD` from it. The password is not included in the process command or ordinary container environment. Bootstrap is deliberately convergent rather than reconciling: every later `up` skips creation when an administrator exists and never changes that account's email, name, or password.
 
 By default, the application listens only on `http://127.0.0.1:8080`. Use an SSH tunnel for a remote evaluation:
 
@@ -56,9 +77,9 @@ By default, the application listens only on `http://127.0.0.1:8080`. Use an SSH 
 ssh -L 8080:127.0.0.1:8080 user@server
 ```
 
-Then open `http://127.0.0.1:8080` locally. To bind the evaluation gateway to every server interface, explicitly set `DATEPIPETTE_HTTP_BIND_ADDRESS=0.0.0.0`; do this only behind an appropriate firewall and TLS reverse proxy. PostgreSQL, Redis, MinIO API, and the MinIO console remain loopback-only.
+Then open `http://127.0.0.1:8080` locally. To bind the evaluation gateway to every server interface, explicitly set `DATAPIPETTE_HTTP_BIND_ADDRESS=0.0.0.0`; do this only behind an appropriate firewall and TLS reverse proxy. PostgreSQL, Redis, MinIO API, and the MinIO console remain loopback-only.
 
-The bundled stack sets `DATEPIPETTE_S3_DOWNLOAD_DELIVERY=proxy`: CSV/XLSX downloads stay on the public application origin while the API retrieves and verifies the object from private MinIO, streams the attachment, and deletes its temporary copy. A deployment with browser-reachable HTTPS S3 should use the default `redirect` mode to avoid proxying large files through the API.
+The bundled stack sets `DATAPIPETTE_S3_DOWNLOAD_DELIVERY=proxy`: CSV/XLSX downloads stay on the public application origin while the API retrieves and verifies the object from private MinIO, streams the attachment, and deletes its temporary copy. A deployment with browser-reachable HTTPS S3 should use the default `redirect` mode to avoid proxying large files through the API.
 
 ## Operations
 
@@ -104,7 +125,7 @@ Do not add `--volumes` unless permanent deletion of metadata, object storage, an
 
 Both `api` and `worker` must be able to resolve and connect to every configured business PostgreSQL host. Use a stable DNS name or network address and a dedicated read-only database role. When PostgreSQL runs directly on the same Linux host as Docker, use `host.docker.internal`; Compose maps it to the host gateway for the two source-touching services. Do not use `localhost`, because inside a container it refers to that container itself.
 
-Prefer `verify-full` with an explicit CA certificate. Source credentials are encrypted with `DATEPIPETTE_CONNECTION_ENCRYPTION_KEY`, but network reachability and PostgreSQL privileges remain deployment responsibilities.
+Prefer `verify-full` with an explicit CA certificate. Source credentials are encrypted with `DATAPIPETTE_CONNECTION_ENCRYPTION_KEY`, but network reachability and PostgreSQL privileges remain deployment responsibilities.
 
 ## Production boundary
 
@@ -115,6 +136,6 @@ Before an internet-facing production rollout, replace or extend this evaluation 
 - a production secret manager or Docker/Kubernetes secret delivery;
 - immutable published images rather than server-side source builds;
 - backup/restore drills, metrics, logs, alerts, and capacity benchmarks;
-- `DATEPIPETTE_ENVIRONMENT=production` with an HTTPS S3 endpoint.
+- `DATAPIPETTE_ENVIRONMENT=production` with an HTTPS S3 endpoint.
 
 Production mode intentionally rejects the built-in development encryption key, local object storage, and non-HTTPS custom S3 endpoints.

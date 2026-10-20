@@ -1,6 +1,6 @@
-# DatePipette TypeScript API client
+# DataPipette TypeScript API client
 
-This independently buildable package is the typed client for the public DatePipette API. It is currently private to the monorepo and is not published to npm.
+This independently buildable package is the typed client for the public DataPipette API. It is currently private to the monorepo and is not published to npm.
 
 The committed `src/generated/schema.ts` is generated from [`docs/openapi.json`](../../docs/openapi.json). Do not edit it by hand. The small runtime wrapper uses `openapi-fetch` and adds explicit browser-cookie and service-token constructors plus safe Problem Details errors.
 
@@ -27,7 +27,7 @@ CI fails when the committed TypeScript schema differs from `docs/openapi.json`.
 ## Browser session
 
 ```ts
-import { createBrowserClient, unwrap } from "@datepipette/api-client";
+import { createBrowserClient, unwrap } from "@datapipette/api-client";
 
 const client = createBrowserClient({ baseUrl: "https://analytics.example.com" });
 const dashboards = unwrap(
@@ -42,11 +42,11 @@ Browser mode sends cookies with `credentials: "include"`. State-changing calls s
 ## Service token
 
 ```ts
-import { createServiceTokenClient, unwrap } from "@datepipette/api-client";
+import { createServiceTokenClient, unwrap } from "@datapipette/api-client";
 
 const client = createServiceTokenClient({
   baseUrl: "https://analytics.example.com",
-  token: process.env.DATEPIPETTE_API_TOKEN!,
+  token: process.env.DATAPIPETTE_API_TOKEN!,
 });
 const dashboards = unwrap(await client.GET("/api/v1/dashboards", {
   params: { query: {} },
@@ -58,15 +58,15 @@ The token is held in memory and attached only as an `Authorization: Bearer` head
 The executable [`service-token-dashboard.ts`](examples/service-token-dashboard.ts) lists granted dashboards and queries every saved item independently:
 
 ```bash
-export DATEPIPETTE_BASE_URL="http://127.0.0.1:8000"
-read -rs DATEPIPETTE_API_TOKEN
-export DATEPIPETTE_API_TOKEN
+export DATAPIPETTE_BASE_URL="http://127.0.0.1:8000"
+read -rs DATAPIPETTE_API_TOKEN
+export DATAPIPETTE_API_TOKEN
 npm run example:service-token --prefix clients/typescript
-unset DATEPIPETTE_API_TOKEN
+unset DATAPIPETTE_API_TOKEN
 ```
 
 The token needs `dashboards:read` and an effective dashboard grant. A valid token cannot bypass account status, role, direct/group ACLs, or the saved-item query boundary.
 
 ## Errors
 
-`unwrap(...)` returns typed success data or throws `DatePipetteApiError`. The error exposes the safe Problem Details `code`, `title`, `detail`, HTTP `status`, and nullable `requestId`; it does not expose backend exceptions or credentials.
+`unwrap(...)` returns typed success data or throws `DataPipetteApiError`. The error exposes the safe Problem Details `code`, `title`, `detail`, HTTP `status`, and nullable `requestId`; it does not expose backend exceptions or credentials.

@@ -5,7 +5,7 @@
 
 ## Context
 
-DatePipette must store PostgreSQL passwords and optional private CA material while keeping the API stateless and horizontally scalable. Metadata database backups must not be sufficient to recover source credentials. Connection tests must support PostgreSQL TLS modes without exposing driver errors or constructing password-bearing URLs.
+DataPipette must store PostgreSQL passwords and optional private CA material while keeping the API stateless and horizontally scalable. Metadata database backups must not be sufficient to recover source credentials. Connection tests must support PostgreSQL TLS modes without exposing driver errors or constructing password-bearing URLs.
 
 ## Decision
 

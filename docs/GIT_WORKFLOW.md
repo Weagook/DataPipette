@@ -1,6 +1,6 @@
 # Git workflow
 
-DatePipette uses short-lived branches, focused pull requests, and a linear, readable history. The repository should explain what changed and why without exposing temporary AI reasoning or requiring a reader to reconstruct the work from checkpoint commits.
+DataPipette uses short-lived branches, focused pull requests, and a linear, readable history. The repository should explain what changed and why without exposing temporary AI reasoning or requiring a reader to reconstruct the work from checkpoint commits.
 
 ## Branches
 

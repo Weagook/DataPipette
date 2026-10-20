@@ -5,7 +5,7 @@
 
 ## Context
 
-DatePipette already publishes a validated draft as an immutable dataset-version row and keeps older versions as superseded metadata, but clients can read only the mutable draft. Before publication, an analyst needs to understand how the current validated output differs from the active published contract. This must detect both intentional editor changes and source drift without executing the business query or weakening the last-known-good snapshot.
+DataPipette already publishes a validated draft as an immutable dataset-version row and keeps older versions as superseded metadata, but clients can read only the mutable draft. Before publication, an analyst needs to understand how the current validated output differs from the active published contract. This must detect both intentional editor changes and source drift without executing the business query or weakening the last-known-good snapshot.
 
 Charts do not exist yet, so inventing dependency records would create a false implementation. The comparison contract should nevertheless be ready to attach real chart impacts later.
 

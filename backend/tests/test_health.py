@@ -2,9 +2,9 @@
 
 from fastapi.testclient import TestClient
 
-from datepipette.application.health import DependencyStatus, ReadinessStatus
-from datepipette.config import Settings
-from datepipette.main import create_app
+from datapipette.application.health import DependencyStatus, ReadinessStatus
+from datapipette.config import Settings
+from datapipette.main import create_app
 
 
 class StaticReadinessProbe:

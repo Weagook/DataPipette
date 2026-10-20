@@ -43,7 +43,7 @@ describe("access administration", () => {
   });
 
   it("manages people, group membership, and one-time integration tokens", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     const copied: string[] = [];
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(async (value: string) => { copied.push(value); }) } });
     let createdUserBody: unknown;

@@ -34,7 +34,7 @@ import { InlineError } from "../components/Status";
 import {
   analyzeDatasetImpact,
   createDataset,
-  DatePipetteApiError,
+  DataPipetteApiError,
   getCatalogRelation,
   getDataset,
   getDatasetDraft,
@@ -998,7 +998,7 @@ function CatalogPicker({
             onRetry={retryCatalog}
           />
           <p>
-            {t("Ask an administrator to retest this connection and confirm that PostgreSQL accepts traffic from the DatePipette server.")}
+            {t("Ask an administrator to retest this connection and confirm that PostgreSQL accepts traffic from the DataPipette server.")}
           </p>
         </div>
       )}
@@ -1664,7 +1664,7 @@ function ValidationWorkspace({
           <div>
             <strong>{t("Read-only inspection")}</strong>
             <p>
-              {t("DatePipette uses EXPLAIN, catalog statistics, index visibility, and configured safety thresholds. It never runs EXPLAIN ANALYZE here.")}
+              {t("DataPipette uses EXPLAIN, catalog statistics, index visibility, and configured safety thresholds. It never runs EXPLAIN ANALYZE here.")}
             </p>
           </div>
         </div>
@@ -2098,7 +2098,7 @@ function SchedulePanel({
       </section>
     );
   const absent =
-    schedule.error instanceof DatePipetteApiError &&
+    schedule.error instanceof DataPipetteApiError &&
     schedule.error.status === 404;
   return (
     <section className="schedule-card">

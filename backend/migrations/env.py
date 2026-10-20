@@ -1,4 +1,4 @@
-"""Alembic environment for DatePipette metadata."""
+"""Alembic environment for DataPipette metadata."""
 
 import asyncio
 from logging.config import fileConfig
@@ -7,9 +7,9 @@ from alembic import context
 from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from datepipette.config import Settings
-from datepipette.infrastructure import models as metadata_models
-from datepipette.infrastructure.database import metadata
+from datapipette.config import Settings
+from datapipette.infrastructure import models as metadata_models
+from datapipette.infrastructure.database import metadata
 
 assert metadata_models.UserModel.__tablename__ == "users"
 

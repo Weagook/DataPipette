@@ -87,7 +87,7 @@ export function App() {
 function LocalizedRoutes() {
   const { t } = useI18n();
   return (
-    <Suspense fallback={<FullPageStatus label={t("Opening DatePipette")} />}>
+    <Suspense fallback={<FullPageStatus label={t("Opening DataPipette")} />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedLayout />}>

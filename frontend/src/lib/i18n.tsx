@@ -34,8 +34,8 @@ const russian: Record<string, string> = {
   "Advanced SQL": "Расширенный SQL",
   "Alias for {relation}": "Псевдоним для {relation}",
   "Analyze": "Анализировать",
-  "Ask an administrator to retest this connection and confirm that PostgreSQL accepts traffic from the DatePipette server.":
-    "Попросите администратора повторно проверить подключение и убедиться, что PostgreSQL принимает соединения от сервера DatePipette.",
+  "Ask an administrator to retest this connection and confirm that PostgreSQL accepts traffic from the DataPipette server.":
+    "Попросите администратора повторно проверить подключение и убедиться, что PostgreSQL принимает соединения от сервера DataPipette.",
   "At": "В",
   "Automatic": "Автоматически",
   "Auto layout": "Автовыравнивание",
@@ -96,8 +96,8 @@ const russian: Record<string, string> = {
   "Dataset name": "Название датасета",
   "Dataset named": "Датасет назван",
   "Dataset workflow": "Процесс работы с датасетом",
-  "DatePipette uses EXPLAIN, catalog statistics, index visibility, and configured safety thresholds. It never runs EXPLAIN ANALYZE here.":
-    "DatePipette использует EXPLAIN, статистику каталога, сведения об индексах и заданные пороги безопасности. EXPLAIN ANALYZE здесь никогда не запускается.",
+  "DataPipette uses EXPLAIN, catalog statistics, index visibility, and configured safety thresholds. It never runs EXPLAIN ANALYZE here.":
+    "DataPipette использует EXPLAIN, статистику каталога, сведения об индексах и заданные пороги безопасности. EXPLAIN ANALYZE здесь никогда не запускается.",
   "Declared output fields": "Объявленные выходные поля",
   "Display label": "Отображаемое название",
   "Draft readiness": "Готовность черновика",
@@ -305,8 +305,8 @@ const russian: Record<string, string> = {
   "Chart type": "Тип диаграммы",
   "Choose a dataset and complete the definition":
     "Выберите датасет и завершите настройку",
-  "Choose a published dataset. DatePipette saves the analytical definition before it executes a bounded preview.":
-    "Выберите опубликованный датасет. DatePipette сохраняет аналитическое определение перед ограниченным предпросмотром.",
+  "Choose a published dataset. DataPipette saves the analytical definition before it executes a bounded preview.":
+    "Выберите опубликованный датасет. DataPipette сохраняет аналитическое определение перед ограниченным предпросмотром.",
   "Choose the clearest shape for the question.":
     "Выберите наиболее понятную форму для вашей задачи.",
   "Compact composition": "Компактный состав",
@@ -470,8 +470,8 @@ const russian: Record<string, string> = {
   "Active analyst": "Активный аналитик",
   "All visible objects": "Все видимые объекты",
   "Analyst visibility": "Видимость для аналитиков",
-  "Browse what the configured PostgreSQL role can see, then narrow it for DatePipette analysts.":
-    "Просмотрите объекты, доступные роли PostgreSQL, и ограничьте их для аналитиков DatePipette.",
+  "Browse what the configured PostgreSQL role can see, then narrow it for DataPipette analysts.":
+    "Просмотрите объекты, доступные роли PostgreSQL, и ограничьте их для аналитиков DataPipette.",
   "CA certificate": "CA-сертификат",
   "Catalog & access": "Каталог и доступ",
   "Certificate and hostname": "Проверка сертификата и имени хоста",
@@ -485,8 +485,8 @@ const russian: Record<string, string> = {
   "Credentials are encrypted at rest and are never returned by the API.":
     "Учётные данные зашифрованы при хранении и никогда не возвращаются через API.",
   "Current grants": "Текущие разрешения",
-  "DatePipette stores encrypted credentials, sends no source secrets to Redis, and returns only safe connection-test codes.":
-    "DatePipette хранит учётные данные в зашифрованном виде, не отправляет секреты источника в Redis и возвращает только безопасные коды проверки.",
+  "DataPipette stores encrypted credentials, sends no source secrets to Redis, and returns only safe connection-test codes.":
+    "DataPipette хранит учётные данные в зашифрованном виде, не отправляет секреты источника в Redis и возвращает только безопасные коды проверки.",
   "Disable": "Отключить",
   "Encrypted, no verification": "Шифрование без проверки сертификата",
   "Everything visible to the DB role": "Всё, что доступно роли БД",
@@ -687,8 +687,8 @@ const russian: Record<string, string> = {
   "Add person": "Добавить пользователя",
   "Added {date}": "Добавлен {date}",
   "Additive memberships": "Суммируемое членство",
-  "After dismissal, DatePipette cannot recover this plaintext. Store it in the external system's secret manager.":
-    "После закрытия DatePipette не сможет восстановить этот токен. Сохраните его в менеджере секретов внешней системы.",
+  "After dismissal, DataPipette cannot recover this plaintext. Store it in the external system's secret manager.":
+    "После закрытия DataPipette не сможет восстановить этот токен. Сохраните его в менеджере секретов внешней системы.",
   "At least 12 characters": "Не менее 12 символов",
   "Authoritative on every request": "Проверяется при каждом запросе",
   "Close": "Закрыть",
@@ -928,8 +928,8 @@ const russian: Record<string, string> = {
     "Создайте визуальный ответ на основе опубликованного датасета.",
   "Credentials are write-only": "Учётные данные доступны только для записи",
   "Database": "База данных",
-  "DatePipette product introduction": "О продукте DatePipette",
-  "DatePipette workflow": "Процесс работы DatePipette",
+  "DataPipette product introduction": "О продукте DataPipette",
+  "DataPipette workflow": "Процесс работы DataPipette",
   "Donut chart": "Кольцевая диаграмма",
   "Draft only": "Только черновик",
   "Draft revision {revision}": "Версия черновика {revision}",
@@ -997,7 +997,7 @@ const russian: Record<string, string> = {
   "Shared dashboards will appear here.": "Здесь появятся доступные вам дашборды.",
   "Shared understanding": "Общее понимание",
   "Show password": "Показать пароль",
-  "Sign in to DatePipette": "Войти в DatePipette",
+  "Sign in to DataPipette": "Войти в DataPipette",
   "Signing in…": "Входим…",
   "Snapshot ready": "Снимок готов",
   "Snapshot reads active": "Чтение снимков активно",
@@ -1022,8 +1022,8 @@ const russian: Record<string, string> = {
   "Welcome back": "С возвращением",
   "Work email": "Рабочая почта",
   "Workspace summary": "Сводка рабочего пространства",
-  "Your password is sent only to this DatePipette installation and is never stored in the browser.":
-    "Пароль отправляется только в эту установку DatePipette и никогда не сохраняется в браузере.",
+  "Your password is sent only to this DataPipette installation and is never stored in the browser.":
+    "Пароль отправляется только в эту установку DataPipette и никогда не сохраняется в браузере.",
   "you@company.com": "you@company.com",
   "Access": "Доступ",
   "Administration": "Администрирование",
@@ -1042,7 +1042,7 @@ const russian: Record<string, string> = {
   "Interface language": "Язык интерфейса",
   "Open navigation": "Открыть навигацию",
   "Open profile menu for {name}": "Открыть меню профиля: {name}",
-  "Opening DatePipette": "Открываем DatePipette",
+  "Opening DataPipette": "Открываем DataPipette",
   "Opening your workspace": "Открываем рабочее пространство",
   "Overview": "Обзор",
   "Primary navigation": "Основная навигация",

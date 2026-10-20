@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from datepipette.application.dashboards import (
+from datapipette.application.dashboards import (
     DashboardCreate,
     DashboardItemNotFoundError,
     DashboardNotFoundError,
@@ -17,11 +17,11 @@ from datepipette.application.dashboards import (
     InvalidDashboardCursorError,
     InvalidDashboardDefinitionError,
 )
-from datepipette.domain.access_control import GrantPrincipalType
-from datepipette.domain.charts import ChartQueryResult, ChartType
-from datepipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardItem
-from datepipette.domain.identity import AccountStatus, SystemRole, User
-from datepipette.domain.snapshot_queries import SnapshotRefreshState
+from datapipette.domain.access_control import GrantPrincipalType
+from datapipette.domain.charts import ChartQueryResult, ChartType
+from datapipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardItem
+from datapipette.domain.identity import AccountStatus, SystemRole, User
+from datapipette.domain.snapshot_queries import SnapshotRefreshState
 
 NOW = datetime(2026, 10, 12, tzinfo=UTC)
 CHART_ONE = uuid4()
@@ -97,7 +97,7 @@ class FakeDashboardStore:
         return tuple(self.grants.values()) if self.dashboard is not None else None
 
     async def create_grant(self, **values: Any) -> Any:
-        from datepipette.domain.dashboards import DashboardGrant
+        from datapipette.domain.dashboards import DashboardGrant
 
         grant = DashboardGrant(
             values["grant_id"],

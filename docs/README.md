@@ -1,6 +1,6 @@
-# DatePipette documentation
+# DataPipette documentation
 
-This directory is the source of truth for DatePipette's product and technical design. Documents describe approved direction, not necessarily functionality already implemented. Implementation status belongs in the roadmap and issues.
+This directory is the source of truth for DataPipette's product and technical design. Documents describe approved direction, not necessarily functionality already implemented. Implementation status belongs in the roadmap and issues.
 
 ## Read in this order
 

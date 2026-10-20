@@ -1,5 +1,5 @@
 [project]
-name = "datepipette"
+name = "datapipette"
 version = "0.1.0"
 description = "API-first analytics platform for PostgreSQL"
 requires-python = ">=3.12"
@@ -26,10 +26,10 @@ dependencies = [
 ]
 
 [project.scripts]
-datepipette = "datepipette.main:run"
-datepipette-admin = "datepipette.cli:main"
-datepipette-scheduler = "datepipette.scheduler:run"
-datepipette-storage-init = "datepipette.storage_init:run"
+datapipette = "datapipette.main:run"
+datapipette-admin = "datapipette.cli:main"
+datapipette-scheduler = "datapipette.scheduler:run"
+datapipette-storage-init = "datapipette.storage_init:run"
 
 [dependency-groups]
 dev = [

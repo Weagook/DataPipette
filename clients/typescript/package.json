@@ -1,8 +1,8 @@
 {
-  "name": "@datepipette/api-client",
+  "name": "@datapipette/api-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Generated, type-safe client for the DatePipette public API",
+  "description": "Generated, type-safe client for the DataPipette public API",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {

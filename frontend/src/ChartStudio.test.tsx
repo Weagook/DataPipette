@@ -12,7 +12,7 @@ const REVENUE_ID = "00000000-0000-4000-8000-000000000014";
 
 describe("chart studio", () => {
   it("creates a saved aggregate chart through the public API", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     let createBody: unknown;
     vi.stubGlobal(
       "fetch",

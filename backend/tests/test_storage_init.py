@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
-from datepipette import storage_init
-from datepipette.config import Settings
-from datepipette.storage_init import ensure_bucket
+from datapipette import storage_init
+from datapipette.config import Settings
+from datapipette.storage_init import ensure_bucket
 
 
 class FakeBucketClient:

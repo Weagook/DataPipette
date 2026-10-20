@@ -7,7 +7,7 @@
 
 Query Safety findings explain planner risk, but a client still has to translate each finding into a useful next action. PostgreSQL estimates can also differ materially from real results, especially when statistics are stale. Running `EXPLAIN ANALYZE` during validation would obtain actual execution data, but it would execute the query before the user requests a preview or refresh and would weaken the non-executing validation boundary.
 
-Index advice is particularly easy to overstate. A sequential scan can be PostgreSQL's correct choice, and DatePipette neither owns the source schema nor has enough workload history to prove that an index will help.
+Index advice is particularly easy to overstate. A sequential scan can be PostgreSQL's correct choice, and DataPipette neither owns the source schema nor has enough workload history to prove that an index will help.
 
 ## Decision
 
@@ -24,7 +24,7 @@ Index advice is particularly easy to overstate. A sequential scan can be Postgre
 - The official frontend and external clients can present consistent actionable advice without parsing finding text.
 - Index candidates are intentionally phrased as review prompts, not guaranteed optimizations. They may be absent even when an expert could devise a useful expression or partial index.
 - Successful refreshes provide direct estimate-versus-actual feedback, while failures can still expose duration and a candidate row count when materialization reached that point.
-- No new query or source privilege is required, and DatePipette's source access remains read-only.
+- No new query or source privilege is required, and DataPipette's source access remains read-only.
 - Historical aggregation, automatic tuning, plan capture, and benchmark baselines remain separate work.
 
 ## Alternatives considered

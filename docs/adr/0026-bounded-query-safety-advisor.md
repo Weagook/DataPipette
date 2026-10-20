@@ -7,7 +7,7 @@
 
 Dataset validation already asks PostgreSQL for a plain JSON execution plan, but previously retained only the root estimate and emitted one fixed large-result warning. That cannot explain expensive work below the root, distinguish advisory risk from a policy denial, or show whether relation statistics and indexes visible to the source role support the estimate.
 
-Planner estimates are useful signals, not measured runtime. The advisor must not execute a potentially expensive business query merely to decide whether that query is safe, and DatePipette must never alter a customer's source schema.
+Planner estimates are useful signals, not measured runtime. The advisor must not execute a potentially expensive business query merely to decide whether that query is safe, and DataPipette must never alter a customer's source schema.
 
 ## Decision
 
@@ -15,7 +15,7 @@ Planner estimates are useful signals, not measured runtime. The advisor must not
 - During the same read-only source transaction, collect bounded metadata only for the definition's already-authorized relations: planner row estimate, relation/index bytes, valid ready index count, and the latest manual or automatic analyze timestamp.
 - Return stable finding codes with `info`, `warning`, `blocked`, or existing structural `error` severity. Numeric findings include observed and threshold values. Relation-specific findings carry a stable visual relation ID when one exists.
 - Treat planner row, total-cost, and join-count hard limits as `blocked`. A blocked validation artifact is persisted for diagnosis but cannot be previewed, refreshed, scheduled, or published. Warning and info findings remain advisory.
-- Use validated `DATEPIPETTE_QUERY_SAFETY_*` installation settings as revision-zero defaults. The metadata-backed administrator policy accepted in [ADR-0036](0036-managed-query-safety-policy.md) may replace them; warning thresholds remain lower than their corresponding block thresholds.
+- Use validated `DATAPIPETTE_QUERY_SAFETY_*` installation settings as revision-zero defaults. The metadata-backed administrator policy accepted in [ADR-0036](0036-managed-query-safety-policy.md) may replace them; warning thresholds remain lower than their corresponding block thresholds.
 - Describe only observable evidence. `no_visible_index_for_large_scan` means no valid ready index was visible for a relation participating in a large sequential scan; it does not claim that adding an index will improve the query.
 - Never issue `EXPLAIN ANALYZE`, DDL, `ANALYZE`, or index creation. Operation-specific runtime limits and actual-versus-estimated execution feedback remain separate later slices; managed planner policy and privileged overrides are defined by ADR-0036.
 
@@ -30,5 +30,5 @@ Planner estimates are useful signals, not measured runtime. The advisor must not
 
 - **Use `EXPLAIN ANALYZE`:** rejected because it executes the business query and defeats pre-execution safety.
 - **Persist the complete PostgreSQL plan:** rejected because plans may be large, expose unnecessary source detail, and are unstable across PostgreSQL versions.
-- **Automatically create a recommended index:** rejected because DatePipette's source role is read-only and source DDL belongs to the database owner.
+- **Automatically create a recommended index:** rejected because DataPipette's source role is read-only and source DDL belongs to the database owner.
 - **Block every large sequential scan:** rejected because sequential scans can be optimal; the first policy blocks only explicit aggregate row, cost, and join thresholds while scan/index/statistics findings remain explainable advice.

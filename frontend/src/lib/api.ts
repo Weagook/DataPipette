@@ -1,9 +1,9 @@
 import {
   createBrowserClient,
-  DatePipetteApiError,
+  DataPipetteApiError,
   unwrap,
   type components,
-} from "@datepipette/api-client";
+} from "@datapipette/api-client";
 
 import { randomUuid } from "./id";
 
@@ -92,7 +92,7 @@ export interface AuditFilters {
   resourceType?: string;
 }
 
-export { DatePipetteApiError };
+export { DataPipetteApiError };
 
 export async function getCurrentUser(): Promise<CurrentUser> {
   return unwrap(await api.GET("/api/v1/auth/me"));
@@ -113,7 +113,7 @@ export async function login(
 export async function logout(): Promise<void> {
   unwrap(
     await api.DELETE("/api/v1/auth/sessions/current", {
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     }),
   );
 }
@@ -123,7 +123,7 @@ export async function updateCurrentUserLocale(
 ): Promise<CurrentUser> {
   return unwrap(
     await api.PATCH("/api/v1/auth/me/preferences", {
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: { locale },
     }),
   );
@@ -164,7 +164,7 @@ export async function createDashboard(
   definition: DashboardDefinition,
 ): Promise<{ dashboard: Dashboard; etag: string }> {
   const result = await api.POST("/api/v1/dashboards", {
-    headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     body: { name, definition },
   });
   const dashboard = unwrap(result);
@@ -184,7 +184,7 @@ export async function replaceDashboard(
   const result = await api.PUT("/api/v1/dashboards/{dashboard_id}", {
     params: { path: { dashboard_id: dashboardId } },
     headers: {
-      "X-CSRF-Token": readCookie("datepipette_csrf"),
+      "X-CSRF-Token": readCookie("datapipette_csrf"),
       "If-Match": etag,
     },
     body: { name, definition },
@@ -216,7 +216,7 @@ export async function createDashboardGrant(
   return unwrap(
     await api.POST("/api/v1/dashboards/{dashboard_id}/grants", {
       params: { path: { dashboard_id: dashboardId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: { principal_type: principalType, principal_id: principalId },
     }),
   );
@@ -229,7 +229,7 @@ export async function revokeDashboardGrant(
   unwrap(
     await api.DELETE("/api/v1/dashboards/{dashboard_id}/grants/{grant_id}", {
       params: { path: { dashboard_id: dashboardId, grant_id: grantId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     }),
   );
 }
@@ -255,7 +255,7 @@ export async function listGroups(): Promise<Group[]> {
 export async function createUser(input: ApiSchemas["CreateUserRequest"]): Promise<UserAdmin> {
   return unwrap(
     await api.POST("/api/v1/users", {
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: input,
     }),
   );
@@ -268,7 +268,7 @@ export async function updateUser(
   return unwrap(
     await api.PATCH("/api/v1/users/{user_id}", {
       params: { path: { user_id: userId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: input,
     }),
   );
@@ -278,7 +278,7 @@ export async function revokeUserSessions(userId: string): Promise<number> {
   const value = unwrap(
     await api.DELETE("/api/v1/users/{user_id}/sessions", {
       params: { path: { user_id: userId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     }),
   );
   return value.revoked_count;
@@ -287,7 +287,7 @@ export async function revokeUserSessions(userId: string): Promise<number> {
 export async function createGroup(name: string): Promise<Group> {
   return unwrap(
     await api.POST("/api/v1/groups", {
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: { name },
     }),
   );
@@ -297,7 +297,7 @@ export async function renameGroup(groupId: string, name: string): Promise<Group>
   return unwrap(
     await api.PATCH("/api/v1/groups/{group_id}", {
       params: { path: { group_id: groupId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: { name },
     }),
   );
@@ -316,7 +316,7 @@ export async function addGroupMember(groupId: string, userId: string): Promise<M
   return unwrap(
     await api.PUT("/api/v1/groups/{group_id}/members/{user_id}", {
       params: { path: { group_id: groupId, user_id: userId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     }),
   );
 }
@@ -325,7 +325,7 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
   unwrap(
     await api.DELETE("/api/v1/groups/{group_id}/members/{user_id}", {
       params: { path: { group_id: groupId, user_id: userId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     }),
   );
 }
@@ -345,7 +345,7 @@ export async function createServiceAccount(
 ): Promise<ServiceAccount> {
   return unwrap(
     await api.POST("/api/v1/service-accounts", {
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: { name, role },
     }),
   );
@@ -358,7 +358,7 @@ export async function updateServiceAccount(
   return unwrap(
     await api.PATCH("/api/v1/service-accounts/{account_id}", {
       params: { path: { account_id: accountId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: input,
     }),
   );
@@ -380,7 +380,7 @@ export async function createApiToken(
   return unwrap(
     await api.POST("/api/v1/service-accounts/{account_id}/tokens", {
       params: { path: { account_id: accountId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: input,
     }),
   );
@@ -390,7 +390,7 @@ export async function revokeApiToken(accountId: string, tokenId: string): Promis
   unwrap(
     await api.DELETE("/api/v1/service-accounts/{account_id}/tokens/{token_id}", {
       params: { path: { account_id: accountId, token_id: tokenId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     }),
   );
 }
@@ -444,7 +444,7 @@ export async function createChart(
   definition: ChartDefinition,
 ): Promise<{ chart: Chart; etag: string }> {
   const result = await api.POST("/api/v1/charts", {
-    headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+    headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     body: { name, dataset_id: datasetId, definition },
   });
   const chart = unwrap(result);
@@ -463,7 +463,7 @@ export async function replaceChart(
   const result = await api.PUT("/api/v1/charts/{chart_id}", {
     params: { path: { chart_id: chartId } },
     headers: {
-      "X-CSRF-Token": readCookie("datepipette_csrf"),
+      "X-CSRF-Token": readCookie("datapipette_csrf"),
       "If-Match": etag,
     },
     body: { name, definition },
@@ -514,7 +514,7 @@ export async function createConnection(
 ): Promise<Connection> {
   return unwrap(
     await api.POST("/api/v1/connections", {
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: input,
     }),
   );
@@ -527,7 +527,7 @@ export async function updateConnection(
   return unwrap(
     await api.PATCH("/api/v1/connections/{connection_id}", {
       params: { path: { connection_id: connectionId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: input,
     }),
   );
@@ -539,7 +539,7 @@ export async function testConnection(
   return unwrap(
     await api.POST("/api/v1/connections/{connection_id}/tests", {
       params: { path: { connection_id: connectionId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
     }),
   );
 }
@@ -562,7 +562,7 @@ export async function createConnectionGrant(
   return unwrap(
     await api.POST("/api/v1/connections/{connection_id}/grants", {
       params: { path: { connection_id: connectionId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: input,
     }),
   );
@@ -579,7 +579,7 @@ export async function revokeConnectionGrant(
         params: {
           path: { connection_id: connectionId, grant_id: grantId },
         },
-        headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+        headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       },
     ),
   );
@@ -656,7 +656,7 @@ export async function createDataset(
 ): Promise<Dataset> {
   return unwrap(
     await api.POST("/api/v1/datasets", {
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: { name, connection_id: connectionId, definition },
     }),
   );
@@ -669,7 +669,7 @@ export async function renameDataset(
   return unwrap(
     await api.PATCH("/api/v1/datasets/{dataset_id}", {
       params: { path: { dataset_id: datasetId } },
-      headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+      headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       body: { name },
     }),
   );
@@ -696,7 +696,7 @@ export async function replaceDatasetDraft(
   const result = await api.PUT("/api/v1/datasets/{dataset_id}/draft", {
     params: { path: { dataset_id: datasetId } },
     headers: {
-      "X-CSRF-Token": readCookie("datepipette_csrf"),
+      "X-CSRF-Token": readCookie("datapipette_csrf"),
       "If-Match": etag,
     },
     body: { definition },
@@ -717,7 +717,7 @@ export async function validateDatasetDraft(
     await api.POST("/api/v1/datasets/{dataset_id}/draft/validations", {
       params: { path: { dataset_id: datasetId } },
       headers: {
-        "X-CSRF-Token": readCookie("datepipette_csrf"),
+        "X-CSRF-Token": readCookie("datapipette_csrf"),
         "If-Match": etag,
       },
       ...(overrideReason ? { body: { override_reason: overrideReason } } : {}),
@@ -734,7 +734,7 @@ export async function previewDatasetDraft(
     await api.POST("/api/v1/datasets/{dataset_id}/draft/previews", {
       params: { path: { dataset_id: datasetId } },
       headers: {
-        "X-CSRF-Token": readCookie("datepipette_csrf"),
+        "X-CSRF-Token": readCookie("datapipette_csrf"),
         "If-Match": etag,
       },
       body: { limit },
@@ -750,7 +750,7 @@ export async function analyzeDatasetImpact(
     await api.POST("/api/v1/datasets/{dataset_id}/draft/impact-analyses", {
       params: { path: { dataset_id: datasetId } },
       headers: {
-        "X-CSRF-Token": readCookie("datepipette_csrf"),
+        "X-CSRF-Token": readCookie("datapipette_csrf"),
         "If-Match": etag,
       },
     }),
@@ -765,7 +765,7 @@ export async function requestDatasetRefresh(
     await api.POST("/api/v1/datasets/{dataset_id}/refresh-runs", {
       params: { path: { dataset_id: datasetId } },
       headers: {
-        "X-CSRF-Token": readCookie("datepipette_csrf"),
+        "X-CSRF-Token": readCookie("datapipette_csrf"),
         "If-Match": etag,
         "Idempotency-Key": randomUuid(),
       },
@@ -803,7 +803,7 @@ export async function replaceRefreshSchedule(
     await api.PUT("/api/v1/datasets/{dataset_id}/refresh-schedule", {
       params: { path: { dataset_id: datasetId } },
       headers: {
-        "X-CSRF-Token": readCookie("datepipette_csrf"),
+        "X-CSRF-Token": readCookie("datapipette_csrf"),
         ...(revision ? { "If-Match": `"schedule-${revision}"` } : {}),
       },
       body: value,
@@ -852,7 +852,7 @@ export async function createDatasetExport(
     await api.POST("/api/v1/datasets/{dataset_id}/exports", {
       params: { path: { dataset_id: datasetId } },
       headers: {
-        "X-CSRF-Token": readCookie("datepipette_csrf"),
+        "X-CSRF-Token": readCookie("datapipette_csrf"),
         "Idempotency-Key": randomUuid(),
       },
       body: {
@@ -874,7 +874,7 @@ export async function issueExportDownload(
       "/api/v1/datasets/{dataset_id}/exports/{export_id}/download-link",
       {
         params: { path: { dataset_id: datasetId, export_id: exportId } },
-        headers: { "X-CSRF-Token": readCookie("datepipette_csrf") },
+        headers: { "X-CSRF-Token": readCookie("datapipette_csrf") },
       },
     ),
   );
@@ -901,7 +901,7 @@ export async function replaceQuerySafetyPolicy(
   const result = await api.PUT("/api/v1/query-safety-policy", {
     headers: {
       "If-Match": etag,
-      "X-CSRF-Token": readCookie("datepipette_csrf"),
+      "X-CSRF-Token": readCookie("datapipette_csrf"),
     },
     body: input,
   });
@@ -955,11 +955,11 @@ function readCookie(name: string): string {
 }
 
 export function isUnauthorized(error: unknown): boolean {
-  return error instanceof DatePipetteApiError && error.status === 401;
+  return error instanceof DataPipetteApiError && error.status === 401;
 }
 
 export function problemMessage(error: unknown): string {
-  if (error instanceof DatePipetteApiError) {
+  if (error instanceof DataPipetteApiError) {
     return error.detail;
   }
   if (error instanceof Error) {

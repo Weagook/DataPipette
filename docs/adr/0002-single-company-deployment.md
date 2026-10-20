@@ -9,7 +9,7 @@ An earlier concept considered multiple independent organizations inside one inst
 
 ## Decision
 
-One DatePipette installation serves one company. The installation may contain many users, groups, service accounts, PostgreSQL connections, datasets, charts, and dashboards, but it has no tenant or organization boundary in MVP.
+One DataPipette installation serves one company. The installation may contain many users, groups, service accounts, PostgreSQL connections, datasets, charts, and dashboards, but it has no tenant or organization boundary in MVP.
 
 ## Consequences
 

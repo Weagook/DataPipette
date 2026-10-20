@@ -1,5 +1,5 @@
 {
-  "name": "@datepipette/frontend",
+  "name": "@datapipette/frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "check": "npm run typecheck && npm test && npm run build && npm run budget"
   },
   "dependencies": {
-    "@datepipette/api-client": "file:../clients/typescript",
+    "@datapipette/api-client": "file:../clients/typescript",
     "@tanstack/react-query": "5.104.3",
     "@xyflow/react": "12.12.0",
     "echarts": "6.1.0",

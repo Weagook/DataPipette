@@ -4,11 +4,11 @@ import { describe, it } from "node:test";
 import {
   createBrowserClient,
   createServiceTokenClient,
-  DatePipetteApiError,
+  DataPipetteApiError,
   unwrap,
 } from "../src/index.js";
 
-describe("DatePipette TypeScript client", () => {
+describe("DataPipette TypeScript client", () => {
   it("sends service tokens only through the Authorization header", async () => {
     let captured: Request | undefined;
     const client = createServiceTokenClient({
@@ -70,7 +70,7 @@ describe("DatePipette TypeScript client", () => {
           },
         }),
       (error: unknown) => {
-        assert.ok(error instanceof DatePipetteApiError);
+        assert.ok(error instanceof DataPipetteApiError);
         assert.equal(error.status, 401);
         assert.equal(error.code, "authentication_required");
         assert.equal(error.requestId, "req-123");

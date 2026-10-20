@@ -9,8 +9,8 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "datepipette",
-    "datepipette-workspace",
+    "datapipette",
+    "datapipette-workspace",
 ]
 
 [[package]]
@@ -491,7 +491,7 @@ wheels = [
 ]
 
 [[package]]
-name = "datepipette"
+name = "datapipette"
 version = "0.1.0"
 source = { editable = "backend" }
 dependencies = [
@@ -556,7 +556,7 @@ dev = [
 ]
 
 [[package]]
-name = "datepipette-workspace"
+name = "datapipette-workspace"
 version = "0.1.0"
 source = { virtual = "." }
 

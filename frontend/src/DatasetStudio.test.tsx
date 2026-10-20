@@ -10,7 +10,7 @@ const DATASET_ID = "00000000-0000-4000-8000-000000000011";
 
 describe("dataset studio", () => {
   it("creates an advanced SQL dataset through the public API", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     let createBody: unknown;
     vi.stubGlobal(
       "fetch",
@@ -147,7 +147,7 @@ describe("dataset studio", () => {
   });
 
   it("opens the complete visual builder before creating a dataset", async () => {
-    document.cookie = "datepipette_csrf=test-token; path=/";
+    document.cookie = "datapipette_csrf=test-token; path=/";
     let createBody: unknown;
     let catalogRequests = 0;
     vi.stubGlobal(

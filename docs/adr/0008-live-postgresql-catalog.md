@@ -5,7 +5,7 @@
 
 ## Context
 
-Visual dataset creation needs schemas, selectable relations, column types, primary keys, and foreign-key suggestions from a configured PostgreSQL source. Copying this metadata into DatePipette would introduce synchronization, invalidation, and stale-definition behavior before dataset drafts and publication exist. Catalog discovery must also respect the least-privileged PostgreSQL role supplied for a connection and must not become an arbitrary SQL facility.
+Visual dataset creation needs schemas, selectable relations, column types, primary keys, and foreign-key suggestions from a configured PostgreSQL source. Copying this metadata into DataPipette would introduce synchronization, invalidation, and stale-definition behavior before dataset drafts and publication exist. Catalog discovery must also respect the least-privileged PostgreSQL role supplied for a connection and must not become an arbitrary SQL facility.
 
 ## Decision
 
@@ -19,13 +19,13 @@ Visual dataset creation needs schemas, selectable relations, column types, prima
 - Preserve constraint-column order when reporting composite primary and foreign keys.
 - Use opaque name cursors and bounded pages for schema and relation collections.
 - Treat a missing and a privilege-hidden relation identically. Collapse timeout, network, TLS, authentication, and catalog-query failures into a safe source-unavailable API problem.
-- Keep endpoints administrator-only until connection grants and DatePipette schema/table allowlists are implemented.
+- Keep endpoints administrator-only until connection grants and DataPipette schema/table allowlists are implemented.
 
 ## Consequences
 
 - Discovery reflects current PostgreSQL DDL and grants without a refresh job or invalidation protocol.
 - Catalog latency and availability depend on the source database, so clients must handle safe transient failures and retry.
-- DatePipette stores no additional source structure that could become stale or leak after a PostgreSQL grant is revoked.
+- DataPipette stores no additional source structure that could become stale or leak after a PostgreSQL grant is revoked.
 - The configured PostgreSQL role remains a primary security boundary. Future connection allowlists must further narrow, never widen, this database-visible set.
 - Dataset publication will need to capture its own validated result schema; a live catalog response is discovery input, not a durable dataset contract.
 

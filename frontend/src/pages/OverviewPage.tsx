@@ -69,7 +69,7 @@ export function OverviewPage() {
         </div>
       </section>
 
-      <section className="capability-strip" aria-label={t("DatePipette workflow")}>
+      <section className="capability-strip" aria-label={t("DataPipette workflow")}>
         <div><Database /><span><strong>{t("Connect")}</strong><small>{t("PostgreSQL sources")}</small></span></div>
         <i />
         <div><Sparkles /><span><strong>{t("Shape")}</strong><small>{t("Visual or SQL datasets")}</small></span></div>

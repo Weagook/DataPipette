@@ -32,6 +32,6 @@ Immutable snapshot publication and background export generation deliberately sep
 
 - **Delete the previous snapshot during publication:** rejected because in-flight readers and snapshot-bound exports may still need it.
 - **Delete export metadata at expiry:** rejected because durable job history is useful for audit and operations.
-- **Use only provider lifecycle rules:** rejected because providers cannot understand DatePipette metadata references, local storage, or export/snapshot protection rules.
+- **Use only provider lifecycle rules:** rejected because providers cannot understand DataPipette metadata references, local storage, or export/snapshot protection rules.
 - **List the complete bucket every tick:** rejected because cost, latency, and memory would scale with total historical objects.
 - **Use Redis locks as authority:** rejected because cleanup eligibility and leases are durable metadata state.

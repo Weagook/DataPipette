@@ -5,7 +5,7 @@
 
 ## Context
 
-DatePipette uses local human accounts in the MVP and must support immediate logout, account deactivation, administrator-controlled session invalidation, CSRF protection, and future SSO without coupling domain authorization to one identity provider. Browser credentials must not be exposed to JavaScript or stored in browser web storage.
+DataPipette uses local human accounts in the MVP and must support immediate logout, account deactivation, administrator-controlled session invalidation, CSRF protection, and future SSO without coupling domain authorization to one identity provider. Browser credentials must not be exposed to JavaScript or stored in browser web storage.
 
 ## Decision
 

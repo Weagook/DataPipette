@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { DatePipetteApiError } from "@datepipette/api-client";
+import { DataPipetteApiError } from "@datapipette/api-client";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,7 +16,7 @@ export const queryClient = new QueryClient({
       },
       retryDelay(attempt, error) {
         if (
-          error instanceof DatePipetteApiError &&
+          error instanceof DataPipetteApiError &&
           error.retryAfterSeconds !== null
         ) {
           return error.retryAfterSeconds * 1_000;

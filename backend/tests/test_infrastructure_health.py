@@ -9,7 +9,7 @@ import pytest
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from datepipette.infrastructure.health import InfrastructureReadinessProbe
+from datapipette.infrastructure.health import InfrastructureReadinessProbe
 
 
 class FakeConnection:

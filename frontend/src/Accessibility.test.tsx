@@ -32,7 +32,7 @@ describe("cross-cutting accessibility", () => {
     expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute("href", "#main-content");
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     expect(screen.getByRole("button", { name: "Open profile menu for Local Administrator" })).toHaveAttribute("aria-controls", "profile-menu");
-    await waitFor(() => expect(document.title).toBe("Governance · DatePipette"));
+    await waitFor(() => expect(document.title).toBe("Governance · DataPipette"));
   });
 
   it("moves focus into the mobile navigation and restores it on Escape", async () => {

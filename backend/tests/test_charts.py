@@ -12,8 +12,8 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
-from datepipette.application.access_control import DatasetAccessAuthorizer
-from datepipette.application.charts import (
+from datapipette.application.access_control import DatasetAccessAuthorizer
+from datapipette.application.charts import (
     ChartCreate,
     ChartDatasetNotAvailableError,
     ChartNotFoundError,
@@ -23,12 +23,12 @@ from datepipette.application.charts import (
     InvalidChartDefinitionError,
     prepare_chart_query,
 )
-from datepipette.application.query_safety import (
+from datapipette.application.query_safety import (
     InteractiveQueryRuntime,
     ManagedQuerySafetyPolicy,
 )
-from datepipette.domain.access_control import DatasetAccess, DatasetPermission
-from datepipette.domain.charts import (
+from datapipette.domain.access_control import DatasetAccess, DatasetPermission
+from datapipette.domain.charts import (
     Chart,
     ChartAggregation,
     ChartDefinition,
@@ -39,9 +39,9 @@ from datepipette.domain.charts import (
     ChartTimeBucket,
     ChartType,
 )
-from datepipette.domain.datasets import QuerySafetyPolicy
-from datepipette.domain.identity import AccountStatus, AccountType, SystemRole, User
-from datepipette.domain.snapshot_queries import (
+from datapipette.domain.datasets import QuerySafetyPolicy
+from datapipette.domain.identity import AccountStatus, AccountType, SystemRole, User
+from datapipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     SnapshotFilterOperator,
     SnapshotQueryField,
@@ -49,7 +49,7 @@ from datepipette.domain.snapshot_queries import (
     SnapshotRefreshState,
     SnapshotSortDirection,
 )
-from datepipette.infrastructure.duckdb_chart_queries import DuckDbLocalChartQueryExecutor
+from datapipette.infrastructure.duckdb_chart_queries import DuckDbLocalChartQueryExecutor
 
 NOW = datetime(2026, 10, 12, tzinfo=UTC)
 DATASET_ID = uuid4()
@@ -209,7 +209,7 @@ class FakeChartStore:
 
 class RecordingExecutor:
     async def query(self, **values: Any) -> Any:
-        from datepipette.domain.charts import ChartQueryExecution
+        from datapipette.domain.charts import ChartQueryExecution
 
         prepared = values["prepared"]
         assert prepared.definition.filters[0].value == 10

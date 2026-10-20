@@ -14,15 +14,15 @@ from pydantic import SecretStr
 from redis.asyncio import Redis
 from sqlalchemy import select, text, update
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.application.charts import ChartService
-from datepipette.config import Settings
-from datepipette.domain.charts import ChartQueryResult, ChartType
-from datepipette.domain.identity import AccountType
-from datepipette.domain.snapshot_queries import SnapshotRefreshState
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import (
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.application.charts import ChartService
+from datapipette.config import Settings
+from datapipette.domain.charts import ChartQueryResult, ChartType
+from datapipette.domain.identity import AccountType
+from datapipette.domain.snapshot_queries import SnapshotRefreshState
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import (
     ApiTokenModel,
     AuditEventModel,
     ChartModel,
@@ -30,8 +30,8 @@ from datepipette.infrastructure.models import (
     PostgresConnectionModel,
     UserModel,
 )
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 ADMIN_EMAIL = "service-admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
@@ -73,8 +73,8 @@ class StubChartService:
 @pytest.fixture
 def service_settings(tmp_path: Path) -> Settings:
     database_url = os.environ.get(
-        "DATEPIPETTE_TEST_DATABASE_URL",
-        "postgresql+psycopg://datepipette:datepipette_dev_only@localhost:5432/datepipette",
+        "DATAPIPETTE_TEST_DATABASE_URL",
+        "postgresql+psycopg://datapipette:datapipette_dev_only@localhost:5432/datapipette",
     )
     return Settings(
         environment="test",

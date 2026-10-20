@@ -14,12 +14,12 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
-from datepipette.application.access_control import DatasetAccessAuthorizer
-from datepipette.application.query_safety import (
+from datapipette.application.access_control import DatasetAccessAuthorizer
+from datapipette.application.query_safety import (
     InteractiveQueryRuntime,
     ManagedQuerySafetyPolicy,
 )
-from datepipette.application.snapshot_queries import (
+from datapipette.application.snapshot_queries import (
     DatasetSnapshotNotFoundError,
     DatasetSnapshotQueryCapacityExceededError,
     DatasetSnapshotQueryService,
@@ -30,10 +30,10 @@ from datepipette.application.snapshot_queries import (
     InvalidSnapshotQueryError,
     supported_filter_operators,
 )
-from datepipette.domain.access_control import DatasetAccess, DatasetPermission
-from datepipette.domain.datasets import FieldDisplayFormat, QuerySafetyPolicy
-from datepipette.domain.identity import AccountStatus, SystemRole, User
-from datepipette.domain.snapshot_queries import (
+from datapipette.domain.access_control import DatasetAccess, DatasetPermission
+from datapipette.domain.datasets import FieldDisplayFormat, QuerySafetyPolicy
+from datapipette.domain.identity import AccountStatus, SystemRole, User
+from datapipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     DatasetDataState,
     DatasetFreshness,
@@ -47,14 +47,14 @@ from datepipette.domain.snapshot_queries import (
     SnapshotRefreshState,
     SnapshotSortDirection,
 )
-from datepipette.infrastructure.duckdb_runtime import (
+from datapipette.infrastructure.duckdb_runtime import (
     DuckDbQueryConcurrencyLimiter,
     InteractiveQueryAdmissionUnavailableError,
 )
-from datepipette.infrastructure.duckdb_snapshot_queries import (
+from datapipette.infrastructure.duckdb_snapshot_queries import (
     DuckDbLocalSnapshotQueryExecutor,
 )
-from datepipette.infrastructure.snapshot_cursor import EncryptedSnapshotCursorCodec
+from datapipette.infrastructure.snapshot_cursor import EncryptedSnapshotCursorCodec
 
 DATASET_ID = uuid4()
 SNAPSHOT_ID = uuid4()

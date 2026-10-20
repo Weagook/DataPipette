@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import psycopg
 
-from datepipette.infrastructure.parquet_snapshots import _cancel_source_when_requested
+from datapipette.infrastructure.parquet_snapshots import _cancel_source_when_requested
 
 
 class FakeAsyncSource:

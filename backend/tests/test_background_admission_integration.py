@@ -2,9 +2,9 @@
 
 import asyncio
 
-from datepipette.config import Settings
-from datepipette.infrastructure.background_admission import PostgresBackgroundJobAdmission
-from datepipette.infrastructure.database import create_database_engine
+from datapipette.config import Settings
+from datapipette.infrastructure.background_admission import PostgresBackgroundJobAdmission
+from datapipette.infrastructure.database import create_database_engine
 
 
 def test_background_admission_is_shared_across_engines_and_dynamic_limits() -> None:

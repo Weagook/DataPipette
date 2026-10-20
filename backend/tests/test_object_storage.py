@@ -14,19 +14,19 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
-from datepipette.application.query_safety import InteractiveQueryRuntime
-from datepipette.config import Settings
-from datepipette.domain.exports import ExportFormat, ExportJob, ExportState
-from datepipette.domain.snapshot_queries import (
+from datapipette.application.query_safety import InteractiveQueryRuntime
+from datapipette.config import Settings
+from datapipette.domain.exports import ExportFormat, ExportJob, ExportState
+from datapipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     SnapshotQuery,
     SnapshotQueryField,
     SnapshotRefreshState,
 )
-from datepipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
-from datepipette.infrastructure.duckdb_snapshot_queries import DuckDbSnapshotQueryExecutor
-from datepipette.infrastructure.local_exports import DatasetExportExecutor
-from datepipette.infrastructure.object_storage import (
+from datapipette.infrastructure.duckdb_runtime import DuckDbQueryConcurrencyLimiter
+from datapipette.infrastructure.duckdb_snapshot_queries import DuckDbSnapshotQueryExecutor
+from datapipette.infrastructure.local_exports import DatasetExportExecutor
+from datapipette.infrastructure.object_storage import (
     LocalObjectStorage,
     ObjectExportDownloadResolver,
     ObjectStorageRegistry,
@@ -224,7 +224,7 @@ def test_s3_storage_verifies_upload_download_and_presigns(tmp_path: Path) -> Non
             expected_byte_size=8,
             expected_checksum_sha256=checksum,
         )
-    client.metadata[("analytics", "datasets/snapshot.parquet")] = {"datepipette-sha256": checksum}
+    client.metadata[("analytics", "datasets/snapshot.parquet")] = {"datapipette-sha256": checksum}
 
     page = storage.list_page("datasets/", after_key=None, limit=1)
     assert [item.object_key for item in page.objects] == ["datasets/snapshot.parquet"]
@@ -253,7 +253,7 @@ def test_download_resolver_dispatches_by_durable_backend(tmp_path: Path) -> None
     local = LocalObjectStorage(tmp_path / "local")
     resolver = ObjectExportDownloadResolver(ObjectStorageRegistry("s3", {"local": local, "s3": s3}))
     client.objects[("analytics", "exports/report.csv")] = b"0123456789"
-    client.metadata[("analytics", "exports/report.csv")] = {"datepipette-sha256": "0" * 64}
+    client.metadata[("analytics", "exports/report.csv")] = {"datapipette-sha256": "0" * 64}
 
     download = resolver.resolve(
         "s3",
@@ -286,7 +286,7 @@ def test_download_resolver_proxies_private_s3_and_marks_temporary_file(
     payload = b"private export"
     checksum = _digest(payload)
     client.objects[("analytics", "exports/report.csv")] = payload
-    client.metadata[("analytics", "exports/report.csv")] = {"datepipette-sha256": checksum}
+    client.metadata[("analytics", "exports/report.csv")] = {"datapipette-sha256": checksum}
     storage = S3ObjectStorage(
         client=client,
         bucket="analytics",
@@ -325,14 +325,14 @@ def test_download_resolver_rejects_unknown_s3_delivery_mode(tmp_path: Path) -> N
 
 
 def test_s3_client_requires_explicit_credentials() -> None:
-    from datepipette.infrastructure.object_storage import create_s3_client
+    from datapipette.infrastructure.object_storage import create_s3_client
 
     with pytest.raises(ValueError, match="credentials"):
         create_s3_client(Settings(environment="test"))
 
 
 @pytest.mark.skipif(
-    "DATEPIPETTE_TEST_S3_ENDPOINT" not in os.environ,
+    "DATAPIPETTE_TEST_S3_ENDPOINT" not in os.environ,
     reason="MinIO integration endpoint is not configured",
 )
 def test_minio_round_trip_with_runtime_factory(tmp_path: Path) -> None:
@@ -340,10 +340,10 @@ def test_minio_round_trip_with_runtime_factory(tmp_path: Path) -> None:
         environment="test",
         object_storage_backend="s3",
         snapshot_storage_path=tmp_path,
-        s3_endpoint_url=os.environ["DATEPIPETTE_TEST_S3_ENDPOINT"],
-        s3_bucket=os.environ.get("DATEPIPETTE_TEST_S3_BUCKET", "datepipette"),
-        s3_access_key_id=os.environ["DATEPIPETTE_TEST_S3_ACCESS_KEY_ID"],
-        s3_secret_access_key=os.environ["DATEPIPETTE_TEST_S3_SECRET_ACCESS_KEY"],
+        s3_endpoint_url=os.environ["DATAPIPETTE_TEST_S3_ENDPOINT"],
+        s3_bucket=os.environ.get("DATAPIPETTE_TEST_S3_BUCKET", "datapipette"),
+        s3_access_key_id=os.environ["DATAPIPETTE_TEST_S3_ACCESS_KEY_ID"],
+        s3_secret_access_key=os.environ["DATAPIPETTE_TEST_S3_SECRET_ACCESS_KEY"],
     )
     storage = create_object_storage_registry(settings).default
     payload = b"real-minio-object"
@@ -391,7 +391,7 @@ def test_minio_round_trip_with_runtime_factory(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(
-    "DATEPIPETTE_TEST_S3_ENDPOINT" not in os.environ,
+    "DATAPIPETTE_TEST_S3_ENDPOINT" not in os.environ,
     reason="MinIO integration endpoint is not configured",
 )
 def test_minio_snapshot_query_export_and_private_download(tmp_path: Path) -> None:
@@ -399,10 +399,10 @@ def test_minio_snapshot_query_export_and_private_download(tmp_path: Path) -> Non
         environment="test",
         object_storage_backend="s3",
         snapshot_storage_path=tmp_path,
-        s3_endpoint_url=os.environ["DATEPIPETTE_TEST_S3_ENDPOINT"],
-        s3_bucket=os.environ.get("DATEPIPETTE_TEST_S3_BUCKET", "datepipette"),
-        s3_access_key_id=os.environ["DATEPIPETTE_TEST_S3_ACCESS_KEY_ID"],
-        s3_secret_access_key=os.environ["DATEPIPETTE_TEST_S3_SECRET_ACCESS_KEY"],
+        s3_endpoint_url=os.environ["DATAPIPETTE_TEST_S3_ENDPOINT"],
+        s3_bucket=os.environ.get("DATAPIPETTE_TEST_S3_BUCKET", "datapipette"),
+        s3_access_key_id=os.environ["DATAPIPETTE_TEST_S3_ACCESS_KEY_ID"],
+        s3_secret_access_key=os.environ["DATAPIPETTE_TEST_S3_SECRET_ACCESS_KEY"],
     )
     storages = create_object_storage_registry(settings)
     field_id = uuid4()

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from datepipette import cli
-from datepipette.application.auth_service import BootstrapUnavailableError
+from datapipette import cli
+from datapipette.application.auth_service import BootstrapUnavailableError
 
 
 def bootstrap_args(*extra: str) -> list[str]:
@@ -28,10 +28,10 @@ def test_bootstrap_reads_password_from_named_environment_variable(
     async def fake_bootstrap(email: str, display_name: str, password: str) -> None:
         captured.append((email, display_name, password))
 
-    monkeypatch.setenv("DATEPIPETTE_BOOTSTRAP_ADMIN_PASSWORD", "a-secure-bootstrap-password")
+    monkeypatch.setenv("DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD", "a-secure-bootstrap-password")
     monkeypatch.setattr(cli, "_bootstrap", fake_bootstrap)
 
-    cli.main(bootstrap_args("--password-env", "DATEPIPETTE_BOOTSTRAP_ADMIN_PASSWORD"))
+    cli.main(bootstrap_args("--password-env", "DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD"))
 
     assert captured == [("admin@example.com", "Installation Admin", "a-secure-bootstrap-password")]
 
@@ -77,7 +77,7 @@ def test_bootstrap_reads_password_from_a_dotenv_secret_file(
 ) -> None:
     dotenv_file = tmp_path / ".env"
     dotenv_file.write_text(
-        'UNRELATED=value\nDATEPIPETTE_BOOTSTRAP_ADMIN_PASSWORD="dotenv-backed-password"\n',
+        'UNRELATED=value\nDATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD="dotenv-backed-password"\n',
         encoding="utf-8",
     )
     captured: list[str] = []

@@ -10,20 +10,20 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.access_control import DatasetAccessAuthorizer
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.application.exports import (
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.access_control import DatasetAccessAuthorizer
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.application.exports import (
     DatasetExportService,
     ExportDownloadService,
     ExportWorkerService,
 )
-from datepipette.config import Settings
-from datepipette.domain.exports import ExportClaimOutcome
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
-from datepipette.infrastructure.local_exports import LocalDatasetExportExecutor
-from datepipette.infrastructure.models import (
+from datapipette.config import Settings
+from datapipette.domain.exports import ExportClaimOutcome
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
+from datapipette.infrastructure.local_exports import LocalDatasetExportExecutor
+from datapipette.infrastructure.models import (
     AuditEventModel,
     DatasetModel,
     DatasetRefreshRunModel,
@@ -32,15 +32,15 @@ from datepipette.infrastructure.models import (
     PostgresConnectionModel,
     UserModel,
 )
-from datepipette.infrastructure.object_storage import (
+from datapipette.infrastructure.object_storage import (
     LocalObjectStorage,
     ObjectExportDownloadResolver,
     ObjectStorageRegistry,
 )
-from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.infrastructure.repositories.exports import SqlAlchemyExportStore
-from datepipette.main import create_app
+from datapipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.infrastructure.repositories.exports import SqlAlchemyExportStore
+from datapipette.main import create_app
 
 ADMIN_EMAIL = "export-admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
@@ -294,7 +294,7 @@ def test_export_api_worker_history_and_reissued_download(tmp_path: Path) -> None
                 json={"format": "csv", "fields": [field_id]},
             )
             assert repeated.json()["id"] == body["id"]
-            assert repeated.headers["x-datepipette-idempotent-replay"] == "true"
+            assert repeated.headers["x-datapipette-idempotent-replay"] == "true"
             not_ready = client.post(f"{url}/{body['id']}/download-link", headers=csrf)
             assert not_ready.status_code == 409
 

@@ -13,8 +13,8 @@ import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 
-from datepipette.application.access_control import DatasetAccessAuthorizer
-from datepipette.application.exports import (
+from datapipette.application.access_control import DatasetAccessAuthorizer
+from datapipette.application.exports import (
     DatasetExportService,
     ExportDispatchUnavailableError,
     ExportDownloadService,
@@ -30,9 +30,9 @@ from datepipette.application.exports import (
     export_query_document,
     export_query_from_document,
 )
-from datepipette.application.snapshot_queries import InvalidSnapshotQueryError
-from datepipette.domain.access_control import DatasetAccess, DatasetPermission
-from datepipette.domain.exports import (
+from datapipette.application.snapshot_queries import InvalidSnapshotQueryError
+from datapipette.domain.access_control import DatasetAccess, DatasetPermission
+from datapipette.domain.exports import (
     ExportArtifact,
     ExportClaimOutcome,
     ExportFormat,
@@ -40,8 +40,8 @@ from datepipette.domain.exports import (
     ExportRequestOutcome,
     ExportState,
 )
-from datepipette.domain.identity import AccountStatus, SystemRole, User
-from datepipette.domain.snapshot_queries import (
+from datapipette.domain.identity import AccountStatus, SystemRole, User
+from datapipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     SnapshotFilterOperator,
     SnapshotQuery,
@@ -51,10 +51,10 @@ from datepipette.domain.snapshot_queries import (
     SnapshotRefreshState,
     SnapshotSortDirection,
 )
-from datepipette.infrastructure.export_dispatch import CeleryExportDispatcher
-from datepipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
-from datepipette.infrastructure.local_exports import LocalDatasetExportExecutor, LocalExportStorage
-from datepipette.infrastructure.object_storage import (
+from datapipette.infrastructure.export_dispatch import CeleryExportDispatcher
+from datapipette.infrastructure.export_tokens import EncryptedExportDownloadTokenCodec
+from datapipette.infrastructure.local_exports import LocalDatasetExportExecutor, LocalExportStorage
+from datapipette.infrastructure.object_storage import (
     LocalObjectStorage,
     ObjectExportDownloadResolver,
     ObjectStorageRegistry,
@@ -502,6 +502,6 @@ def test_celery_export_dispatch_contract() -> None:
     fake = FakeCelery()
     export_id = uuid4()
     CeleryExportDispatcher(fake).dispatch(export_id)
-    assert fake.call["name"] == "datepipette.export.execute"
+    assert fake.call["name"] == "datapipette.export.execute"
     assert fake.call["queue"] == "export"
     assert fake.call["task_id"] == f"export-{export_id}"

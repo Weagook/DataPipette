@@ -11,17 +11,17 @@ from httpx2 import Response as HttpResponse
 from redis.asyncio import Redis
 from sqlalchemy import select, text, update
 
-from datepipette import cli
-from datepipette.api.dependencies.authentication import (
+from datapipette import cli
+from datapipette.api.dependencies.authentication import (
     CSRF_COOKIE_NAME,
     SESSION_COOKIE_NAME,
 )
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.config import Settings
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import AuditEventModel, BrowserSessionModel, UserModel
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.config import Settings
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import AuditEventModel, BrowserSessionModel, UserModel
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(
     environment="test",
@@ -299,7 +299,7 @@ def test_bootstrap_cli_prompts_and_refuses_second_admin(
         sys,
         "argv",
         [
-            "datepipette-admin",
+            "datapipette-admin",
             "bootstrap-admin",
             "--email",
             ADMIN_EMAIL,

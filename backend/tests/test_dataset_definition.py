@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from datepipette.domain.datasets import (
+from datapipette.domain.datasets import (
     DatasetPlanSummary,
     DatasetRecommendationCode,
     DatasetRelationStatistics,
@@ -29,7 +29,7 @@ from datepipette.domain.datasets import (
     VisualRelation,
     build_dataset_recommendations,
 )
-from datepipette.infrastructure.dataset_sql import compile_visual_select
+from datapipette.infrastructure.dataset_sql import compile_visual_select
 
 
 def _definition() -> VisualDatasetDefinition:

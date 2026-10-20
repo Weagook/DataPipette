@@ -1,16 +1,18 @@
 """Authenticated encryption and production-key configuration tests."""
 
 import asyncio
+import base64
 import os
 from uuid import uuid4
 
 import pytest
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pydantic import ValidationError
 
-from datepipette.application.connections import ConnectionSecretUnavailableError
-from datepipette.config import DEVELOPMENT_CONNECTION_ENCRYPTION_KEY, Settings
-from datepipette.infrastructure.crypto import AesGcmSecretCipher, InvalidEncryptionKeyError
-from datepipette.infrastructure.source_postgres import _temporary_ca
+from datapipette.application.connections import ConnectionSecretUnavailableError
+from datapipette.config import DEVELOPMENT_CONNECTION_ENCRYPTION_KEY, Settings
+from datapipette.infrastructure.crypto import AesGcmSecretCipher, InvalidEncryptionKeyError
+from datapipette.infrastructure.source_postgres import _temporary_ca
 
 
 def test_aes_gcm_round_trip_is_randomized_and_bound_to_owner() -> None:
@@ -19,7 +21,7 @@ def test_aes_gcm_round_trip_is_randomized_and_bound_to_owner() -> None:
     first = cipher.encrypt("source-password", connection_id=connection_id, field="password")
     second = cipher.encrypt("source-password", connection_id=connection_id, field="password")
 
-    assert first.startswith("v1.")
+    assert first.startswith("v2.")
     assert first != second
     assert "source-password" not in first
     assert cipher.decrypt(first, connection_id=connection_id, field="password") == (
@@ -33,6 +35,24 @@ def test_aes_gcm_round_trip_is_randomized_and_bound_to_owner() -> None:
     tampered = first[:4] + ("A" if first[4] != "A" else "B") + first[5:]
     with pytest.raises(ConnectionSecretUnavailableError):
         cipher.decrypt(tampered, connection_id=connection_id, field="password")
+
+
+def test_aes_gcm_decrypts_legacy_brand_envelopes() -> None:
+    connection_id = uuid4()
+    key = base64.urlsafe_b64decode(DEVELOPMENT_CONNECTION_ENCRYPTION_KEY + "=")
+    nonce = os.urandom(12)
+    associated_data = f"datepipette:postgresql-connection:{connection_id}:password:v1".encode()
+    encrypted = AESGCM(key).encrypt(nonce, b"legacy-password", associated_data)
+    envelope = "v1." + base64.urlsafe_b64encode(nonce + encrypted).decode().rstrip("=")
+
+    assert (
+        AesGcmSecretCipher(DEVELOPMENT_CONNECTION_ENCRYPTION_KEY).decrypt(
+            envelope,
+            connection_id=connection_id,
+            field="password",
+        )
+        == "legacy-password"
+    )
 
 
 def test_invalid_and_development_production_keys_are_rejected() -> None:

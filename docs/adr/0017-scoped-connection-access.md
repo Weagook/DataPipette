@@ -37,7 +37,7 @@ Grant changes append redacted audit events with identifiers and exact scope name
 ## Alternatives considered
 
 - **Rely only on the PostgreSQL role:** rejected because every analyst would discover the same database-visible surface.
-- **Copy catalog metadata into the DatePipette database:** deferred because it introduces freshness and invalidation problems before they are needed.
+- **Copy catalog metadata into the DataPipette database:** deferred because it introduces freshness and invalidation problems before they are needed.
 - **Check access only when a dataset is created:** rejected because saved definitions and queued jobs would bypass later revocation.
 - **Make connection grants imply dataset access:** rejected because source authoring and consumption of published business data are separate security decisions.
 - **Allow dataset `manage` holders to edit definitions:** rejected for now because sharing permission is not ownership transfer.

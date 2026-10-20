@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from datepipette.domain.schedules import (
+from datapipette.domain.schedules import (
     RefreshScheduleKind,
     RefreshScheduleSpec,
     next_occurrence,

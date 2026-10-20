@@ -163,7 +163,7 @@ function NewChartStudio() {
       <StudioHeading
         eyebrow={t("New private chart")}
         title={t("Build a visual answer")}
-        detail={t("Choose a published dataset. DatePipette saves the analytical definition before it executes a bounded preview.")}
+        detail={t("Choose a published dataset. DataPipette saves the analytical definition before it executes a bounded preview.")}
       />
       <section className="studio-panel chart-source-panel">
         <div className="section-heading">

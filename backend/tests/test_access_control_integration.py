@@ -11,25 +11,25 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text, update
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.access_control import (
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.access_control import (
     DatasetAccessAuthorizer,
     DatasetAccessDeniedError,
 )
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.config import Settings
-from datepipette.domain.access_control import DatasetPermission
-from datepipette.domain.identity import AccountStatus, SystemRole, User
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import (
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.config import Settings
+from datapipette.domain.access_control import DatasetPermission
+from datapipette.domain.identity import AccountStatus, SystemRole, User
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import (
     AuditEventModel,
     DatasetModel,
     PostgresConnectionModel,
     UserModel,
 )
-from datepipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(
     environment="test",

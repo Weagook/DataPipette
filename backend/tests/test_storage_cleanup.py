@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from datepipette.application.storage_cleanup import (
+from datapipette.application.storage_cleanup import (
     CleanupObject,
     CleanupObjectKind,
     StorageCleanupService,

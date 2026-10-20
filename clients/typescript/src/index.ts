@@ -2,7 +2,7 @@ import createClient, { type Client } from "openapi-fetch";
 
 import type { components, paths } from "./generated/schema.js";
 
-export type DatePipetteClient = Client<paths>;
+export type DataPipetteClient = Client<paths>;
 export type ProblemDetails = components["schemas"]["ProblemDetails"];
 
 export interface ClientOptions {
@@ -14,13 +14,13 @@ export interface ServiceTokenClientOptions extends ClientOptions {
   token: string;
 }
 
-export interface DatePipetteResponse<T> {
+export interface DataPipetteResponse<T> {
   data?: T;
   error?: unknown;
   response: Response;
 }
 
-export class DatePipetteApiError extends Error {
+export class DataPipetteApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly title: string;
@@ -31,10 +31,10 @@ export class DatePipetteApiError extends Error {
 
   constructor(response: Response, error: unknown) {
     const problem = isProblemDetails(error) ? error : null;
-    const title = problem?.title ?? "DatePipette API request failed";
+    const title = problem?.title ?? "DataPipette API request failed";
     const detail = problem?.detail ?? `The API returned HTTP ${response.status}.`;
     super(`${title}: ${detail}`);
-    this.name = "DatePipetteApiError";
+    this.name = "DataPipetteApiError";
     this.status = response.status;
     this.code = problem?.code ?? "unexpected_api_response";
     this.title = title;
@@ -53,7 +53,7 @@ function parseRetryAfter(value: string | null): number | null {
   return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : null;
 }
 
-export function createBrowserClient(options: ClientOptions): DatePipetteClient {
+export function createBrowserClient(options: ClientOptions): DataPipetteClient {
   return createClient<paths>({
     baseUrl: normalizeBaseUrl(options.baseUrl),
     credentials: "include",
@@ -63,10 +63,10 @@ export function createBrowserClient(options: ClientOptions): DatePipetteClient {
 
 export function createServiceTokenClient(
   options: ServiceTokenClientOptions,
-): DatePipetteClient {
+): DataPipetteClient {
   const token = options.token.trim();
   if (!token) {
-    throw new TypeError("A non-empty DatePipette API token is required.");
+    throw new TypeError("A non-empty DataPipette API token is required.");
   }
   return createClient<paths>({
     baseUrl: normalizeBaseUrl(options.baseUrl),
@@ -75,17 +75,17 @@ export function createServiceTokenClient(
   });
 }
 
-export function unwrap<T>(result: DatePipetteResponse<T>): T {
+export function unwrap<T>(result: DataPipetteResponse<T>): T {
   if (result.response.ok) {
     return result.data as T;
   }
-  throw new DatePipetteApiError(result.response, result.error);
+  throw new DataPipetteApiError(result.response, result.error);
 }
 
 function normalizeBaseUrl(value: string): string {
   const normalized = value.trim().replace(/\/+$/, "");
   if (!normalized) {
-    throw new TypeError("A non-empty DatePipette API base URL is required.");
+    throw new TypeError("A non-empty DataPipette API base URL is required.");
   }
   return normalized;
 }

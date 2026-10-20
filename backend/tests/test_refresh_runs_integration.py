@@ -12,37 +12,37 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.application.connection_access import ConnectionAccessAuthorizer
-from datepipette.application.refresh_runs import RefreshRunService
-from datepipette.application.refresh_worker import (
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.application.connection_access import ConnectionAccessAuthorizer
+from datapipette.application.refresh_runs import RefreshRunService
+from datapipette.application.refresh_worker import (
     RefreshExecutionResult,
     RefreshWorkerService,
     UnavailableSnapshotWriter,
 )
-from datepipette.application.schedules import RefreshSchedulerService
-from datepipette.config import Settings
-from datepipette.domain.refresh import RefreshClaimOutcome, RefreshRun, RefreshRunState
-from datepipette.domain.snapshots import SnapshotArtifact
-from datepipette.infrastructure.celery_app import create_celery_app
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import (
+from datapipette.application.schedules import RefreshSchedulerService
+from datapipette.config import Settings
+from datapipette.domain.refresh import RefreshClaimOutcome, RefreshRun, RefreshRunState
+from datapipette.domain.snapshots import SnapshotArtifact
+from datapipette.infrastructure.celery_app import create_celery_app
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import (
     AuditEventModel,
     DatasetRefreshRequestModel,
     DatasetRefreshRunModel,
     DatasetRefreshScheduleModel,
     DatasetVersionModel,
 )
-from datepipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.infrastructure.repositories.connection_access import (
+from datapipette.infrastructure.refresh_dispatch import CeleryRefreshDispatcher
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.infrastructure.repositories.connection_access import (
     SqlAlchemyConnectionAccessStore,
 )
-from datepipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
-from datepipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
-from datepipette.infrastructure.repositories.schedules import SqlAlchemyRefreshScheduleStore
-from datepipette.main import create_app
+from datapipette.infrastructure.repositories.datasets import SqlAlchemyDatasetStore
+from datapipette.infrastructure.repositories.refresh_runs import SqlAlchemyRefreshRunStore
+from datapipette.infrastructure.repositories.schedules import SqlAlchemyRefreshScheduleStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
 ADMIN_EMAIL = "admin@example.com"
@@ -280,7 +280,7 @@ def test_refresh_requests_are_idempotent_coalesced_and_retryable() -> None:
             )
             assert first.status_code == 202, first.text
             assert first.json()["state"] == "queued"
-            assert first.headers["x-datepipette-coalesced"] == "false"
+            assert first.headers["x-datapipette-coalesced"] == "false"
             run_id = first.json()["id"]
             assert dispatcher.run_ids == [UUID(run_id)]
 
@@ -294,8 +294,8 @@ def test_refresh_requests_are_idempotent_coalesced_and_retryable() -> None:
             )
             assert repeated.json()["id"] == run_id
             assert coalesced.json()["id"] == run_id
-            assert repeated.headers["x-datepipette-coalesced"] == "true"
-            assert coalesced.headers["x-datepipette-coalesced"] == "true"
+            assert repeated.headers["x-datapipette-coalesced"] == "true"
+            assert coalesced.headers["x-datapipette-coalesced"] == "true"
             assert dispatcher.run_ids == [UUID(run_id)]
             assert client.get(f"{url}/{run_id}").status_code == 200
 

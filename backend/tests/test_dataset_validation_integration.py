@@ -11,18 +11,18 @@ from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import select, text
 
-from datepipette.api.dependencies.authentication import CSRF_COOKIE_NAME
-from datepipette.application.auth_service import bootstrap_first_admin
-from datepipette.config import Settings
-from datepipette.infrastructure.database import create_database_engine, create_session_factory
-from datepipette.infrastructure.models import AuditEventModel
-from datepipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
-from datepipette.main import create_app
+from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
+from datapipette.application.auth_service import bootstrap_first_admin
+from datapipette.config import Settings
+from datapipette.infrastructure.database import create_database_engine, create_session_factory
+from datapipette.infrastructure.models import AuditEventModel
+from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
+from datapipette.main import create_app
 
 TEST_SETTINGS = Settings(environment="test", docs_enabled=False)
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "correct horse battery staple"
-SOURCE_PASSWORD = "datepipette_dev_only"
+SOURCE_PASSWORD = "datapipette_dev_only"
 SCHEMA = "validation_fixture"
 
 
@@ -98,8 +98,8 @@ def _connection(client: TestClient, password: str = SOURCE_PASSWORD) -> str:
             "name": f"Source {uuid4()}",
             "host": "127.0.0.1",
             "port": 5432,
-            "database_name": "datepipette",
-            "username": "datepipette",
+            "database_name": "datapipette",
+            "username": "datapipette",
             "password": password,
             "ssl_mode": "disable",
         },

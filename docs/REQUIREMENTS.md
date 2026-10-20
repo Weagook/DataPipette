@@ -50,7 +50,7 @@ This document assigns stable identifiers to approved product requirements. Detai
 - **QSA-003:** The advisor shall return explainable findings with stable codes and `info`, `warning`, or `blocked` severity. Findings may include large sequential scans, high estimated rows or cost, expensive sorts, Cartesian joins, type-mismatched joins, and stale statistics.
 - **QSA-004:** Administrators shall configure separate safety limits for interactive preview and background refresh, including estimated rows, planner cost, join count, execution timeout, result size, and concurrency.
 - **QSA-005:** Policy overrides shall require explicit permission and create a redacted audit event. A warning shall not be presented as certainty because PostgreSQL planner estimates can be inaccurate.
-- **QSA-006:** DatePipette may recommend an index or query change but shall never execute DDL or create an index in the source database.
+- **QSA-006:** DataPipette may recommend an index or query change but shall never execute DDL or create an index in the source database.
 - **QSA-007:** Completed source executions shall capture bounded operational metrics so estimates can be compared with actual duration, result rows, transferred bytes, and snapshot size.
 - **QSA-008:** Table, chart, and dashboard-item queries shall share one crash-safe installation-wide concurrency budget; exhausted capacity shall fail immediately through a stable retryable API response.
 

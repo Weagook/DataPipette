@@ -37,7 +37,7 @@ describe("application session flow", () => {
     expect(
       await screen.findByRole(
         "heading",
-        { name: "Sign in to DatePipette" },
+        { name: "Sign in to DataPipette" },
         { timeout: 5_000 },
       ),
     ).toBeVisible();
@@ -95,7 +95,7 @@ describe("application session flow", () => {
 
   it("persists the profile language and switches the interface", async () => {
     const preferenceBodies: unknown[] = [];
-    document.cookie = "datepipette_csrf=test-csrf-token; path=/";
+    document.cookie = "datapipette_csrf=test-csrf-token; path=/";
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

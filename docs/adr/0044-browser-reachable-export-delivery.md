@@ -12,7 +12,7 @@ Export capabilities originally redirected every S3-compatible artifact to a pres
 - Keep `redirect` as the default S3 download delivery mode for externally reachable HTTPS object storage.
 - Add an explicit `proxy` mode for S3-compatible storage private to the application network. The API downloads the immutable object to a unique temporary path, verifies its persisted byte size and SHA-256, returns it as an attachment, and removes the temporary file after the response completes.
 - Configure the bundled Compose/MinIO topology to use proxy mode. MinIO remains loopback-only and the browser receives downloads from the same public application origin.
-- Keep the encrypted five-minute DatePipette capability as the only public download URL in both modes. Do not expose storage credentials, internal endpoints, object keys, or absolute paths through the API.
+- Keep the encrypted five-minute DataPipette capability as the only public download URL in both modes. Do not expose storage credentials, internal endpoints, object keys, or absolute paths through the API.
 
 ## Consequences
 
