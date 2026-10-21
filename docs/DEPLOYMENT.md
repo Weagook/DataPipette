@@ -69,7 +69,7 @@ The dependency graph performs the following work:
 5. starts the API, refresh/export worker, and durable scheduler;
 6. exposes the React SPA and same-origin `/api` through Nginx.
 
-Compose mounts `.env` read-only into the one-shot bootstrap container as a secret source, and the administration CLI reads only `DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD` from it. The password is not included in the process command or ordinary container environment. Bootstrap is deliberately convergent rather than reconciling: every later `up` skips creation when an administrator exists and never changes that account's email, name, or password.
+Compose mounts the mode-`0600` `.env` file read-only into the one-shot bootstrap container as a secret source. Because Compose implements file-backed secrets as bind mounts, only that short-lived container runs as the container root user so it can read the root-owned file; the API, worker, and scheduler continue to run as UID `10001`. The administration CLI reads only `DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD`, and the password is not included in the process command or ordinary container environment. Bootstrap is deliberately convergent rather than reconciling: every later `up` skips creation when an administrator exists and never changes that account's email, name, or password.
 
 By default, the application listens only on `http://127.0.0.1:8080`. Use an SSH tunnel for a remote evaluation:
 
