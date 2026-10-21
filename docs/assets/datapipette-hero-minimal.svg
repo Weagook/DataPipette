@@ -20,7 +20,7 @@
 
   <g aria-label="DataPipette">
     <text x="660" y="292" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="78" font-weight="700" letter-spacing="-3">
-      <tspan fill="#111827">Date</tspan><tspan fill="#7467F0">Pipette</tspan>
+      <tspan fill="#111827">Data</tspan><tspan fill="#7467F0">Pipette</tspan>
     </text>
     <rect x="665" y="326" width="84" height="8" rx="4" fill="#20C7D9"/>
   </g>
