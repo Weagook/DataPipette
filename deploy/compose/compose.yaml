@@ -136,6 +136,10 @@ services:
 
   bootstrap-admin:
     <<: *backend-image
+    # Compose implements file-backed secrets as bind mounts, so the container
+    # root user must read the host's mode-0600 environment file. This service
+    # is one-shot; long-running application services remain UID 10001.
+    user: "0:0"
     command:
       - datapipette-admin
       - bootstrap-admin
