@@ -13,6 +13,41 @@ DataPipette turns governed PostgreSQL data into reusable datasets, explorable ta
 
 > **Status: functional pre-alpha.** The end-to-end evaluation stack is implemented and runnable, but DataPipette is not yet a production release. A reproducible performance baseline is published; optimization against it, backup and restore procedures, general API rate limiting, operational telemetry, and release-candidate security hardening remain on the roadmap.
 
+## Product tour
+
+These are live product screens from the evaluation deployment—not design mockups.
+
+### Turn governed data into dashboards
+
+[![A DataPipette dashboard with customer segment and regional charts](docs/assets/screenshots/dashboard-overview.png)](docs/assets/screenshots/dashboard-overview.png)
+
+Dashboards combine independently loaded charts from multiple datasets in a versioned, drag-and-resize layout. Viewers see freshness and failure states without receiving automatic access to detailed source rows.
+
+### Model datasets on a visual canvas
+
+[![The DataPipette Canvas Builder showing a saved dataset model](docs/assets/screenshots/dataset-canvas-builder.png)](docs/assets/screenshots/dataset-canvas-builder.png)
+
+The desktop Canvas Builder composes PostgreSQL tables, joins, projections, formatting, and dataset output as editable nodes. Its layout and viewport are stored alongside the authoritative JSON definition, so analysts can reopen and evolve the same model.
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/assets/screenshots/dataset-table-filters.png">
+        <img src="docs/assets/screenshots/dataset-table-filters.png" alt="A DataPipette snapshot table with a multi-value column filter">
+      </a>
+    </td>
+    <td width="50%">
+      <a href="docs/assets/screenshots/chart-studio.png">
+        <img src="docs/assets/screenshots/chart-studio.png" alt="DataPipette Chart Studio showing a donut chart configuration and preview">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Explore immutable snapshots.</strong><br>Browse millions of rows through typed, Excel-like filters, deterministic pagination, sorting, and display formatting without repeatedly querying the source database.</td>
+    <td><strong>Build reusable visualizations.</strong><br>Configure aggregations, dimensions, date buckets, filters, sorting, and limits with a bounded live preview before saving a versioned chart.</td>
+  </tr>
+</table>
+
 ## Why DataPipette?
 
 - **Built for operational PostgreSQL data.** Connect one or more PostgreSQL databases to a single-company DataPipette installation.
