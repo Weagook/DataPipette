@@ -56,7 +56,7 @@ export function DatasetTablePage() {
 }
 
 function DatasetWorkspace({ exploration }: { exploration: DatasetExploration }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const visibleColumns = useMemo(
     () => exploration.columns.filter((column) => column.visible),
     [exploration.columns],
@@ -150,7 +150,7 @@ function DatasetWorkspace({ exploration }: { exploration: DatasetExploration }) 
           <span className="eyebrow">{t("Snapshot table")}</span>
           <h1>{exploration.dataset_name}</h1>
           <p>
-            {t("{count} rows · Snapshot activated {date}", { count: exploration.snapshot_row_count.toLocaleString(), date: formatDateTime(exploration.snapshot_activated_at) })}
+            {t("{count} rows · Snapshot activated {date}", { count: exploration.snapshot_row_count.toLocaleString(), date: formatDateTime(exploration.snapshot_activated_at, locale) })}
           </p>
         </div>
         <div className="heading-actions">

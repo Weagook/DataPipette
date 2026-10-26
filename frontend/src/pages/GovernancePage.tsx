@@ -142,7 +142,7 @@ function GovernanceAdmin() {
 }
 
 function PolicyEditor() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const policyQuery = useQuery({ queryKey: queryKeys.querySafetyPolicy, queryFn: getQuerySafetyPolicy });
   const [draft, setDraft] = useState<PolicyDraft | null>(null);
@@ -169,7 +169,7 @@ function PolicyEditor() {
     <section className="governance-surface policy-surface">
       <header className="governance-surface-heading">
         <div><span className="panel-icon"><ShieldCheck size={18} /></span><span><strong>{t("Query Safety policy")}</strong><small>{t("One versioned policy protects previews, refreshes, queries, exports, and workers.")}</small></span></div>
-        <div className="policy-revision"><small>{t("Revision")}</small><strong>{policy.revision}</strong><span>{policy.updated_at ? t("Updated {date}", { date: formatDateTime(policy.updated_at) }) : t("Default policy")}</span></div>
+        <div className="policy-revision"><small>{t("Revision")}</small><strong>{policy.revision}</strong><span>{policy.updated_at ? t("Updated {date}", { date: formatDateTime(policy.updated_at, locale) }) : t("Default policy")}</span></div>
       </header>
       <div className="policy-notice"><Clock3 size={17} /><div><strong>{t("Optimistic concurrency is active")}</strong><p>{t("Saving replaces the complete policy only if nobody changed revision {revision} in the meantime.", { revision: policy.revision })}</p></div></div>
       {save.isError && <InlineError message={problemMessage(save.error)} onRetry={() => void policyQuery.refetch()} />}
@@ -257,13 +257,13 @@ function AuditExplorer() {
 }
 
 function AuditRow({ event, open, onToggle }: { event: AuditEvent; open: boolean; onToggle: () => void }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   return <article className={`audit-row ${open ? "open" : ""}`}>
     <button type="button" onClick={onToggle} aria-expanded={open}>
       <span className={`audit-outcome ${event.outcome}`}>{event.outcome}</span>
       <span className="audit-action"><strong>{event.action}</strong><small>{event.actor_type.replace("_", " ")}{event.actor_id ? ` · ${event.actor_id}` : ""}</small></span>
       <span className="audit-resource"><small>{event.resource_type ?? t("No resource")}</small><strong>{event.resource_id ?? "—"}</strong></span>
-      <time dateTime={event.occurred_at}>{formatDateTime(event.occurred_at)}</time>
+      <time dateTime={event.occurred_at}>{formatDateTime(event.occurred_at, locale)}</time>
       {open ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
     </button>
     {open && <div className="audit-details"><dl><div><dt>{t("Event ID")}</dt><dd>{event.id}</dd></div><div><dt>{t("Request ID")}</dt><dd>{event.request_id ?? "—"}</dd></div></dl><strong>{t("Details")}</strong><pre>{JSON.stringify(event.details, null, 2)}</pre></div>}

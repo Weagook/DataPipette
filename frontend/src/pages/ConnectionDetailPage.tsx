@@ -158,7 +158,7 @@ function ConnectionWorkspace({ connection, form, onFormChange, onSave, savePendi
   savePending: boolean;
   saveError: unknown;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const test = useMutation({ mutationFn: () => testConnection(connection!.id) });
   const requiresCa = form.sslMode === "verify-ca" || form.sslMode === "verify-full";
   const valid = Boolean(
@@ -226,7 +226,7 @@ function ConnectionWorkspace({ connection, form, onFormChange, onSave, savePendi
           {test.data && (
             <div className={`test-result ${test.data.succeeded ? "success" : "failure"}`}>
               {test.data.succeeded ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-              <div><strong>{t(test.data.succeeded ? "Connection succeeded" : "Connection failed safely")}</strong><span>{test.data.succeeded ? postgresVersion(test.data.server_version) : `${t("Code")}: ${test.data.error_code ?? "source_unavailable"}`} · {formatDateTime(test.data.tested_at)}</span></div>
+              <div><strong>{t(test.data.succeeded ? "Connection succeeded" : "Connection failed safely")}</strong><span>{test.data.succeeded ? postgresVersion(test.data.server_version) : `${t("Code")}: ${test.data.error_code ?? "source_unavailable"}`} · {formatDateTime(test.data.tested_at, locale)}</span></div>
             </div>
           )}
 
@@ -359,10 +359,10 @@ function ConnectionGrantRow({ grant, users, groups, onRevoke, revoking }: { gran
 }
 
 function ConnectionStatus({ connection, result }: { connection: Connection; result?: Awaited<ReturnType<typeof testConnection>> }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const succeeded = result?.succeeded ?? connection.last_test_succeeded;
   const testedAt = result?.tested_at ?? connection.last_tested_at;
-  return <span title={testedAt ? t("Tested {date}", { date: formatDateTime(testedAt) }) : undefined} className={`connection-title-status ${succeeded === true ? "healthy" : succeeded === false ? "failed" : "untested"}`}>{succeeded === true ? <CheckCircle2 size={16} /> : succeeded === false ? <XCircle size={16} /> : <RefreshCw size={16} />}{t(succeeded === true ? "Last test passed" : succeeded === false ? "Last test failed" : "Not tested")}</span>;
+  return <span title={testedAt ? t("Tested {date}", { date: formatDateTime(testedAt, locale) }) : undefined} className={`connection-title-status ${succeeded === true ? "healthy" : succeeded === false ? "failed" : "untested"}`}>{succeeded === true ? <CheckCircle2 size={16} /> : succeeded === false ? <XCircle size={16} /> : <RefreshCw size={16} />}{t(succeeded === true ? "Last test passed" : succeeded === false ? "Last test failed" : "Not tested")}</span>;
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

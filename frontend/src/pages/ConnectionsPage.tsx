@@ -119,7 +119,7 @@ function ConnectionsAdmin() {
 }
 
 function ConnectionCard({ connection, testing, onTest }: { connection: Connection; testing: boolean; onTest: () => void }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const state = connection.last_test_succeeded === true ? "healthy" : connection.last_test_succeeded === false ? "failed" : "untested";
   return (
     <article className="connection-card">
@@ -140,7 +140,7 @@ function ConnectionCard({ connection, testing, onTest }: { connection: Connectio
         <div><dt>TLS</dt><dd>{connection.ssl_mode}</dd></div>
       </dl>
       <footer>
-        <span>{connection.last_tested_at ? t("Tested {date}", { date: formatDateTime(connection.last_tested_at) }) : t("Awaiting first test")}</span>
+        <span>{connection.last_tested_at ? t("Tested {date}", { date: formatDateTime(connection.last_tested_at, locale) }) : t("Awaiting first test")}</span>
         <div>
           <button className="button secondary small" type="button" onClick={onTest} disabled={testing}>
             {testing ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}

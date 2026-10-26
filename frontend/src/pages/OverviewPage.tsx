@@ -9,7 +9,7 @@ import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function OverviewPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const dashboards = useQuery({
     queryKey: queryKeys.dashboardOverview,
     queryFn: () => listDashboards(),
@@ -59,7 +59,7 @@ export function OverviewPage() {
             <Link className="dashboard-row" to={`/dashboards/${dashboard.id}`} key={dashboard.id}>
               <span className="dashboard-icon"><LayoutDashboard size={19} /></span>
               <span><strong>{dashboard.name}</strong><small>{t("{count} visualizations", { count: dashboard.definition.items?.length ?? 0 })}</small></span>
-              <time dateTime={dashboard.updated_at}>{formatDateTime(dashboard.updated_at)}</time>
+              <time dateTime={dashboard.updated_at}>{formatDateTime(dashboard.updated_at, locale)}</time>
               <ArrowUpRight size={17} />
             </Link>
           ))}

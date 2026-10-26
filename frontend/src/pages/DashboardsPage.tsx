@@ -10,7 +10,7 @@ import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function DashboardsPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const [search, setSearch] = useState("");
   const dashboards = useInfiniteQuery({
@@ -44,7 +44,7 @@ export function DashboardsPage() {
           <Link className="dashboard-card" key={dashboard.id} to={user.role !== "viewer" && (user.role === "admin" || dashboard.owner_id === user.id) ? `/dashboards/${dashboard.id}/edit` : `/dashboards/${dashboard.id}`}>
             <div className="dashboard-card-top"><span className="dashboard-icon"><LayoutDashboard size={20} /></span><span className="revision">v{dashboard.revision}</span></div>
             <div><h2>{dashboard.name}</h2><p>{t("{count} visualizations", { count: dashboard.definition.items?.length ?? 0 })}</p></div>
-            <footer><time dateTime={dashboard.updated_at}>{t("Updated {date}", { date: formatDateTime(dashboard.updated_at) })}</time><ArrowRight size={17} /></footer>
+            <footer><time dateTime={dashboard.updated_at}>{t("Updated {date}", { date: formatDateTime(dashboard.updated_at, locale) })}</time><ArrowRight size={17} /></footer>
           </Link>
         ))}
       </section>

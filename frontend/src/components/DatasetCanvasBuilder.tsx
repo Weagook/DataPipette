@@ -94,10 +94,6 @@ export function DatasetCanvasBuilder({
   );
 
   useEffect(() => {
-    if (!definition.canvas) onChange(stableDefinition);
-  }, [definition.canvas, onChange, stableDefinition]);
-
-  useEffect(() => {
     setNodes(buildNodes(stableDefinition, t));
   }, [stableDefinition, t]);
 
@@ -163,7 +159,8 @@ export function DatasetCanvasBuilder({
     [commit, stableDefinition],
   );
   const onMoveEnd = useCallback(
-    (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
+    (event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
+      if (!definition.canvas && event === null) return;
       const current = stableDefinition.canvas?.viewport ?? { x: 0, y: 0, zoom: 1 };
       if (
         Math.abs(current.x - viewport.x) < 0.5 &&

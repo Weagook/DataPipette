@@ -110,6 +110,7 @@ const russian: Record<string, string> = {
   "Find foreign-key joins": "Найти связи по внешним ключам",
   "First publication": "Первая публикация",
   "First table selected": "Первая таблица выбрана",
+  "Final node": "Финальный узел",
   "Fixed interval": "Фиксированный интервал",
   "Foreign-key suggestions become explicit editable joins":
     "Предложенные внешние ключи становятся явными редактируемыми соединениями",
@@ -123,6 +124,7 @@ const russian: Record<string, string> = {
   "Join type for {relation}": "Тип соединения для {relation}",
   "Joins": "Соединения",
   "Label": "Название",
+  "Labels and display types": "Названия и форматы отображения",
   "New source node": "Новый узел источника",
   "New table column": "Столбец новой таблицы",
   "No visible foreign key was found. Configure a manual compatible-column join below.":
@@ -247,6 +249,7 @@ const russian: Record<string, string> = {
   "Source columns": "Столбцы источника",
   "Stable draft contract": "Стабильный контракт черновика",
   "Table or view": "Таблица или представление",
+  "Tables": "Таблицы",
   "Tables or SQL": "Таблицы или SQL",
   "The draft is not ready.": "Черновик не готов.",
   "The original query stays editable in the saved draft.":

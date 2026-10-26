@@ -56,7 +56,7 @@ export function ChartView({ result }: { result: RenderableChartResult }) {
       <div className="kpi-view">
         <span>{measure?.label ?? t("Value")}</span>
         <strong>
-          {formatMetric(measure && firstRow ? firstRow[measure.key] : null)}
+          {formatMetric(measure && firstRow ? firstRow[measure.key] : null, locale)}
         </strong>
         <small>
           {result.data.rows.length === 0
@@ -88,7 +88,7 @@ export function ChartView({ result }: { result: RenderableChartResult }) {
               {result.data.rows.map((row, index) => (
                 <tr key={index}>
                   {result.data.columns.map((column) => (
-                    <td key={column.key}>{formatMetric(row[column.key])}</td>
+                    <td key={column.key}>{formatMetric(row[column.key], locale)}</td>
                   ))}
                 </tr>
               ))}
@@ -223,7 +223,7 @@ function numericValue(value: unknown): number {
 }
 
 function formatDimension(value: unknown, locale: InterfaceLocale): string {
-  if (typeof value !== "string") return formatMetric(value);
+  if (typeof value !== "string") return formatMetric(value, locale);
   const timestamp = Date.parse(value);
   if (!Number.isNaN(timestamp) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
     return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", { dateStyle: "medium" }).format(

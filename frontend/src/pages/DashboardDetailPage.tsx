@@ -10,7 +10,7 @@ import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function DashboardDetailPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const { dashboardId = "" } = useParams();
   const dashboard = useQuery({
@@ -27,7 +27,7 @@ export function DashboardDetailPage() {
     <div className="page-stack dashboard-detail">
       <Link className="back-link" to="/dashboards"><ArrowLeft size={16} /> {t("All dashboards")}</Link>
       <header className="page-heading dashboard-titlebar">
-        <div><span className="eyebrow">{t("Dashboard")}</span><h1>{dashboard.data.name}</h1><p><CalendarClock size={15} /> {t("Updated {date} · revision {revision}", { date: formatDateTime(dashboard.data.updated_at), revision: dashboard.data.revision })}</p></div>
+        <div><span className="eyebrow">{t("Dashboard")}</span><h1>{dashboard.data.name}</h1><p><CalendarClock size={15} /> {t("Updated {date} · revision {revision}", { date: formatDateTime(dashboard.data.updated_at, locale), revision: dashboard.data.revision })}</p></div>
         <div className="heading-actions">
           <button className="button secondary" type="button" onClick={() => void dashboard.refetch()}><RefreshCw size={16} /> {t("Refresh view")}</button>
           {(user.role === "admin" || dashboard.data.owner_id === user.id) && <Link className="button secondary" to={`/dashboards/${dashboard.data.id}/edit`}><Share2 size={16} /> {t("Edit & share")}</Link>}

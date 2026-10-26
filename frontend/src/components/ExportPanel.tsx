@@ -20,7 +20,7 @@ interface ExportPanelProps {
 }
 
 export function ExportPanel({ datasetId, query }: ExportPanelProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -84,7 +84,7 @@ export function ExportPanel({ datasetId, query }: ExportPanelProps) {
                     {job.state === "succeeded" ? <Check size={13} /> : job.state === "failed" ? <XCircle size={13} /> : <LoaderCircle className="spin" size={13} />}
                     {t(expired && job.state === "succeeded" ? "expired" : job.state)}
                   </span>
-                  <div><strong>{job.format.toUpperCase()}</strong><small>{formatDateTime(job.requested_at)} · {job.row_count == null ? t("Preparing") : t("{count} rows", { count: job.row_count.toLocaleString() })}</small></div>
+                  <div><strong>{job.format.toUpperCase()}</strong><small>{formatDateTime(job.requested_at, locale)} · {job.row_count == null ? t("Preparing") : t("{count} rows", { count: job.row_count.toLocaleString() })}</small></div>
                   {job.state === "succeeded" && !expired && (
                     <button className="button secondary small" type="button" disabled={download.isPending} onClick={() => download.mutate(job.id)}>{t("Download")}</button>
                   )}

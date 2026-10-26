@@ -13,7 +13,7 @@ const ChartView = lazy(() =>
 type DashboardItem = NonNullable<Dashboard["definition"]["items"]>[number];
 
 export function DashboardItemCard({ dashboardId, item }: { dashboardId: string; item: DashboardItem }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const query = useQuery({
     queryKey: queryKeys.dashboardItem(dashboardId, item.id),
     queryFn: () => queryDashboardItem(dashboardId, item.id),
@@ -32,7 +32,7 @@ export function DashboardItemCard({ dashboardId, item }: { dashboardId: string; 
           <h2>{query.data?.meta.chart_name ?? <span className="title-skeleton" />}</h2>
           {query.data && (
             <p>
-              {query.data.meta.is_stale ? t("Stale snapshot") : t("Updated {date}", { date: relativeTime(query.data.meta.snapshot_activated_at) })}
+              {query.data.meta.is_stale ? t("Stale snapshot") : t("Updated {date}", { date: relativeTime(query.data.meta.snapshot_activated_at, locale) })}
             </p>
           )}
         </div>
@@ -61,7 +61,7 @@ export function DashboardItemCard({ dashboardId, item }: { dashboardId: string; 
       {query.data?.meta.truncated_by_bytes && (
         <footer className="truncated-notice"><Clock3 size={15} /> {t("Result was truncated by the response safety limit.")}</footer>
       )}
-      {query.data && <span className="sr-only">{t("Snapshot activated {date}", { date: formatDateTime(query.data.meta.snapshot_activated_at) })}</span>}
+      {query.data && <span className="sr-only">{t("Snapshot activated {date}", { date: formatDateTime(query.data.meta.snapshot_activated_at, locale) })}</span>}
     </article>
   );
 }

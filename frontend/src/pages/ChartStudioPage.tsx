@@ -261,7 +261,7 @@ function NewChartStudio() {
 }
 
 function ExistingChartStudio({ chartId }: { chartId: string }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [definition, setDefinition] = useState<ChartDefinition | null>(null);
@@ -353,7 +353,7 @@ function ExistingChartStudio({ chartId }: { chartId: string }) {
           {t(dirty ? "Unsaved changes" : "Saved definition")}
         </span>
         <span>{t("Private to owner and administrators")}</span>
-        <span>{t("Updated {date}", { date: relativeTime(saved.updated_at) })}</span>
+        <span>{t("Updated {date}", { date: relativeTime(saved.updated_at, locale) })}</span>
       </div>
       <section className="studio-panel">
         <div className="studio-form-grid single-name">
@@ -1002,7 +1002,7 @@ function PreviewPanel({
   dirty: boolean;
   onRetry: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   return (
     <aside className="chart-preview-panel">
       <header>
@@ -1059,7 +1059,7 @@ function PreviewPanel({
             <Check /> {t("revision {revision}", { revision: result.meta.chart_revision })}
           </span>
           <span>{t("{count} groups", { count: result.data.rows.length })}</span>
-          <span>{formatDateTime(result.meta.snapshot_activated_at)}</span>
+          <span>{formatDateTime(result.meta.snapshot_activated_at, locale)}</span>
         </footer>
       )}
       {result?.meta.is_stale && !dirty && (
