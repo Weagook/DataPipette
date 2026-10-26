@@ -95,7 +95,7 @@ function Metric({ icon, label, value, note }: { icon: React.ReactNode; label: st
 }
 
 function PeoplePanel({ currentUser, users, loading }: { currentUser: CurrentUser; users: UserAdmin[]; loading: boolean }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -119,7 +119,7 @@ function PeoplePanel({ currentUser, users, loading }: { currentUser: CurrentUser
         <div className="identity-primary"><strong>{user.display_name}{user.id === currentUser.id && <em>{t("You")}</em>}</strong><small>{user.email}</small></div>
         <label><span>{t("Role")}</span><select aria-label={t("Role for {name}", { name: user.display_name })} value={user.role} onChange={(event) => update.mutate({ userId: user.id, input: { role: event.target.value as SystemRole } })} disabled={update.isPending}><option value="admin">{t("Administrator")}</option><option value="analyst">{t("Analyst")}</option><option value="viewer">{t("Viewer")}</option></select></label>
         <label><span>{t("Status")}</span><select aria-label={t("Status for {name}", { name: user.display_name })} value={user.status} onChange={(event) => update.mutate({ userId: user.id, input: { status: event.target.value as "active" | "disabled" } })} disabled={update.isPending}><option value="active">{t("Active")}</option><option value="disabled">{t("Disabled")}</option></select></label>
-        <div className="identity-activity"><span className={`account-state ${user.status}`}>{t(user.status)}</span><small>{user.last_login_at ? t("Seen {date}", { date: relativeTime(user.last_login_at) }) : t("Never signed in")}</small></div>
+        <div className="identity-activity"><span className={`account-state ${user.status}`}>{t(user.status)}</span><small>{user.last_login_at ? t("Seen {date}", { date: relativeTime(user.last_login_at, locale) }) : t("Never signed in")}</small></div>
         <button className="icon-button bordered" type="button" aria-label={t("Revoke sessions for {name}", { name: user.display_name })} title={t("Revoke browser sessions")} onClick={() => revoke.mutate(user.id)} disabled={revoke.isPending}>{revoke.isPending && revoke.variables === user.id ? <LoaderCircle className="spin" size={15} /> : <LogOut size={15} />}</button>
       </article>)}
       {!loading && filtered.length === 0 && <div className="empty-state compact"><UserRound /><strong>{t("No matching people")}</strong><p>{t("Try another name, email, or role.")}</p></div>}
@@ -146,7 +146,7 @@ function CreateUserPanel({ onClose }: { onClose: () => void }) {
 }
 
 function GroupsPanel({ users, groups, loading }: { users: UserAdmin[]; groups: Group[]; loading: boolean }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState("");
   const [newName, setNewName] = useState("");
@@ -159,14 +159,14 @@ function GroupsPanel({ users, groups, loading }: { users: UserAdmin[]; groups: G
       <header><span className="panel-icon"><UsersRound size={18} /></span><div><strong>{t("Groups")}</strong><small>{t("Reusable access bundles")}</small></div></header>
       <form onSubmit={(event) => { event.preventDefault(); if (newName.trim()) create.mutate(); }}><input aria-label={t("New group name")} value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={t("Finance analysts")} /><button className="icon-button" type="submit" disabled={!newName.trim() || create.isPending} aria-label={t("Create group")}><Plus size={16} /></button></form>
       {create.isError && <InlineError message={problemMessage(create.error)} />}
-      <nav aria-label={t("Groups")}>{loading && <LoaderCircle className="spin" size={16} />}{groups.map((group) => <button type="button" className={group.id === selectedId ? "active" : ""} onClick={() => setSelectedId(group.id)} key={group.id}><span>{initials(group.name)}</span><div><strong>{group.name}</strong><small>{t("Updated {date}", { date: relativeTime(group.updated_at) })}</small></div></button>)}</nav>
+      <nav aria-label={t("Groups")}>{loading && <LoaderCircle className="spin" size={16} />}{groups.map((group) => <button type="button" className={group.id === selectedId ? "active" : ""} onClick={() => setSelectedId(group.id)} key={group.id}><span>{initials(group.name)}</span><div><strong>{group.name}</strong><small>{t("Updated {date}", { date: relativeTime(group.updated_at, locale) })}</small></div></button>)}</nav>
     </aside>
     {selected ? <GroupDetail group={selected} users={users} /> : <div className="access-detail-empty"><UsersRound size={27} /><strong>{t("Create the first group")}</strong><p>{t("Groups make repeated dashboard, dataset, and connection grants easier to govern.")}</p></div>}
   </section>;
 }
 
 function GroupDetail({ group, users }: { group: Group; users: UserAdmin[] }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [name, setName] = useState(group.name);
   const [userId, setUserId] = useState("");
@@ -186,7 +186,7 @@ function GroupDetail({ group, users }: { group: Group; users: UserAdmin[] }) {
     <form className="rename-group" onSubmit={(event) => { event.preventDefault(); if (name.trim() && name.trim() !== group.name) rename.mutate(); }}><label><span>{t("Group name")}</span><input aria-label={t("Group name")} value={name} onChange={(event) => setName(event.target.value)} /></label><button className="button secondary small" type="submit" disabled={!name.trim() || name.trim() === group.name || rename.isPending}>{t("Rename")}</button></form>
     <form className="add-member" onSubmit={(event) => { event.preventDefault(); if (userId) add.mutate(); }}><div><strong>{t("Add a person")}</strong><small>{t("Only active local accounts can join.")}</small></div><select aria-label={t("Person to add")} value={userId} onChange={(event) => setUserId(event.target.value)}><option value="">{t("No eligible people")}</option>{eligible.map((user) => <option value={user.id} key={user.id}>{user.display_name} · {user.email}</option>)}</select><button className="button primary small" type="submit" disabled={!userId || add.isPending}><UserPlus size={14} /> {t("Add member")}</button></form>
     {error && <InlineError message={problemMessage(error)} />}
-    <div className="member-list">{members.isPending && <LoaderCircle className="spin" />}{members.data?.map((membership) => { const user = users.find((value) => value.id === membership.user_id); return <article key={membership.user_id}><span className="identity-avatar small">{initials(user?.display_name ?? "?")}</span><div><strong>{user?.display_name ?? membership.user_id}</strong><small>{user?.email ?? t("Account unavailable")} · {t("Added {date}", { date: formatDateTime(membership.created_at) })}</small></div><button className="icon-button" type="button" onClick={() => remove.mutate(membership.user_id)} aria-label={t("Remove {name}", { name: user?.display_name ?? t("member") })}><Trash2 size={14} /></button></article>; })}{!members.isPending && members.data?.length === 0 && <div className="empty-state compact"><UsersRound /><strong>{t("No members yet")}</strong><p>{t("Add an active person to begin.")}</p></div>}</div>
+    <div className="member-list">{members.isPending && <LoaderCircle className="spin" />}{members.data?.map((membership) => { const user = users.find((value) => value.id === membership.user_id); return <article key={membership.user_id}><span className="identity-avatar small">{initials(user?.display_name ?? "?")}</span><div><strong>{user?.display_name ?? membership.user_id}</strong><small>{user?.email ?? t("Account unavailable")} · {t("Added {date}", { date: formatDateTime(membership.created_at, locale) })}</small></div><button className="icon-button" type="button" onClick={() => remove.mutate(membership.user_id)} aria-label={t("Remove {name}", { name: user?.display_name ?? t("member") })}><Trash2 size={14} /></button></article>; })}{!members.isPending && members.data?.length === 0 && <div className="empty-state compact"><UsersRound /><strong>{t("No members yet")}</strong><p>{t("Add an active person to begin.")}</p></div>}</div>
   </div>;
 }
 
@@ -237,10 +237,10 @@ function ServiceAccountDetail({ account }: { account: ServiceAccount }) {
 }
 
 function TokenRow({ token, onRevoke, revoking }: { token: ApiToken; onRevoke: () => void; revoking: boolean }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const expired = token.expires_at ? new Date(token.expires_at).getTime() <= Date.now() : false;
   const state = token.revoked_at ? "revoked" : expired ? "expired" : "active";
-  return <article className="token-row"><span className="token-icon"><KeyRound size={15} /></span><div><strong>{token.name}</strong><small>{token.scopes.join(", ")} · {token.expires_at ? t("Expires {date}", { date: formatDateTime(token.expires_at) }) : t("Never expires")}</small></div><div className="token-usage"><span className={`account-state ${state}`}>{t(state)}</span><small>{token.last_used_at ? t("Used {date}", { date: relativeTime(token.last_used_at) }) : t("Never used")}</small></div>{!token.revoked_at && <button className="icon-button bordered" type="button" onClick={onRevoke} disabled={revoking} aria-label={t("Revoke {name}", { name: token.name })}>{revoking ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />}</button>}</article>;
+  return <article className="token-row"><span className="token-icon"><KeyRound size={15} /></span><div><strong>{token.name}</strong><small>{token.scopes.join(", ")} · {token.expires_at ? t("Expires {date}", { date: formatDateTime(token.expires_at, locale) }) : t("Never expires")}</small></div><div className="token-usage"><span className={`account-state ${state}`}>{t(state)}</span><small>{token.last_used_at ? t("Used {date}", { date: relativeTime(token.last_used_at, locale) }) : t("Never used")}</small></div>{!token.revoked_at && <button className="icon-button bordered" type="button" onClick={onRevoke} disabled={revoking} aria-label={t("Revoke {name}", { name: token.name })}>{revoking ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />}</button>}</article>;
 }
 
 function initials(value: string): string { return value.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join(""); }

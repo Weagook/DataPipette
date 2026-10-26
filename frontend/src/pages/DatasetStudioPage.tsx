@@ -1685,7 +1685,7 @@ function ValidationWorkspace({
 }
 
 function ValidationReport({ validation }: { validation: DatasetValidation }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   return (
     <div className="validation-report">
       <div className={`validation-summary ${validation.state}`}>
@@ -1698,7 +1698,7 @@ function ValidationReport({ validation }: { validation: DatasetValidation }) {
             {t("Revision {revision} · policy {policy} · {date}", {
               revision: validation.validated_revision,
               policy: validation.policy_revision,
-              date: formatDateTime(validation.validated_at),
+              date: formatDateTime(validation.validated_at, locale),
             })}
           </p>
         </div>
@@ -2052,7 +2052,7 @@ function SchedulePanel({
   datasetId: string;
   published: boolean;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const schedule = useQuery({
     queryKey: queryKeys.refreshSchedule(datasetId),
@@ -2156,7 +2156,7 @@ function SchedulePanel({
         </label>
       )}
       {schedule.data?.next_run_at && (
-        <p>{t("Next run {date}", { date: formatDateTime(schedule.data.next_run_at) })}</p>
+        <p>{t("Next run {date}", { date: formatDateTime(schedule.data.next_run_at, locale) })}</p>
       )}
       {schedule.error && !absent && (
         <InlineError message={problemMessage(schedule.error)} />

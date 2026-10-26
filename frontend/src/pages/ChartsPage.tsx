@@ -24,7 +24,7 @@ const typeLabels = {
 } as const;
 
 export function ChartsPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const [search, setSearch] = useState("");
   const charts = useInfiniteQuery({
@@ -108,7 +108,7 @@ export function ChartsPage() {
             </div>
             <footer>
               <time dateTime={chart.updated_at}>
-                {t("Updated {date}", { date: formatDateTime(chart.updated_at) })}
+                {t("Updated {date}", { date: formatDateTime(chart.updated_at, locale) })}
               </time>
               <ArrowRight size={17} />
             </footer>

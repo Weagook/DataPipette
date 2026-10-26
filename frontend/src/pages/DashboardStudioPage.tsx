@@ -214,7 +214,7 @@ interface DashboardEditorProps {
 }
 
 function DashboardEditor(props: DashboardEditorProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [chartSearch, setChartSearch] = useState("");
   const [layoutNotice, setLayoutNotice] = useState("");
   const charts = useQuery({
@@ -311,7 +311,7 @@ function DashboardEditor(props: DashboardEditorProps) {
         </span>
         <span><Lock size={14} /> {t("Private until explicitly shared")}</span>
         {props.revision && <span>{t("Revision {revision}", { revision: props.revision })}</span>}
-        {props.updatedAt && <span>{t("Updated {date}", { date: formatDateTime(props.updatedAt) })}</span>}
+        {props.updatedAt && <span>{t("Updated {date}", { date: formatDateTime(props.updatedAt, locale) })}</span>}
       </div>
 
       <section className="dashboard-studio-name">

@@ -10,7 +10,7 @@ import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function DatasetsPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const [search, setSearch] = useState("");
   const datasets = useInfiniteQuery({
@@ -86,7 +86,7 @@ export function DatasetsPage() {
               </div>
               <footer>
                 <time dateTime={dataset.updated_at}>
-                  {t("Updated {date}", { date: formatDateTime(dataset.updated_at) })}
+                  {t("Updated {date}", { date: formatDateTime(dataset.updated_at, locale) })}
                 </time>
                 {published ? <ArrowRight size={17} /> : <Layers3 size={17} />}
               </footer>

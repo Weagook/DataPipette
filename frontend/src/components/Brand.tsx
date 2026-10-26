@@ -12,7 +12,7 @@ export function Brand({ compact = false }: BrandProps) {
       </span>
       {!compact && (
         <span className="brand-name">
-          Date<span>Pipette</span>
+          Data<span>Pipette</span>
         </span>
       )}
     </div>

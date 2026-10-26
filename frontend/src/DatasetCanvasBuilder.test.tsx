@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { DatasetCanvasBuilder } from "./components/DatasetCanvasBuilder";
 import { I18nProvider } from "./lib/i18n";
@@ -31,6 +31,28 @@ function initialDefinition(): VisualDefinition {
 }
 
 describe("dataset canvas builder", () => {
+  it("does not mutate a saved definition when canvas mode opens", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const onChange = vi.fn();
+
+    render(
+      <QueryClientProvider client={client}>
+        <I18nProvider>
+          <DatasetCanvasBuilder
+            connectionId="00000000-0000-4000-8000-000000000099"
+            definition={initialDefinition()}
+            onChange={onChange}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+
+    expect((await screen.findAllByText("Dataset Output"))[0]).toBeInTheDocument();
+    await waitFor(() => expect(onChange).not.toHaveBeenCalled());
+  });
+
   it("edits the authoritative definition and supports undo", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
