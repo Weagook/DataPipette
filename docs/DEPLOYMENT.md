@@ -2,7 +2,7 @@
 
 DataPipette ships a self-contained Docker Compose topology for evaluation on one machine. The host needs only Git, Docker Engine, and Docker Compose v2; Python, uv, Node.js, PostgreSQL, Redis, and MinIO are contained in the deployment.
 
-This topology is not yet the production reference architecture. It uses an embedded MinIO-compatible object store and an environment file as the source for local secrets, and it does not provision DNS, TLS certificates, backups, or external observability.
+This topology is not yet the production reference architecture. It uses an embedded MinIO-compatible object store and an environment file as the source for local secrets, and it does not provision DNS, TLS certificates, off-host backup storage, or external observability. Local backup and restore commands are described in [Backup and restore](#backup-and-restore).
 
 ## Upgrade from the former DatePipette name
 
@@ -121,6 +121,47 @@ docker compose --env-file .env -f deploy/compose/compose.yaml down
 
 Do not add `--volumes` unless permanent deletion of metadata, object storage, and queued state is intended and independently backed up.
 
+## Backup and restore
+
+`deploy/compose/backup.sh` backs up and restores the running installation. It uses the backend image already built by Compose, so the host still needs only Docker. The target objectives for this topology are one backup per day (at most 24 hours of lost changes) and a restore within one hour. The design is recorded in [ADR-0047](adr/0047-compose-backup-and-restore.md).
+
+A backup set is one directory, `datapipette-<UTC timestamp>`, containing:
+
+- `metadata.dump` — a PostgreSQL custom-format dump of all DataPipette metadata;
+- `objects/` — every snapshot and export object with a SHA-256 manifest;
+- `MANIFEST` — format, application revision, schema revision, and the encryption-key fingerprint;
+- `SHA256SUMS` — checksums of the files above.
+
+The connection-encryption key and `.env` are never included. Store a copy of `.env`, or at least `DATAPIPETTE_CONNECTION_ENCRYPTION_KEY`, in a password manager or another location separate from the backups; without it, restored source passwords cannot be decrypted.
+
+Create a backup and keep the seven most recent sets:
+
+```bash
+deploy/compose/backup.sh create /var/backups/datapipette --keep 7
+```
+
+Run it daily from the repository directory with cron, for example at 03:00 server time:
+
+```cron
+0 3 * * * cd /opt/DataPipette && deploy/compose/backup.sh create /var/backups/datapipette --keep 7 >>/var/log/datapipette-backup.log 2>&1
+```
+
+Backups on the same disk do not survive the loss of that disk. Copy each new set to another host or object store, for example with `rsync` or `rclone`, and protect that copy like the production database: it contains password hashes, encrypted source credentials, audit history, and business data.
+
+Check a set at any time without changing the installation:
+
+```bash
+deploy/compose/backup.sh verify /var/backups/datapipette/datapipette-20261029T030000Z
+```
+
+Restore replaces all metadata, objects, browser sessions, and queued work. On a new host, clone the repository at the same or a newer revision, put the original `.env` in place, start the stack once with `docker compose --env-file .env -f deploy/compose/compose.yaml up -d --build --wait`, then run:
+
+```bash
+deploy/compose/backup.sh restore /var/backups/datapipette/datapipette-20261029T030000Z --yes
+```
+
+The command verifies every checksum, refuses to continue when the configured encryption key differs from the one recorded in the backup, stops the application services, recreates the metadata database, clears Redis, replaces the bucket contents, starts the stack, and finally decrypts every stored connection secret to prove the key is correct. Source databases are not part of the backup: a restored connection works once its source is reachable again. Set `DATAPIPETTE_ENV_FILE` when the environment file is not the repository's `.env`.
+
 ## Source PostgreSQL connectivity
 
 Both `api` and `worker` must be able to resolve and connect to every configured business PostgreSQL host. Use a stable DNS name or network address and a dedicated read-only database role. When PostgreSQL runs directly on the same Linux host as Docker, use `host.docker.internal`; Compose maps it to the host gateway for the two source-touching services. Do not use `localhost`, because inside a container it refers to that container itself.
@@ -135,7 +176,7 @@ Before an internet-facing production rollout, replace or extend this evaluation 
 - managed or independently backed-up PostgreSQL, Redis, and S3-compatible storage;
 - a production secret manager or Docker/Kubernetes secret delivery;
 - immutable published images rather than server-side source builds;
-- backup/restore drills, metrics, logs, alerts, and capacity benchmarks;
+- off-host backup replication, regular restore drills, metrics, logs, alerts, and capacity benchmarks;
 - `DATAPIPETTE_ENVIRONMENT=production` with an HTTPS S3 endpoint.
 
 Production mode intentionally rejects the built-in development encryption key, local object storage, and non-HTTPS custom S3 endpoints.

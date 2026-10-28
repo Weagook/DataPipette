@@ -28,6 +28,7 @@ dependencies = [
 [project.scripts]
 datapipette = "datapipette.main:run"
 datapipette-admin = "datapipette.cli:main"
+datapipette-backup = "datapipette.backup:main"
 datapipette-scheduler = "datapipette.scheduler:run"
 datapipette-storage-init = "datapipette.storage_init:run"
 
