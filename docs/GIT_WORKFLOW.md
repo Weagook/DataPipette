@@ -21,7 +21,7 @@ Use lowercase kebab-case after the prefix, for example `feat/dataset-preview` or
 
 For non-trivial work, create or rewrite `.local/ACTIVE_PLAN.md` before implementation. The directory is excluded locally through `.git/info/exclude`, not the shared `.gitignore`.
 
-The plan is living working memory for the developer and Codex. Update it as facts change, check off verified milestones, and record the exact next action. Do not stage or commit it. Before completing the branch, transfer durable outcomes to tracked documentation, ADRs, tests, and code comments where they belong.
+The plan is living working memory for the developer and any coding agent. Update it as facts change, check off verified milestones, and record the exact next action. Do not stage or commit it. Before completing the branch, transfer durable outcomes to tracked documentation, ADRs, tests, and code comments where they belong.
 
 ## Commits
 
@@ -55,9 +55,9 @@ Before opening a pull request:
 
 Prefer squash merging so one focused pull request becomes one meaningful commit on `main`. Rebase the branch when necessary to resolve drift; do not create merge commits merely to synchronize with `main`. Delete the branch after merge.
 
-## Codex working loop
+## Coding-agent working loop
 
-For each task, Codex should:
+Agent instructions live in `AGENTS.md`. For each task, a coding agent should:
 
 1. Read the relevant source-of-truth documents and the complete active plan.
 2. Inspect the repository before editing and preserve unrelated work.

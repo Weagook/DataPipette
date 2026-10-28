@@ -26,4 +26,4 @@ There are no supported production versions yet. A support table and disclosure p
 
 ## Security architecture
 
-The planned trust boundaries and controls are documented in [docs/SECURITY.md](docs/SECURITY.md).
+Trust boundaries and controls, including which are implemented and which remain planned, are documented in [docs/SECURITY.md](docs/SECURITY.md).

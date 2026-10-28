@@ -4,7 +4,16 @@
 
 DataPipette is an API-first, snapshot-based BI platform for PostgreSQL. The backend is a headless product core; the official frontend is a client of the same public API used by integrations.
 
-The repository is currently pre-alpha and documentation-first. Do not describe planned behavior as implemented.
+The repository is a functional pre-alpha: the backend API, worker, scheduler, official frontend, generated TypeScript client, and one-command evaluation deployment are implemented, but there is no production release. `docs/ROADMAP.md` is the implementation-status reference. Do not describe planned behavior as implemented.
+
+## Repository layout
+
+- `backend/` — the `datapipette` Python package (`src/datapipette/{domain,application,infrastructure,api}`), Alembic migrations, and pytest suite.
+- `frontend/` — the official React application.
+- `clients/typescript/` — the TypeScript API client generated from `docs/openapi.json`.
+- `deploy/` — Docker images and the Compose evaluation topology.
+- `benchmarks/` — the reproducible reference benchmark and its reports.
+- `docs/` — product and technical documentation, ADRs, and the committed OpenAPI contract.
 
 ## Sources of truth
 
@@ -14,6 +23,8 @@ The repository is currently pre-alpha and documentation-first. Do not describe p
 - Read `docs/ARCHITECTURE.md` for component boundaries and data flows.
 - Read `docs/API_GUIDELINES.md` for public API work.
 - Read `docs/SECURITY.md` for authentication, authorization, SQL, secrets, snapshots, or exports.
+- Read `docs/FRONTEND.md` for official UI work.
+- Read `docs/DEPLOYMENT.md` for Compose, images, or operational changes.
 - Read the relevant ADR before changing an accepted architecture decision.
 
 Only load the documents relevant to the current task. If documents conflict, stop and surface the conflict rather than silently choosing one.
@@ -23,7 +34,7 @@ Only load the documents relevant to the current task. If documents conflict, sto
 - Prefer a complete vertical slice over broad scaffolding.
 - Keep the domain independent of FastAPI, Celery, SQLAlchemy, Redis, S3, and DuckDB.
 - Keep backend behavior accessible through the public API; do not hide product logic only in the frontend.
-- Treat OpenAPI as a reviewed contract and verify generated-client drift in CI once generation exists.
+- Treat OpenAPI as a reviewed contract: regenerate `docs/openapi.json` and the TypeScript client after an intentional API change; CI rejects drift in both.
 - Enforce authorization in the backend on every protected operation.
 - Never log or return passwords, connection secrets, session secrets, or API token plaintext.
 - Keep source-database operations read-only, bounded, cancellable, and authorized.
@@ -34,11 +45,11 @@ Only load the documents relevant to the current task. If documents conflict, sto
 ## Tooling direction
 
 - Backend: Python 3.12 managed with `uv`.
-- Python quality: Ruff, mypy, and pytest.
-- Frontend: React and TypeScript; package-manager commands will be documented when the frontend scaffold is created.
+- Python quality: Ruff, mypy, and pytest with at least 90% backend coverage.
+- Frontend and TypeScript client: React, TypeScript, Vite, and Vitest managed with npm (`--prefix frontend`, `--prefix clients/typescript`), Node.js 22.12 or newer.
 - Local infrastructure: Docker Compose.
 
-Do not invent commands that the repository does not yet provide. When adding a command, document it in `CONTRIBUTING.md` in the same change.
+`CONTRIBUTING.md` lists the setup and verification commands that mirror CI. Do not invent commands that the repository does not yet provide. When adding a command, document it in `CONTRIBUTING.md` in the same change.
 
 ## Planning and completion
 

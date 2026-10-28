@@ -311,7 +311,7 @@ Complex table and chart queries use typed request bodies rather than user-writte
 - Creation and replacement require CSRF, chart ownership (or administrator role), current effective dataset `view_rows`, and validation against the active published field contract. A chart never grants dataset access.
 - `POST /api/v1/charts/{chart_id}/data:query` executes only the saved definition against the current active Parquet snapshot. It returns stable result keys, column roles and identifiers, chart revision, snapshot identity, freshness, stale error metadata, and response truncation state.
 - Chart definition version 2 adds an optional dimension `time_bucket` of `hour`, `day`, `week`, `month`, `quarter`, or `year`. Bucketed timestamp result columns include the installation timezone; version-1 definitions remain valid without buckets.
-- Direct chart querying is owner/administrator-only in this slice. Dashboard-context viewer access is a separate future authorization path and will never accept arbitrary chart definitions.
+- Direct chart querying is owner/administrator-only. Dashboard recipients, including Viewers, execute a saved chart only through the dashboard-item query described below, which never accepts arbitrary chart definitions.
 - Deletion is intentionally absent until chart archival and dashboard dependency semantics are accepted.
 
 The rationale and bounds are recorded in [ADR-0028](adr/0028-private-chart-query-foundation.md) and [ADR-0029](adr/0029-timezone-aware-chart-time-buckets.md).
