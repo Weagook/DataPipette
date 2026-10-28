@@ -118,7 +118,13 @@ Dashboard-item queries accept only a dashboard ID and stable item ID; the backen
 - Secret values are write-only through the API.
 - Connection test errors are redacted before reaching users or logs.
 - `verify-full` is recommended for production; custom CA material exists as a restricted temporary file only while libpq establishes a connection.
-- Key storage, backup, and rotation procedures must be documented before production readiness.
+- The key must be stored separately from metadata backups. Compose backup sets record only a domain-separated SHA-256 fingerprint of the decoded key; restore refuses a mismatched key and then proves that every stored secret decrypts. Key rotation and production key storage must be documented before production readiness.
+
+## Backups
+
+- Backup sets contain the metadata database (including password hashes, session hashes, encrypted connection secrets, and audit events) and every private snapshot and export object. Treat them with the same confidentiality as the live database.
+- The backup command creates sets with owner-only permissions and never writes the encryption key or the `.env` file into them.
+- Restore is destructive, requires an explicit confirmation flag, and replaces all metadata, objects, and transient Redis state. See [ADR-0047](adr/0047-compose-backup-and-restore.md).
 
 ## Snapshot and query safety
 

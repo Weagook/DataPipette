@@ -74,3 +74,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0044](0044-browser-reachable-export-delivery.md): Browser-reachable export delivery
 - [ADR-0045](0045-persisted-interface-localization.md): Persisted English and Russian interface localization
 - [ADR-0046](0046-persisted-dataset-canvas-authoring.md): Persisted node-canvas dataset authoring
+- [ADR-0047](0047-compose-backup-and-restore.md): Operator backup and restore for the Compose installation

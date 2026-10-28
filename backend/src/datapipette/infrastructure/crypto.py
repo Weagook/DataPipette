@@ -15,6 +15,23 @@ class InvalidEncryptionKeyError(ValueError):
     pass
 
 
+def decode_encryption_key(encoded_key: str) -> bytes:
+    try:
+        padding = "=" * (-len(encoded_key) % 4)
+        key = base64.b64decode(
+            encoded_key + padding,
+            altchars=b"-_",
+            validate=True,
+        )
+    except (binascii.Error, ValueError) as exc:
+        raise InvalidEncryptionKeyError(
+            "Connection encryption key must be URL-safe base64"
+        ) from exc
+    if len(key) != 32:
+        raise InvalidEncryptionKeyError("Connection encryption key must decode to exactly 32 bytes")
+    return key
+
+
 class AesGcmSecretCipher:
     """Encrypt connection fields with a versioned AES-256-GCM envelope."""
 
@@ -23,22 +40,7 @@ class AesGcmSecretCipher:
     _NONCE_SIZE = 12
 
     def __init__(self, encoded_key: str) -> None:
-        try:
-            padding = "=" * (-len(encoded_key) % 4)
-            key = base64.b64decode(
-                encoded_key + padding,
-                altchars=b"-_",
-                validate=True,
-            )
-        except (binascii.Error, ValueError) as exc:
-            raise InvalidEncryptionKeyError(
-                "Connection encryption key must be URL-safe base64"
-            ) from exc
-        if len(key) != 32:
-            raise InvalidEncryptionKeyError(
-                "Connection encryption key must decode to exactly 32 bytes"
-            )
-        self._cipher = AESGCM(key)
+        self._cipher = AESGCM(decode_encryption_key(encoded_key))
 
     @classmethod
     def _associated_data(cls, connection_id: UUID, field: str, version: str) -> bytes:

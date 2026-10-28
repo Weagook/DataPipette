@@ -7,6 +7,7 @@ on:
       - "benchmarks/**"
       - ".dockerignore"
       - "deploy/docker/backend.Dockerfile"
+      - "deploy/compose/backup.sh"
       - "deploy/compose/compose.yaml"
       - "deploy/compose/.env.example"
       - "docs/openapi.json"
@@ -22,6 +23,7 @@ on:
       - "benchmarks/**"
       - ".dockerignore"
       - "deploy/docker/backend.Dockerfile"
+      - "deploy/compose/backup.sh"
       - "deploy/compose/compose.yaml"
       - "deploy/compose/.env.example"
       - "docs/openapi.json"
@@ -87,6 +89,9 @@ jobs:
 
       - name: Test benchmark tooling
         run: uv run python -m unittest discover -s benchmarks/tests
+
+      - name: Check backup script
+        run: shellcheck deploy/compose/backup.sh
 
       - name: Apply migrations
         run: uv run --package datapipette alembic -c backend/alembic.ini upgrade head

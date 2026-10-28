@@ -32,9 +32,9 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## Security and operations
 
-- Define installation-key storage, backup, and rotation.
+- Define production installation-key storage and rotation; evaluation key handling for backups is defined in [ADR-0047](adr/0047-compose-backup-and-restore.md).
 - Define account recovery beyond the implemented first-administrator bootstrap.
-- Define metadata PostgreSQL backup and disaster-recovery objectives.
+- Define production disaster-recovery objectives, off-host retention, and point-in-time recovery beyond the daily evaluation backup in [ADR-0047](adr/0047-compose-backup-and-restore.md).
 - Decide whether production adds customer-managed KMS keys and workload-identity/STS credential providers beyond the implemented optional `AES256` request and static secret settings.
 - Publish the private vulnerability-reporting contact before the first release.
 

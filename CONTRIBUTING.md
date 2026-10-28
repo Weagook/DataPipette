@@ -137,6 +137,8 @@ uv run --package datapipette python -c 'import base64, secrets; print(base64.url
 
 Back up this key separately from metadata PostgreSQL. Losing it makes stored source credentials unrecoverable.
 
+Back up, verify, and restore a running Compose installation with `deploy/compose/backup.sh`; the script runs `datapipette-backup` through the backend image. See [the deployment guide](docs/DEPLOYMENT.md#backup-and-restore) for scheduling, key handling, and restore steps.
+
 Stop local services without deleting their volumes:
 
 ```bash
@@ -157,6 +159,7 @@ uv run --package datapipette ruff format --check backend
 uv run --package datapipette ruff check backend
 uv run --package datapipette mypy
 uv run python -m unittest discover -s benchmarks/tests
+shellcheck deploy/compose/backup.sh
 uv run --package datapipette alembic -c backend/alembic.ini upgrade head
 uv run --package datapipette alembic -c backend/alembic.ini check
 uv run --package datapipette pytest

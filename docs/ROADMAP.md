@@ -85,7 +85,7 @@ Outcome: another application can securely embed DataPipette backend capabilities
 - [x] Generated TypeScript client and service-token dashboard integration example
 - [x] Self-contained one-command evaluation Compose topology
 - Rate limiting, idempotency, optimistic concurrency, and deprecation policy
-- Backup and restore procedures
+- [x] Backup and restore procedures for the Compose installation (off-host replication and point-in-time recovery remain production work)
 - Operational dashboards, alerts, and capacity guidance
 - Threat-model review and release-candidate security hardening
 - Production Docker Compose documentation
