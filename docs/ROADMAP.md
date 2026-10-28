@@ -6,12 +6,12 @@ The roadmap is outcome-based and intentionally has no date promises. Each phase 
 
 Outcome: contributors can understand, run, verify, and safely change a small backend service.
 
-- Approve product, architecture, API, security, and ADR foundations
-- Reorganize the repository into backend/frontend/deploy/docs areas
-- Configure Python 3.12, uv, linting, typing, tests, and CI
-- Add FastAPI health/readiness endpoints and structured configuration
-- Add metadata PostgreSQL, Alembic, Redis, and Docker Compose
-- Establish structured logging, request IDs, and test fixtures
+- [x] Approve product, architecture, API, security, and ADR foundations
+- [x] Reorganize the repository into backend/frontend/deploy/docs areas
+- [x] Configure Python 3.12, uv, linting, typing, tests, and CI
+- [x] Add FastAPI health/readiness endpoints and structured configuration
+- [x] Add metadata PostgreSQL, Alembic, Redis, and Docker Compose
+- [x] Establish structured logging, request IDs, and test fixtures
 
 ## Phase 1 — First dataset vertical slice
 
@@ -41,7 +41,7 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] S3/MinIO-compatible result storage
 - [x] Safe superseded-snapshot, expired-export, and orphan-object cleanup
 - [x] Refresh cancellation and execution retry policies
-- [x] Draft/published versions, schema comparison, and impact analysis (schema impact implemented; chart dependency blocking activates with chart resources)
+- [x] Draft/published versions, schema comparison, and impact analysis, including affected and blocking chart field dependencies
 - [x] Extend the initial non-executing PostgreSQL plan guard into a configurable Query Safety Advisor foundation
 - [x] Explainable warnings for large scans, absence of visible indexes, expensive joins/sorts, stale statistics, and oversized results
 - [x] Revisioned administrator planner policies for estimated rows, planner cost, and joins, with audited privileged overrides
@@ -51,7 +51,7 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Cross-instance interactive-query admission control
 - [x] Read-only index/query recommendations and estimate-versus-actual execution metrics; DataPipette never applies source DDL
 - [x] Filtered, paginated administrator audit-event API
-- Administrator audit UI (frontend phase)
+- [x] Administrator audit UI (delivered in Phase 6)
 - [x] Reproducible reference benchmark and first measured baseline report
 - Meet the approved 5M × 50 / 20-active-client target; the current measured baseline is documented but does not pass
 

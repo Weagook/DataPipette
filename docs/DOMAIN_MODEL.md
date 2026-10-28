@@ -77,9 +77,9 @@ An analyst-created dataset is private to its owner and administrators. The owner
 
 The published definition and snapshot serve readers. Editing creates or updates a draft. Publication succeeds only when validation, impact analysis, refresh, storage, and activation complete successfully.
 
-Drafts are mutable through optimistic revision checks. A future published version is immutable; editing it creates or resumes a separate draft instead of modifying the definition used by readers.
+Drafts are mutable through optimistic revision checks. A published version is immutable; editing it creates or resumes a separate draft instead of modifying the definition used by readers.
 
-Published and superseded versions form immutable, owner-visible history. The current draft is compared with the active published version only after validation of the exact revision. Schema impact uses stable field UUIDs to distinguish additions, removals, renames, PostgreSQL type/nullability drift, unavailable result fields, and compatible display/source changes. Reports are derived rather than persisted; chart dependency collections remain empty until real chart resources exist.
+Published and superseded versions form immutable, owner-visible history. The current draft is compared with the active published version only after validation of the exact revision. Schema impact uses stable field UUIDs to distinguish additions, removals, renames, PostgreSQL type/nullability drift, unavailable result fields, and compatible display/source changes. Reports are derived rather than persisted. Normalized chart field dependencies identify the saved charts affected by each change; a chart that references a field with a breaking change is a blocking dependency, and a report with blocking dependencies is not ready for publication.
 
 ### Draft validation
 

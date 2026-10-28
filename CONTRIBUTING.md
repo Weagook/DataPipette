@@ -1,6 +1,6 @@
 # Contributing to DataPipette
 
-Thank you for your interest in DataPipette. The project is pre-alpha and is establishing its first vertical slice. Focused changes aligned with the approved MVP are preferred over broad feature additions.
+Thank you for your interest in DataPipette. The project is a functional pre-alpha: the evaluation stack runs end to end, but there is no production release yet. Focused changes aligned with the approved MVP are preferred over broad feature additions.
 
 ## Before proposing a change
 
@@ -156,9 +156,11 @@ uv lock --check
 uv run --package datapipette ruff format --check backend
 uv run --package datapipette ruff check backend
 uv run --package datapipette mypy
+uv run python -m unittest discover -s benchmarks/tests
+uv run --package datapipette alembic -c backend/alembic.ini upgrade head
+uv run --package datapipette alembic -c backend/alembic.ini check
 uv run --package datapipette pytest
 uv run --package datapipette alembic -c backend/alembic.ini heads
-uv run --package datapipette alembic -c backend/alembic.ini check
 uv run --package datapipette python tools/export_openapi.py
 git diff --exit-code -- docs/openapi.json
 docker compose --env-file .env -f deploy/compose/compose.yaml config --quiet
@@ -167,13 +169,16 @@ npm run generate:check --prefix clients/typescript
 npm run typecheck --prefix clients/typescript
 npm test --prefix clients/typescript
 npm run build --prefix clients/typescript
+npm pack --dry-run ./clients/typescript
 npm ci --prefix frontend
 npm run typecheck --prefix frontend
 npm test --prefix frontend
 npm run build --prefix frontend
+npm run budget --prefix frontend
+docker compose -f deploy/compose/compose.yaml build frontend
 ```
 
-To include the real MinIO round-trip tests, export the `DATAPIPETTE_TEST_S3_ENDPOINT`, `DATAPIPETTE_TEST_S3_BUCKET`, `DATAPIPETTE_TEST_S3_ACCESS_KEY_ID`, and `DATAPIPETTE_TEST_S3_SECRET_ACCESS_KEY` values for the running development service before invoking `pytest`.
+The migration commands require the local metadata PostgreSQL service from the host-based setup. To include the real MinIO round-trip tests, export the `DATAPIPETTE_TEST_S3_ENDPOINT`, `DATAPIPETTE_TEST_S3_BUCKET`, `DATAPIPETTE_TEST_S3_ACCESS_KEY_ID`, and `DATAPIPETTE_TEST_S3_SECRET_ACCESS_KEY` values for the running development service before invoking `pytest`.
 
 `pytest` enforces at least 90% backend coverage. Keep the lockfile synchronized whenever project dependencies change.
 

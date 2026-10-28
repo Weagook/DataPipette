@@ -4,7 +4,7 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## Product and UX
 
-- What exact dashboard grid, breakpoints, and mobile behavior should the official frontend use?
+- Which responsive breakpoints and mobile layout should dashboards use beyond the implemented 12-column desktop grid?
 - Which chart styling options belong in MVP beyond required data configuration?
 - Should temporary table filters be restorable from URL state without becoming saved dataset configuration?
 - What is the ownership-transfer experience when a user is disabled or deleted?
@@ -40,6 +40,5 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## Project
 
-- Select the frontend design system after the first workflow wireframes.
-- Decide package-manager and workspace conventions for the frontend scaffold.
+- Decide whether the official frontend's in-house styles should become a documented design system before accepting external UI contributions.
 - Establish release versioning and changelog automation before the first tagged release.
