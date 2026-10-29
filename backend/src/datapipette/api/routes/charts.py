@@ -8,7 +8,12 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from datapipette.api.chart_query_responses import ChartQueryResponse, chart_query_response
+from datapipette.api.chart_query_responses import (
+    ChartPreviewResponse,
+    ChartQueryResponse,
+    chart_preview_response,
+    chart_query_response,
+)
 from datapipette.api.dependencies.authentication import CsrfSession, CurrentSession, request_id
 from datapipette.api.problems import ApiProblem, ProblemDetails
 from datapipette.application.charts import (
@@ -108,6 +113,11 @@ class ChartDefinitionPayload(StrictModel):
 
 class CreateChartRequest(StrictModel):
     name: str = Field(min_length=1, max_length=100)
+    dataset_id: UUID
+    definition: ChartDefinitionPayload
+
+
+class PreviewChartRequest(StrictModel):
     dataset_id: UUID
     definition: ChartDefinitionPayload
 
@@ -373,6 +383,65 @@ async def update_chart(
         raise _invalid(exc) from exc
     response.headers["ETag"] = _etag(chart.revision)
     return _chart_response(chart)
+
+
+@router.post(
+    "/data:preview",
+    response_model=ChartPreviewResponse,
+    responses=_QUERY_RESPONSES,
+)
+async def preview_chart_data(
+    payload: PreviewChartRequest,
+    request: Request,
+    session: CurrentSession,
+) -> ChartPreviewResponse:
+    """Run an unsaved chart definition against the dataset's active snapshot."""
+    try:
+        result = await _service(request).preview(
+            actor=session.user,
+            dataset_id=payload.dataset_id,
+            definition=_definition(payload.definition),
+            request_id=request_id(),
+        )
+    except ChartDatasetNotAvailableError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dataset_not_found",
+            title="Dataset not found",
+            detail="The requested published dataset is not available.",
+        ) from exc
+    except InvalidChartDefinitionError as exc:
+        raise _invalid(exc) from exc
+    except ChartQueryResultTooLargeError as exc:
+        raise ApiProblem(
+            status_code=413,
+            code="chart_result_row_too_large",
+            title="Chart result row too large",
+            detail="One chart result row exceeds the response-size limit.",
+        ) from exc
+    except ChartQueryCapacityExceededError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="interactive_query_capacity_exceeded",
+            title="Interactive query capacity exceeded",
+            detail="All interactive query slots are busy. Retry shortly.",
+            headers={"Retry-After": "1"},
+        ) from exc
+    except ChartQueryTimeoutError as exc:
+        raise ApiProblem(
+            status_code=504,
+            code="chart_query_timeout",
+            title="Chart query timed out",
+            detail="The chart query exceeded the configured execution time.",
+        ) from exc
+    except ChartQueryUnavailableError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="chart_query_unavailable",
+            title="Chart query unavailable",
+            detail="The active snapshot could not be queried safely.",
+        ) from exc
+    return chart_preview_response(result)
 
 
 @router.post(

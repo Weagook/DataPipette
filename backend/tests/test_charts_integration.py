@@ -431,6 +431,22 @@ def test_chart_api_persists_updates_queries_and_registers_dependencies(
         assert queried.json()["meta"]["chart_name"] == "Revenue by region"
         assert queried.json()["meta"]["chart_type"] == "bar"
 
+        saved_definition = client.get(f"/api/v1/charts/{chart_id}").json()["definition"]
+        previewed = client.post(
+            "/api/v1/charts/data:preview",
+            json={"dataset_id": str(dataset_id), "definition": saved_definition},
+        )
+        assert previewed.status_code == 200, previewed.text
+        assert previewed.json()["data"] == queried.json()["data"]
+        assert previewed.json()["meta"]["chart_type"] == "bar"
+        assert "chart_id" not in previewed.json()["meta"]
+        unknown_dataset = client.post(
+            "/api/v1/charts/data:preview",
+            json={"dataset_id": str(uuid4()), "definition": saved_definition},
+        )
+        assert unknown_dataset.status_code == 404
+        assert unknown_dataset.json()["code"] == "dataset_not_found"
+
         async def query_while_at_capacity() -> Any:
             admission_engine = create_database_engine(chart_settings)
             try:

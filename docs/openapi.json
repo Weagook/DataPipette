@@ -725,6 +725,71 @@
         "title": "ChartMeasurePayload",
         "type": "object"
       },
+      "ChartPreviewMetaResponse": {
+        "properties": {
+          "chart_type": {
+            "$ref": "#/components/schemas/ChartType"
+          },
+          "dataset_id": {
+            "format": "uuid",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "policy_revision": {
+            "title": "Policy Revision",
+            "type": "integer"
+          },
+          "refresh_state": {
+            "$ref": "#/components/schemas/SnapshotRefreshState"
+          },
+          "snapshot_activated_at": {
+            "format": "date-time",
+            "title": "Snapshot Activated At",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "format": "uuid",
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "truncated_by_bytes": {
+            "title": "Truncated By Bytes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "policy_revision",
+          "chart_type",
+          "dataset_id",
+          "snapshot_id",
+          "snapshot_activated_at",
+          "refresh_state",
+          "is_stale",
+          "truncated_by_bytes"
+        ],
+        "title": "ChartPreviewMetaResponse",
+        "type": "object"
+      },
+      "ChartPreviewResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ChartQueryDataResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ChartPreviewMetaResponse"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ChartPreviewResponse",
+        "type": "object"
+      },
       "ChartQueryDataResponse": {
         "properties": {
           "columns": {
@@ -3765,6 +3830,25 @@
         ],
         "title": "PostgresSslMode",
         "type": "string"
+      },
+      "PreviewChartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset_id": {
+            "format": "uuid",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/ChartDefinitionPayload"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "definition"
+        ],
+        "title": "PreviewChartRequest",
+        "type": "object"
       },
       "PreviewDatasetDraftRequest": {
         "additionalProperties": false,
@@ -6948,6 +7032,152 @@
           }
         ],
         "summary": "Create Chart",
+        "tags": [
+          "charts"
+        ]
+      }
+    },
+    "/api/v1/charts/data:preview": {
+      "post": {
+        "description": "Run an unsaved chart definition against the dataset's active snapshot.",
+        "operationId": "preview_chart_data_api_v1_charts_data_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewChartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Failed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait after interactive capacity exhaustion.",
+                "schema": {
+                  "minimum": 1.0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "Preview Chart Data",
         "tags": [
           "charts"
         ]

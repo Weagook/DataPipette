@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from datapipette.domain.charts import (
+    ChartPreviewResult,
     ChartQueryResult,
     ChartResultColumnRole,
     ChartTimeBucket,
@@ -52,7 +53,25 @@ class ChartQueryResponse(BaseModel):
     meta: ChartQueryMetaResponse
 
 
-def chart_query_data_response(result: ChartQueryResult) -> ChartQueryDataResponse:
+class ChartPreviewMetaResponse(BaseModel):
+    policy_revision: int
+    chart_type: ChartType
+    dataset_id: UUID
+    snapshot_id: UUID
+    snapshot_activated_at: datetime
+    refresh_state: SnapshotRefreshState
+    is_stale: bool
+    truncated_by_bytes: bool
+
+
+class ChartPreviewResponse(BaseModel):
+    data: ChartQueryDataResponse
+    meta: ChartPreviewMetaResponse
+
+
+def chart_query_data_response(
+    result: ChartQueryResult | ChartPreviewResult,
+) -> ChartQueryDataResponse:
     return ChartQueryDataResponse(
         columns=[
             ChartResultColumnResponse(
@@ -93,4 +112,20 @@ def chart_query_response(result: ChartQueryResult) -> ChartQueryResponse:
     return ChartQueryResponse(
         data=chart_query_data_response(result),
         meta=chart_query_meta_response(result),
+    )
+
+
+def chart_preview_response(result: ChartPreviewResult) -> ChartPreviewResponse:
+    return ChartPreviewResponse(
+        data=chart_query_data_response(result),
+        meta=ChartPreviewMetaResponse(
+            policy_revision=result.policy_revision,
+            chart_type=result.chart_type,
+            dataset_id=result.dataset_id,
+            snapshot_id=result.snapshot_id,
+            snapshot_activated_at=result.snapshot_activated_at,
+            refresh_state=result.refresh_state,
+            is_stale=result.is_stale,
+            truncated_by_bytes=result.truncated_by_bytes,
+        ),
     )

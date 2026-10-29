@@ -280,3 +280,19 @@ class ChartQueryResult:
     columns: tuple[ChartResultColumn, ...]
     rows: tuple[dict[str, Any], ...]
     truncated_by_bytes: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ChartPreviewResult:
+    """Result of an unsaved chart definition; it has no chart identity or revision."""
+
+    policy_revision: int
+    chart_type: ChartType
+    dataset_id: UUID
+    snapshot_id: UUID
+    snapshot_activated_at: datetime
+    refresh_state: SnapshotRefreshState
+    is_stale: bool
+    columns: tuple[ChartResultColumn, ...]
+    rows: tuple[dict[str, Any], ...]
+    truncated_by_bytes: bool
