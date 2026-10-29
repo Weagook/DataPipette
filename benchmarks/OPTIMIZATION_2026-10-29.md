@@ -1,6 +1,6 @@
-# Snapshot refresh optimization report — 2026-10-29
+# Snapshot optimization report — 2026-10-29
 
-This report measures the columnar CSV refresh stream ([ADR-0048](../docs/adr/0048-columnar-csv-refresh-stream.md)) against the existing row stream on the unchanged 5-million-row × 50-column reference relation. It isolates the refresh writer; it is not a complete API benchmark run and not a universal capacity claim.
+This report measures two optimizations on the unchanged 5-million-row × 50-column reference relation: the columnar CSV refresh stream ([ADR-0048](../docs/adr/0048-columnar-csv-refresh-stream.md)) and the verified local snapshot cache ([ADR-0049](../docs/adr/0049-verified-snapshot-object-cache.md)). Both isolate the product code paths; neither is a complete API benchmark run or a universal capacity claim.
 
 ## Verdict
 
@@ -12,7 +12,7 @@ The reference target also requires the 20-client interactive workload and two si
 
 | Component | Configuration |
 | --- | --- |
-| DataPipette revision | `perf/csv-refresh-stream` at `c86e35b` |
+| DataPipette revision | refresh stream: `perf/csv-refresh-stream` at `c86e35b`; cache: `perf/snapshot-cache` at `f2661bb` |
 | Node | 4 vCPU, 7.8 GiB RAM, 94 GiB disk; container limited to 4 CPUs and 6 GiB |
 | Source PostgreSQL | 17.11 (`postgres:17-alpine`) in a container on the same Docker network as the worker; `shared_buffers=1GB` |
 | Fixture | `benchmarks/sql/prepare_source.sql`, 5,000,000 events, 100,000 customers, 2,338 MB relation |
@@ -62,8 +62,21 @@ Snapshot contents are identical between the two streams; `backend/tests/test_par
 
 That report attributed the timeout to the PostgreSQL-to-application network path, based on slow remote `COPY` controls in both CSV and binary formats. The colocated measurements here remove the network and show that binary encoding and per-cell client work were each large enough on their own to dominate the refresh. The remote network may still add cost; it should be re-measured with the new stream before drawing a conclusion about it.
 
+## Interactive reads with the verified snapshot cache
+
+The 5M × 50 snapshot (229,179,639 bytes) was published through the product refresh writer into the evaluation stack's private MinIO. Each measured request performed the product `S3ObjectStorage.materialize` call and one DuckDB query with two threads and a 256 MB memory limit, rotating through three shapes from the benchmark harness: a point lookup on `event_id` (12 columns), a category filter sorted by `occurred_at` with `LIMIT 100` (12 columns), and a 50-column page sorted by `event_id` with `LIMIT 100`.
+
+| Shape | Without cache, p50 | With warm cache, p50 | Speed-up |
+| --- | ---: | ---: | ---: |
+| Point lookup | 1,526 ms | 57 ms | 27× |
+| Filter + sort | 1,651 ms | 204 ms | 8× |
+| 50-column page | 2,253 ms | 772 ms | 2.9× |
+
+Without the cache every request downloaded and hashed the complete object. With the cache, the first request of a fresh cache took 1,429 ms (download, verification, and query); later requests read the local copy, and a new container reusing the cache volume answered its first request in 60 ms. The remaining cost of the 50-column page is DuckDB sorting all 5,000,000 `event_id` values, not storage.
+
+These are single-client latencies measured sequentially; the 1/5/10/20-client API load test was not re-run.
+
 ## Next measurements
 
 1. Repeat the complete API benchmark (`setup`, interactive `load`, `exports`) with this revision against the same colocated source and against the remote cluster.
-2. Address the interactive bottleneck documented on 2026-10-19: every S3-backed query still downloads and verifies the complete snapshot.
-3. Run the two-heavy-job scenario with worker concurrency two.
+2. Run the two-heavy-job scenario with worker concurrency two.

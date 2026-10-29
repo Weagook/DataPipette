@@ -19,7 +19,7 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## Execution and storage
 
-- Benchmark whole-object S3 materialization against direct/ranged DuckDB reads and a verified local cache under the reference workload.
+- Decide whether snapshots larger than the local cache need direct/ranged DuckDB reads from S3; the verified local cache is implemented ([ADR-0049](adr/0049-verified-snapshot-object-cache.md)).
 - Define Parquet file sizing, row-group sizing, compression, and object-key layout from benchmarks.
 - Decide whether a dead-letter workflow is needed beyond durable terminal refresh state and administrator-visible safe errors.
 

@@ -53,7 +53,7 @@ Outcome: teams can safely build and share production-shaped datasets.
 - [x] Filtered, paginated administrator audit-event API
 - [x] Administrator audit UI (delivered in Phase 6)
 - [x] Reproducible reference benchmark and first measured baseline report
-- Meet the approved 5M × 50 / 20-active-client target; the refresh writer now builds the 5M × 50 snapshot in under a minute against a colocated source, while the interactive and two-heavy-job scenarios have not been re-measured
+- Meet the approved 5M × 50 / 20-active-client target; the refresh writer now builds the 5M × 50 snapshot in under a minute against a colocated source and warm-cache reads no longer download the snapshot, while the 20-client and two-heavy-job scenarios have not been re-measured
 
 ## Phase 3 — Exploration and export
 
