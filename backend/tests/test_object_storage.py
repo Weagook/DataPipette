@@ -346,6 +346,10 @@ def test_minio_round_trip_with_runtime_factory(tmp_path: Path) -> None:
         s3_secret_access_key=os.environ["DATAPIPETTE_TEST_S3_SECRET_ACCESS_KEY"],
     )
     storage = create_object_storage_registry(settings).default
+    # Without the cache, every read goes to MinIO, so deletion is observable.
+    uncached = create_object_storage_registry(
+        settings.model_copy(update={"snapshot_cache_max_mb": 0})
+    ).default
     payload = b"real-minio-object"
     candidate = tmp_path / "minio.part"
     candidate.write_bytes(payload)
@@ -379,9 +383,16 @@ def test_minio_round_trip_with_runtime_factory(tmp_path: Path) -> None:
     assert key in {item.object_key for item in page.objects}
     storage.delete(key)
     storage.delete(key)
+    # A verified cached copy of an immutable object stays readable after deletion.
+    with storage.materialize(
+        key,
+        expected_byte_size=len(payload),
+        expected_checksum_sha256=_digest(payload),
+    ) as path:
+        assert path.read_bytes() == payload
     with (
         pytest.raises(ObjectStorageUnavailableError),
-        storage.materialize(
+        uncached.materialize(
             key,
             expected_byte_size=len(payload),
             expected_checksum_sha256=_digest(payload),
