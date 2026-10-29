@@ -62,13 +62,18 @@ domain="$(env_value DATAPIPETTE_DOMAIN)"
 installation="${domain:-$(hostname)}"
 problems=()
 
-# 1. The application answers through its public entry point.
+# 1. The application answers through its entry point. A host often cannot
+# reach its own public address (no NAT hairpin), so the check connects to the
+# local gateway port while still using the domain for TLS and routing.
+curl_target=()
 if [[ -n "${domain}" ]]; then
   ready_url="https://${domain}/api/v1/health/ready"
+  curl_target=(--resolve "${domain}:443:127.0.0.1")
 else
   ready_url="http://127.0.0.1:$(env_value DATAPIPETTE_HTTP_PORT | grep . || echo 8080)/api/v1/health/ready"
 fi
-if ! curl --fail --silent --show-error --max-time 10 --output /dev/null "${ready_url}" 2>/dev/null; then
+if ! curl --fail --silent --show-error --max-time 10 --output /dev/null \
+  ${curl_target[@]+"${curl_target[@]}"} "${ready_url}" 2>/dev/null; then
   problems+=("Application is not answering at ${ready_url}")
 fi
 
@@ -121,7 +126,7 @@ fi
 
 # 6. The public certificate is not about to expire.
 if [[ -n "${domain}" ]] && command -v openssl >/dev/null; then
-  certificate="$(openssl s_client -connect "${domain}:443" -servername "${domain}" </dev/null 2>/dev/null \
+  certificate="$(openssl s_client -connect 127.0.0.1:443 -servername "${domain}" </dev/null 2>/dev/null \
     | openssl x509 2>/dev/null || true)"
   if [[ -z "${certificate}" ]]; then
     problems+=("TLS certificate for ${domain} cannot be read")
