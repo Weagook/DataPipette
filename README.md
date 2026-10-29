@@ -19,13 +19,13 @@ These are live product screens from the evaluation deployment—not design mocku
 
 ### Turn governed data into dashboards
 
-[![A DataPipette dashboard with customer segment and regional charts](docs/assets/screenshots/dashboard-overview.png)](docs/assets/screenshots/dashboard-overview.png)
+[![A DataPipette sales dashboard with revenue, order, and customer metrics, a monthly revenue trend, and orders by channel](docs/assets/screenshots/dashboard-overview.png)](docs/assets/screenshots/dashboard-overview.png)
 
 Dashboards combine independently loaded charts from multiple datasets in a versioned, drag-and-resize layout. Viewers see freshness and failure states without receiving automatic access to detailed source rows.
 
 ### Build datasets on a board
 
-[![The DataPipette Canvas Builder showing a saved dataset model](docs/assets/screenshots/dataset-canvas-builder.png)](docs/assets/screenshots/dataset-canvas-builder.png)
+[![The DataPipette dataset board linking order lines, orders, products, customers, and regions](docs/assets/screenshots/dataset-canvas-builder.png)](docs/assets/screenshots/dataset-canvas-builder.png)
 
 On a desktop screen, datasets are built on a board: drag tables from the list, draw a line between matching columns to link them (known foreign keys are linked automatically), tick the columns to keep, and press **Save and load data**. The board's layout is stored alongside the authoritative JSON definition, so the same model can be reopened and changed later.
 
@@ -33,7 +33,7 @@ On a desktop screen, datasets are built on a board: drag tables from the list, d
   <tr>
     <td width="50%">
       <a href="docs/assets/screenshots/dataset-table-filters.png">
-        <img src="docs/assets/screenshots/dataset-table-filters.png" alt="A DataPipette snapshot table with a multi-value column filter">
+        <img src="docs/assets/screenshots/dataset-table-filters.png" alt="A DataPipette snapshot table filtered to two product categories">
       </a>
     </td>
     <td width="50%">
