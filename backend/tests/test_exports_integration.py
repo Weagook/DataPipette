@@ -40,6 +40,9 @@ from datapipette.infrastructure.object_storage import (
 from datapipette.infrastructure.repositories.access_control import SqlAlchemyAccessControlStore
 from datapipette.infrastructure.repositories.authentication import SqlAlchemyAuthenticationStore
 from datapipette.infrastructure.repositories.exports import SqlAlchemyExportStore
+from datapipette.infrastructure.repositories.user_administration import (
+    SqlAlchemyUserAdministrationStore,
+)
 from datapipette.main import create_app
 
 ADMIN_EMAIL = "export-admin@example.com"
@@ -257,6 +260,7 @@ def test_export_api_worker_history_and_reissued_download(tmp_path: Path) -> None
             )
         ),
         authorizer,
+        SqlAlchemyUserAdministrationStore(session_factory),
     )
     app = create_app(
         settings=settings,
