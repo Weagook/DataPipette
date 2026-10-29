@@ -49,9 +49,8 @@ export function ChartsPage() {
     <div className="page-stack">
       <header className="page-heading split-heading">
         <div>
-          <span className="eyebrow">{t("Saved analytics")}</span>
           <h1>{t("Charts")}</h1>
-          <p>{t("Turn published datasets into governed, reusable visual answers.")}</p>
+          <p>{t("Charts built from your datasets.")}</p>
         </div>
         <Link className="button primary" to="/charts/new">
           <Plus size={17} /> {t("New chart")}

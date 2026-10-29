@@ -60,7 +60,7 @@ describe("governance administration", () => {
       throw new Error(`Unexpected request: ${request.method} ${request.url}`);
     }));
     renderApp("/governance");
-    expect(await screen.findByRole("heading", { name: "Good data should feel quiet." })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeVisible();
     expect(requests.some((url) => url.includes("query-safety-policy") || url.includes("audit-events"))).toBe(false);
   });
 

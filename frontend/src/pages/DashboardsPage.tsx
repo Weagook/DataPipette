@@ -30,7 +30,7 @@ export function DashboardsPage() {
   return (
     <div className="page-stack">
       <header className="page-heading split-heading">
-        <div><span className="eyebrow">{t("Shared understanding")}</span><h1>{t("Dashboards")}</h1><p>{t("Every visualization loads and reports freshness independently.")}</p></div>
+        <div><h1>{t("Dashboards")}</h1><p>{t("Pages that bring several charts together.")}</p></div>
         {user.role !== "viewer" && <Link className="button primary" to="/dashboards/new"><Plus size={17} /> {t("New dashboard")}</Link>}
       </header>
       <div className="collection-toolbar">

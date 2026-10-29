@@ -83,7 +83,7 @@ describe("application session flow", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Good data should feel quiet.",
+        name: "Overview",
       }),
     ).toBeVisible();
     expect(requestBodies).toEqual([

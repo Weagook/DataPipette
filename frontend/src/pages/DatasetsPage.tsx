@@ -35,10 +35,9 @@ export function DatasetsPage() {
     <div className="page-stack">
       <header className="page-heading split-heading">
         <div>
-          <span className="eyebrow">{t("Reusable data models")}</span>
           <h1>{t("Datasets")}</h1>
           <p>
-            {t("Open a published snapshot, shape the table for your question, and export exactly the rows you can see.")}
+            {t("Prepared tables of data. Open one to view, filter, or export its rows.")}
           </p>
         </div>
         <Link className="button primary" to="/datasets/new">
