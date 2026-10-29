@@ -8,11 +8,13 @@ import http.client
 import json
 import math
 import os
+import random
 import statistics
 import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from http.cookiejar import CookieJar
@@ -105,6 +107,9 @@ class Sample:
     elapsed_ms: float
     response_bytes: int
     error: str | None = None
+
+    def _replace_scenario(self, scenario: str) -> Sample:
+        return Sample(scenario, self.status, self.elapsed_ms, self.response_bytes, self.error)
 
 
 class ApiClient:
@@ -205,8 +210,14 @@ class PersistentJsonClient:
             self.connection.close()
             self.connection = None
 
-    def post(self, path: str, payload: dict[str, Any]) -> tuple[int, int]:
-        body = json.dumps(payload, separators=(",", ":")).encode()
+    def post(self, path: str, payload: dict[str, Any] | None) -> tuple[int, int]:
+        return self.send("POST", path, payload)
+
+    def get(self, path: str) -> tuple[int, int]:
+        return self.send("GET", path, None)
+
+    def send(self, method: str, path: str, payload: dict[str, Any] | None) -> tuple[int, int]:
+        body = b"" if payload is None else json.dumps(payload, separators=(",", ":")).encode()
         last_error: OSError | http.client.HTTPException | None = None
         for _attempt in range(2):
             try:
@@ -217,16 +228,15 @@ class PersistentJsonClient:
                         else http.client.HTTPConnection
                     )
                     self.connection = connection_type(self.host, self.port, timeout=self.timeout)
+                headers = {"Accept": "application/json", "Cookie": self.cookie_header}
+                if method != "GET":
+                    headers["Content-Type"] = "application/json"
+                    headers["Content-Length"] = str(len(body))
                 self.connection.request(
-                    "POST",
+                    method,
                     f"{self.base_path}{path}",
-                    body=body,
-                    headers={
-                        "Accept": "application/json",
-                        "Content-Type": "application/json",
-                        "Content-Length": str(len(body)),
-                        "Cookie": self.cookie_header,
-                    },
+                    body=body if method != "GET" else None,
+                    headers=headers,
                 )
                 response = self.connection.getresponse()
                 raw = response.read()
@@ -680,6 +690,196 @@ def run_load(args: argparse.Namespace) -> None:
     _write_result(args.output, result)
 
 
+BROWSER_CONNECTIONS_PER_HOST = 6
+
+
+def dashboard_selection(
+    filters: list[dict[str, Any]],
+    values: dict[str, list[Any]],
+    rng: random.Random,
+) -> list[dict[str, Any]]:
+    """Pick what a viewer might choose: one to two values per list filter, or a month."""
+
+    selections: list[dict[str, Any]] = []
+    for item in filters:
+        if item["kind"] == "values":
+            options = values.get(item["id"], [])
+            if options and rng.random() < 0.7:
+                chosen = rng.sample(options, k=min(len(options), rng.choice((1, 2))))
+                selections.append({"filter_id": item["id"], "values": chosen})
+        elif rng.random() < 0.5:
+            month = rng.randint(1, 12)
+            last_day = 28 if month == 2 else 30 if month in {4, 6, 9, 11} else 31
+            year = datetime.now(UTC).year - rng.choice((0, 1))
+            selections.append(
+                {
+                    "filter_id": item["id"],
+                    "from": f"{year}-{month:02d}-01",
+                    "to": f"{year}-{month:02d}-{last_day}",
+                }
+            )
+    return selections
+
+
+def items_for_selection(
+    item_id: str, filters: list[dict[str, Any]], selections: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Send each item only the choices of filters that target it, as the frontend does."""
+
+    targeted = {
+        item["id"]
+        for item in filters
+        if any(target["item_id"] == item_id for target in item["targets"])
+    }
+    return [selection for selection in selections if selection["filter_id"] in targeted]
+
+
+def run_dashboard(args: argparse.Namespace) -> None:
+    client = _authenticated_client(args)
+    dashboard = client.request("GET", f"/dashboards/{args.dashboard_id}").payload
+    items = dashboard["definition"].get("items") or []
+    filters = dashboard["definition"].get("filters") or []
+    if not items:
+        raise BenchmarkError("The dashboard has no charts to load")
+    values = {
+        item["id"]: client.request(
+            "GET", f"/dashboards/{args.dashboard_id}/filters/{item['id']}/values"
+        ).payload["values"]
+        for item in filters
+        if item["kind"] == "values"
+    }
+    samples: list[Sample] = []
+    samples_lock = threading.Lock()
+    barrier = threading.Barrier(args.concurrency + 1)
+    started = time.monotonic()
+    warmup_ends = started + args.warmup
+    run_ends = warmup_ends + args.duration
+
+    def viewer(viewer_id: int) -> None:
+        rng = random.Random(args.seed + viewer_id)
+        local = threading.local()
+        connections: list[PersistentJsonClient] = []
+
+        def connection() -> PersistentJsonClient:
+            if not hasattr(local, "client"):
+                local.client = PersistentJsonClient(
+                    args.api_url, client.cookie_header, timeout=args.request_timeout
+                )
+                connections.append(local.client)
+            return local.client
+
+        def timed(scenario: str, call: Any) -> Sample:
+            request_started = time.perf_counter()
+            status, response_bytes, error = 0, 0, None
+            try:
+                status, response_bytes = call()
+            except (OSError, http.client.HTTPException) as exc:
+                error = type(exc).__name__
+            return Sample(
+                scenario,
+                status,
+                (time.perf_counter() - request_started) * 1000,
+                response_bytes,
+                error,
+            )
+
+        pool = ThreadPoolExecutor(
+            max_workers=min(BROWSER_CONNECTIONS_PER_HOST, len(items)),
+            thread_name_prefix=f"viewer-{viewer_id}",
+        )
+        barrier.wait()
+        # Viewers start at different moments, as people do.
+        time.sleep(rng.uniform(0, args.think_time))
+        try:
+            while time.monotonic() < run_ends:
+                filtered = bool(filters) and rng.random() < args.filter_share
+                selection = dashboard_selection(filters, values, rng) if filtered else []
+                view_started = time.perf_counter()
+                layout = timed(
+                    "layout", lambda: connection().get(f"/dashboards/{args.dashboard_id}")
+                )
+
+                def load(
+                    item: dict[str, Any], selection: list[dict[str, Any]] = selection
+                ) -> Sample:
+                    chosen = items_for_selection(item["id"], filters, selection)
+                    item_started = time.perf_counter()
+                    # Like the frontend, retry capacity and server errors twice, one
+                    # second apart (the API's Retry-After), before showing an error.
+                    for attempt in range(args.browser_retries + 1):
+                        sample = timed(
+                            "item_filtered" if chosen else "item",
+                            lambda: connection().post(
+                                f"/dashboards/{args.dashboard_id}/items/{item['id']}/data:query",
+                                {"filters": chosen} if chosen else None,
+                            ),
+                        )
+                        if sample.status < 500 or attempt == args.browser_retries:
+                            break
+                        with samples_lock:
+                            if time.monotonic() >= warmup_ends:
+                                samples.append(sample._replace_scenario("retried"))
+                        time.sleep(1.0)
+                    return Sample(
+                        sample.scenario,
+                        sample.status,
+                        (time.perf_counter() - item_started) * 1000,
+                        sample.response_bytes,
+                        sample.error,
+                    )
+
+                item_samples = list(pool.map(load, items))
+                view_ms = (time.perf_counter() - view_started) * 1000
+                worst = max(
+                    (sample.status for sample in (layout, *item_samples) if sample.status != 200),
+                    default=200,
+                )
+                view = Sample("view_filtered" if selection else "view", worst, view_ms, 0, None)
+                if time.monotonic() >= warmup_ends:
+                    with samples_lock:
+                        samples.extend((layout, *item_samples, view))
+                time.sleep(rng.uniform(0.5, 1.5) * args.think_time)
+        finally:
+            pool.shutdown(wait=True)
+            for item in connections:
+                item.close()
+
+    threads = [
+        threading.Thread(target=viewer, args=(viewer_id,), name=f"viewer-{viewer_id}")
+        for viewer_id in range(args.concurrency)
+    ]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    views = [sample for sample in samples if sample.scenario.startswith("view")]
+    requests = [
+        sample
+        for sample in samples
+        if not sample.scenario.startswith("view") and sample.scenario != "retried"
+    ]
+    result = {
+        "schema_version": 1,
+        "recorded_at": datetime.now(UTC).isoformat(),
+        "dashboard_id": args.dashboard_id,
+        "item_count": len(items),
+        "filter_count": len(filters),
+        "concurrency": args.concurrency,
+        "think_time_seconds": args.think_time,
+        "filter_share": args.filter_share,
+        "warmup_seconds": args.warmup,
+        "duration_seconds": args.duration,
+        "browser_retries": args.browser_retries,
+        "retried_attempts": sum(sample.scenario == "retried" for sample in samples),
+        "dashboard_views": summarize_samples(views, args.duration),
+        "requests": summarize_samples(requests, args.duration),
+        "errors": sorted({sample.error for sample in samples if sample.error}),
+    }
+    _write_result(args.output, result)
+
+
 def run_exports(args: argparse.Namespace) -> None:
     client = _authenticated_client(args)
     exploration = client.request("GET", f"/datasets/{args.dataset_id}/exploration").payload
@@ -765,6 +965,22 @@ def parser() -> argparse.ArgumentParser:
     load.add_argument("--request-timeout", type=float, default=30.0)
     load.add_argument("--output")
     load.set_defaults(func=run_load)
+
+    dashboard = commands.add_parser(
+        "dashboard",
+        help="Simulate viewers opening a dashboard, loading every chart, and changing filters",
+    )
+    dashboard.add_argument("--dashboard-id", required=True)
+    dashboard.add_argument("--concurrency", type=int, choices=range(1, 201), default=20)
+    dashboard.add_argument("--think-time", type=float, default=3.0)
+    dashboard.add_argument("--filter-share", type=float, default=0.5)
+    dashboard.add_argument("--warmup", type=float, default=15.0)
+    dashboard.add_argument("--duration", type=float, default=120.0)
+    dashboard.add_argument("--request-timeout", type=float, default=30.0)
+    dashboard.add_argument("--seed", type=int, default=20261029)
+    dashboard.add_argument("--browser-retries", type=int, choices=range(0, 6), default=2)
+    dashboard.add_argument("--output")
+    dashboard.set_defaults(func=run_dashboard)
 
     exports = commands.add_parser("exports", help="Run bounded concurrent CSV export jobs")
     exports.add_argument("--dataset-id", required=True)

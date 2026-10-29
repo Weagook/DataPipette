@@ -176,6 +176,41 @@ Run the same command once by hand to confirm it works, then check `/var/log/data
 
 Copy the backups to another machine as well; a backup on the same disk does not survive the loss of that disk.
 
+### Health checks and alerts
+
+`deploy/compose/healthcheck.sh` checks the installation and sends a message when something breaks and again when it recovers ([ADR-0054](adr/0054-host-health-checks-and-alerts.md)). Each run checks:
+
+- that the application answers at `https://<domain>/api/v1/health/ready`;
+- that every long-running service is running and healthy;
+- free disk space for Docker volumes and backups (alarm below 15%);
+- that a backup newer than 26 hours exists;
+- datasets whose most recent data load failed during the last week;
+- that the TLS certificate is valid for at least 14 more days.
+
+A lasting problem is reported once, not every five minutes. The thresholds can be changed with `DATAPIPETTE_HEALTH_MIN_FREE_PERCENT`, `DATAPIPETTE_HEALTH_MAX_BACKUP_HOURS`, and `DATAPIPETTE_HEALTH_MIN_CERT_DAYS`.
+
+To receive alerts in Telegram, create a bot with [@BotFather](https://t.me/BotFather), send the bot any message, then open `https://api.telegram.org/bot<token>/getUpdates` and copy `message.chat.id`. Add both values to `.env`:
+
+```bash
+DATAPIPETTE_ALERT_TELEGRAM_BOT_TOKEN=<token from BotFather>
+DATAPIPETTE_ALERT_TELEGRAM_CHAT_ID=<chat id>
+```
+
+`DATAPIPETTE_ALERT_WEBHOOK_URL` works as well or instead: it receives `{"text": "..."}`, the format of Slack, Mattermost, and Rocket.Chat incoming webhooks. Send a test message, then schedule the check every five minutes:
+
+```bash
+DATAPIPETTE_COMPOSE_FILES=deploy/compose/compose.yaml:deploy/compose/compose.production.yaml \
+  deploy/compose/healthcheck.sh --test-alert
+
+cat >/etc/cron.d/datapipette-healthcheck <<'EOF'
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/5 * * * * root cd /opt/DataPipette && DATAPIPETTE_COMPOSE_FILES=deploy/compose/compose.yaml:deploy/compose/compose.production.yaml deploy/compose/healthcheck.sh --backup-root /var/backups/datapipette >>/var/log/datapipette-health.log 2>&1
+EOF
+```
+
+The check runs on the server it watches, so it cannot report that the whole server is down. Add an external uptime monitor for `https://<domain>/healthz`, for example a free hosted uptime service.
+
 ### Move an evaluation installation to production
 
 An installation that started from `compose.yaml` alone keeps its data. First check `.env`:
