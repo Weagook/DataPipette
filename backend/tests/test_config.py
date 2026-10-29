@@ -69,6 +69,11 @@ def test_s3_configuration_is_complete_and_production_safe() -> None:
         Settings(environment="production", connection_encryption_key=PRODUCTION_KEY)
     with pytest.raises(ValidationError, match="must use HTTPS"):
         _production_settings(s3_endpoint_url="http://minio:9000")
+    assert _production_settings(
+        s3_endpoint_url="http://minio:9000", s3_private_network_http=True
+    ).s3_private_network_http
+    with pytest.raises(ValidationError, match="must use HTTPS"):
+        _production_settings(s3_endpoint_url="ftp://minio:9000", s3_private_network_http=True)
     assert _production_settings(s3_endpoint_url="https://objects.example").s3_bucket == (
         "datapipette"
     )

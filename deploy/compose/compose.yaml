@@ -162,7 +162,18 @@ services:
 
   api:
     <<: *backend-image
-    command: ["uvicorn", "datapipette.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Trust X-Forwarded-For only from the private Compose network (the Nginx
+    # gateway), so sign-in throttling sees each browser's own address.
+    command:
+      - uvicorn
+      - datapipette.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
     environment: *app-environment
     tmpfs:
       - /var/lib/datapipette/snapshots:uid=10001,gid=10001,mode=0700

@@ -17,7 +17,11 @@ from sqlalchemy import select
 
 from datapipette.application.connections import ConnectionSecretUnavailableError
 from datapipette.config import Settings, get_settings
-from datapipette.infrastructure.crypto import AesGcmSecretCipher, decode_encryption_key
+from datapipette.infrastructure.crypto import (
+    AesGcmSecretCipher,
+    InvalidEncryptionKeyError,
+    decode_encryption_key,
+)
 from datapipette.infrastructure.database import create_database_engine, create_session_factory
 from datapipette.infrastructure.models import PostgresConnectionModel
 from datapipette.infrastructure.object_storage import create_s3_client
@@ -53,6 +57,19 @@ class ObjectImportResult:
     imported: int
     pruned: int
     byte_size: int
+
+
+class KeyRotationError(RuntimeError):
+    """Stored secrets could not be re-encrypted; nothing was changed."""
+
+
+NEW_KEY_ENVIRONMENT = "DATAPIPETTE_NEW_CONNECTION_ENCRYPTION_KEY"
+
+
+@dataclass(frozen=True, slots=True)
+class KeyRotationResult:
+    connections: int
+    secrets: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +276,66 @@ async def verify_connection_secrets(settings: Settings) -> KeyVerificationResult
     return KeyVerificationResult(len(rows), secrets, tuple(failed))
 
 
+async def rotate_connection_secrets(settings: Settings, new_key: str) -> KeyRotationResult:
+    """Re-encrypt every stored source-connection secret with a new key in one transaction.
+
+    Every secret is decrypted with the configured key first; if any fails, the
+    transaction is rolled back and nothing is changed.
+    """
+    decode_encryption_key(new_key)
+    current_key = settings.connection_encryption_key.get_secret_value()
+    if new_key == current_key:
+        raise KeyRotationError("The new key is the same as the configured key")
+    current = AesGcmSecretCipher(current_key)
+    replacement = AesGcmSecretCipher(new_key)
+    engine = create_database_engine(settings)
+    secrets = 0
+    try:
+        async with create_session_factory(engine)() as session, session.begin():
+            connections = list(
+                await session.scalars(
+                    select(PostgresConnectionModel)
+                    .order_by(PostgresConnectionModel.id)
+                    .with_for_update()
+                )
+            )
+            failed: list[UUID] = []
+            for connection in connections:
+                try:
+                    password = current.decrypt(
+                        connection.encrypted_password, connection_id=connection.id, field="password"
+                    )
+                    ca_certificate = (
+                        current.decrypt(
+                            connection.encrypted_ca_certificate,
+                            connection_id=connection.id,
+                            field="ca_certificate",
+                        )
+                        if connection.encrypted_ca_certificate is not None
+                        else None
+                    )
+                except ConnectionSecretUnavailableError:
+                    failed.append(connection.id)
+                    continue
+                connection.encrypted_password = replacement.encrypt(
+                    password, connection_id=connection.id, field="password"
+                )
+                secrets += 1
+                if ca_certificate is not None:
+                    connection.encrypted_ca_certificate = replacement.encrypt(
+                        ca_certificate, connection_id=connection.id, field="ca_certificate"
+                    )
+                    secrets += 1
+            if failed:
+                raise KeyRotationError(
+                    f"{len(failed)} connections cannot be decrypted with the configured key: "
+                    + ", ".join(str(item) for item in failed)
+                )
+    finally:
+        await engine.dispose()
+    return KeyRotationResult(len(connections), secrets)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="datapipette-backup")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -282,6 +359,10 @@ def _parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "verify-key",
         help="Check that every stored connection secret decrypts with the configured key",
+    )
+    subparsers.add_parser(
+        "rotate-key",
+        help=f"Re-encrypt every stored connection secret with the key in {NEW_KEY_ENVIRONMENT}",
     )
     return parser
 
@@ -318,6 +399,15 @@ def main(argv: Sequence[str] | None = None) -> None:
                 f"Imported {imported.imported} objects ({imported.byte_size} bytes); "
                 f"pruned {imported.pruned}"
             )
+        elif args.command == "rotate-key":
+            new_key = os.environ.get(NEW_KEY_ENVIRONMENT, "")
+            if not new_key:
+                raise SystemExit(f"{NEW_KEY_ENVIRONMENT} must be set to the new key")
+            rotated = asyncio.run(rotate_connection_secrets(settings, new_key))
+            print(
+                f"Re-encrypted {rotated.secrets} secrets across {rotated.connections} connections"
+            )
+            print(f"New key fingerprint: {key_fingerprint(new_key)}")
         else:
             result = asyncio.run(verify_connection_secrets(settings))
             if result.failed_connection_ids:
@@ -329,7 +419,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 )
                 raise SystemExit(1)
             print(f"Decrypted {result.secrets} secrets across {result.connections} connections")
-    except BackupIntegrityError as exc:
+    except (BackupIntegrityError, KeyRotationError, InvalidEncryptionKeyError) as exc:
         raise SystemExit(str(exc)) from exc
 
 

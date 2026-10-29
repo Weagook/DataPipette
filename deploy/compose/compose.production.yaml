@@ -1,0 +1,78 @@
+# Single-host production overlay. Use together with compose.yaml:
+#
+#   docker compose --env-file .env \
+#     -f deploy/compose/compose.yaml -f deploy/compose/compose.production.yaml \
+#     up -d --build --wait
+#
+# It publishes only HTTPS through Caddy, removes every other host port,
+# refuses to start with missing secrets, and runs the application in
+# production mode. See docs/DEPLOYMENT.md.
+
+x-production-environment: &production-environment
+  DATAPIPETTE_ENVIRONMENT: production
+  DATAPIPETTE_DOCS_ENABLED: "false"
+  DATAPIPETTE_METADATA_DATABASE_URL: postgresql+psycopg://${DATAPIPETTE_POSTGRES_USER:-datapipette}:${DATAPIPETTE_POSTGRES_PASSWORD:?Set DATAPIPETTE_POSTGRES_PASSWORD}@metadata-db:5432/${DATAPIPETTE_POSTGRES_DB:-datapipette}
+  DATAPIPETTE_CONNECTION_ENCRYPTION_KEY: ${DATAPIPETTE_CONNECTION_ENCRYPTION_KEY:?Set DATAPIPETTE_CONNECTION_ENCRYPTION_KEY}
+  DATAPIPETTE_S3_ACCESS_KEY_ID: ${DATAPIPETTE_S3_ACCESS_KEY_ID:?Set DATAPIPETTE_S3_ACCESS_KEY_ID}
+  DATAPIPETTE_S3_SECRET_ACCESS_KEY: ${DATAPIPETTE_S3_SECRET_ACCESS_KEY:?Set DATAPIPETTE_S3_SECRET_ACCESS_KEY}
+  # MinIO is reached over the private Compose network and never leaves the host.
+  DATAPIPETTE_S3_PRIVATE_NETWORK_HTTP: "true"
+
+services:
+  metadata-db:
+    environment:
+      POSTGRES_PASSWORD: ${DATAPIPETTE_POSTGRES_PASSWORD:?Set DATAPIPETTE_POSTGRES_PASSWORD}
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  minio:
+    environment:
+      MINIO_ROOT_USER: ${DATAPIPETTE_S3_ACCESS_KEY_ID:?Set DATAPIPETTE_S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${DATAPIPETTE_S3_SECRET_ACCESS_KEY:?Set DATAPIPETTE_S3_SECRET_ACCESS_KEY}
+    ports: !reset []
+
+  migrate:
+    environment: *production-environment
+
+  minio-init:
+    environment: *production-environment
+
+  bootstrap-admin:
+    environment: *production-environment
+
+  api:
+    environment: *production-environment
+
+  worker:
+    environment: *production-environment
+
+  scheduler:
+    environment: *production-environment
+
+  frontend:
+    ports: !reset []
+
+  gateway:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    environment:
+      DATAPIPETTE_DOMAIN: ${DATAPIPETTE_DOMAIN:?Set DATAPIPETTE_DOMAIN to the public host name}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - gateway-data:/data
+      - gateway-config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  gateway-data:
+    name: ${DATAPIPETTE_GATEWAY_DATA_VOLUME_NAME:-datapipette_gateway-data}
+  gateway-config:
+    name: ${DATAPIPETTE_GATEWAY_CONFIG_VOLUME_NAME:-datapipette_gateway-config}

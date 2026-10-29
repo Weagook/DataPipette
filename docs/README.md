@@ -12,7 +12,7 @@ This directory is the source of truth for DataPipette's product and technical de
 6. [FRONTEND.md](FRONTEND.md) — official UI principles, information architecture, and delivery slices.
 7. [API_GUIDELINES.md](API_GUIDELINES.md) — rules for the public API.
 8. [SECURITY.md](SECURITY.md) — trust boundaries, authentication, authorization, and data protection.
-9. [DEPLOYMENT.md](DEPLOYMENT.md) — one-command evaluation topology, operations, and production boundary.
+9. [DEPLOYMENT.md](DEPLOYMENT.md) — one-command evaluation topology, single-server production overlay, operations, and backups.
 10. [ROADMAP.md](ROADMAP.md) — incremental delivery sequence.
 11. [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — decisions intentionally left unresolved.
 12. [GIT_WORKFLOW.md](GIT_WORKFLOW.md) — branch, commit, review, and local planning conventions.

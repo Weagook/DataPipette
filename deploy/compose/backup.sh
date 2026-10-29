@@ -16,16 +16,26 @@ Usage:
   deploy/compose/backup.sh create <backup-root> [--keep N]
   deploy/compose/backup.sh verify <backup-set>
   deploy/compose/backup.sh restore <backup-set> --yes
+  deploy/compose/backup.sh rotate-key --yes
 
 Environment:
-  DATAPIPETTE_ENV_FILE  Compose environment file (default: <repository>/.env)
+  DATAPIPETTE_ENV_FILE       Compose environment file (default: <repository>/.env)
+  DATAPIPETTE_COMPOSE_FILES  Colon-separated Compose files relative to the repository
+                             (default: deploy/compose/compose.yaml; add
+                             deploy/compose/compose.production.yaml in production)
+  DATAPIPETTE_NEW_CONNECTION_ENCRYPTION_KEY
+                             New key for rotate-key
 EOF
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_dir}/../.." && pwd)"
 env_file="${DATAPIPETTE_ENV_FILE:-${repository_root}/.env}"
-compose=(docker compose --env-file "${env_file}" -f "${repository_root}/deploy/compose/compose.yaml")
+compose=(docker compose --env-file "${env_file}")
+IFS=: read -r -a compose_files <<<"${DATAPIPETTE_COMPOSE_FILES:-deploy/compose/compose.yaml}"
+for compose_file in "${compose_files[@]}"; do
+  compose+=(-f "${repository_root}/${compose_file}")
+done
 format_version="datapipette-backup-v1"
 application_services=(frontend api worker scheduler)
 
@@ -218,6 +228,44 @@ restore_backup() {
   log "Restored ${set_dir}"
 }
 
+# Re-encrypt stored source-connection secrets with a new key, then switch the
+# environment file to that key. Backups made earlier still need the old key.
+rotate_key() {
+  [[ "${1:-}" == "--yes" && $# -eq 1 ]] \
+    || fail "rotate-key changes how every connection secret is encrypted; rerun with --yes"
+  [[ -f "${env_file}" ]] || fail "environment file ${env_file} does not exist"
+  [[ -n "${DATAPIPETTE_NEW_CONNECTION_ENCRYPTION_KEY:-}" ]] \
+    || fail "set DATAPIPETTE_NEW_CONNECTION_ENCRYPTION_KEY to the new key"
+  grep -q '^DATAPIPETTE_CONNECTION_ENCRYPTION_KEY=' "${env_file}" \
+    || fail "${env_file} has no DATAPIPETTE_CONNECTION_ENCRYPTION_KEY line to replace"
+  require_running metadata-db
+
+  log "Stopping application services"
+  "${compose[@]}" stop "${application_services[@]}"
+  log "Re-encrypting connection secrets"
+  if ! "${compose[@]}" run --rm --no-deps -T \
+    -e DATAPIPETTE_NEW_CONNECTION_ENCRYPTION_KEY \
+    api datapipette-backup rotate-key >&2; then
+    "${compose[@]}" up -d --wait
+    fail "rotation failed; nothing was changed and the application was restarted"
+  fi
+
+  log "Writing the new key to ${env_file}"
+  local updated="${env_file}.rotating"
+  (
+    umask 077
+    awk -v key="${DATAPIPETTE_NEW_CONNECTION_ENCRYPTION_KEY}" \
+      '/^DATAPIPETTE_CONNECTION_ENCRYPTION_KEY=/ { print "DATAPIPETTE_CONNECTION_ENCRYPTION_KEY=" key; next } { print }' \
+      "${env_file}" >"${updated}"
+  )
+  mv "${updated}" "${env_file}"
+
+  log "Starting the application"
+  "${compose[@]}" up -d --wait
+  "${compose[@]}" run --rm --no-deps -T api datapipette-backup verify-key >&2
+  log "Key rotated. Store the new key separately and create a fresh backup."
+}
+
 command="${1:-}"
 [[ $# -gt 0 ]] && shift
 case "${command}" in
@@ -229,6 +277,7 @@ case "${command}" in
     verify_backup "$(cd "$1" && pwd)"
     ;;
   restore) restore_backup "$@" ;;
+  rotate-key) rotate_key "$@" ;;
   -h | --help | help) usage ;;
   *) usage; exit 2 ;;
 esac
