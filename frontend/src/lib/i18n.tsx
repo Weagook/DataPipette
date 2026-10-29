@@ -1230,6 +1230,18 @@ const russian: Record<string, string> = {
   "Open dashboards": "Открыть дашборды",
   "Pick tables from your database and load them for analysis.": "Выберите таблицы из базы данных и загрузите их для анализа.",
   "Turn a dataset into a bar, line, pie, or single-number chart.": "Постройте по датасету столбчатый, линейный, круговой график или одно число.",
+  "Add your first chart": "Добавьте первую диаграмму",
+  "Chart unavailable": "Диаграмма недоступна",
+  "Close gaps": "Убрать пустые места",
+  "Drag a chart by its title. Hover a chart to move or resize it with buttons.": "Перетаскивайте диаграмму за заголовок. Наведите на диаграмму, чтобы двигать её или менять размер кнопками.",
+  "No data": "Нет данных",
+  "Not created yet": "Ещё не создан",
+  "Open dashboard": "Открыть дашборд",
+  "Press + next to a chart on the right, or create a new one.": "Нажмите + рядом с диаграммой справа или создайте новую.",
+  "Press + to place a chart on the dashboard.": "Нажмите +, чтобы поставить диаграмму на дашборд.",
+  "You have no charts yet": "У вас пока нет диаграмм",
+  "Your charts": "Ваши диаграммы",
+  "People you add here see the saved dashboard, but not the underlying rows.": "Те, кого вы добавите, увидят сохранённый дашборд, но не исходные строки данных.",
 };
 
 interface I18nValue {
