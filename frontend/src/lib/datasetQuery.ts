@@ -104,6 +104,7 @@ export function formatDatasetValue(
   value: unknown,
   column: DatasetColumn,
   installationTimezone = "UTC",
+  locale: "en" | "ru" = "en",
 ): string {
   if (value == null) return "—";
   if (typeof value === "object") return JSON.stringify(value);
@@ -135,15 +136,45 @@ export function formatDatasetValue(
     }
   }
   if (format === "number_integer") {
-    return formatExactDecimal(value, 0);
+    return formatExactDecimal(value, 0, 0, locale);
   }
   if (format === "number_decimal_2") {
-    return formatExactDecimal(value, 2);
+    return formatExactDecimal(value, 2, 0, locale);
   }
   if (format === "percent") {
-    return `${formatExactDecimal(value, 2, 2)}%`;
+    return `${formatExactDecimal(value, 2, 2, locale)}%`;
   }
-  if (typeof value === "boolean") return value ? "True" : "False";
+  return formatByType(value, normalizeType(column.data_type), installationTimezone, locale);
+}
+
+/** Readable defaults for columns without an explicit display format. */
+function formatByType(
+  value: unknown,
+  type: string,
+  installationTimezone: string,
+  locale: "en" | "ru",
+): string {
+  const tag = locale === "ru" ? "ru-RU" : "en-GB";
+  if (typeof value === "boolean") return locale === "ru" ? (value ? "Да" : "Нет") : value ? "Yes" : "No";
+  if (isInteger(type) || isBoundedNumber(type)) {
+    const raw = String(value).trim();
+    const fraction = raw.match(/^[+-]?\d+\.(\d+)$/)?.[1]?.length ?? 0;
+    return /^[+-]?\d+(\.\d+)?$/.test(raw) ? formatExactDecimal(raw, fraction, 0, locale) : raw;
+  }
+  if (type === "date") {
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) return new Intl.DateTimeFormat(tag, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${match[0]}T00:00:00Z`));
+  }
+  if (/^timestamp/.test(type)) {
+    const local = type.includes("without time zone");
+    const parsed = new Date(local ? `${String(value).replace(" ", "T").slice(0, 19)}Z` : String(value));
+    if (!Number.isNaN(parsed.getTime()))
+      return new Intl.DateTimeFormat(tag, {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: local ? "UTC" : installationTimezone,
+      }).format(parsed);
+  }
   return String(value);
 }
 
@@ -188,11 +219,17 @@ function isBoundedNumber(value: string): boolean {
   return value === "real" || value === "double precision" || /^(numeric|decimal)\(\d+,-?\d+\)$/.test(value);
 }
 
-function formatExactDecimal(value: unknown, fractionDigits: number, power = 0): string {
+function formatExactDecimal(
+  value: unknown,
+  fractionDigits: number,
+  power = 0,
+  locale: "en" | "ru" = "en",
+): string {
   const raw = String(value).trim();
   const match = raw.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  const [group, point] = locale === "ru" ? ["\u00a0", ","] : [",", "."];
   if (!match) {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US", {
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
     }).format(Number(value));
@@ -210,8 +247,8 @@ function formatExactDecimal(value: unknown, fractionDigits: number, power = 0): 
     if (remainder * 2n >= divisor) scaled += 1n;
   }
   const base = 10n ** BigInt(fractionDigits);
-  const integer = (scaled / base).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const integer = (scaled / base).toString().replace(/\B(?=(\d{3})+(?!\d))/g, group);
   if (fractionDigits === 0) return `${sign}${integer}`;
   const decimals = (scaled % base).toString().padStart(fractionDigits, "0");
-  return `${sign}${integer}.${decimals}`;
+  return `${sign}${integer}${point}${decimals}`;
 }

@@ -77,4 +77,15 @@ describe("dataset query model", () => {
     expect(formatDatasetValue("2026-01-01T00:30:00Z", { ...base, data_type: "timestamp with time zone" }, "Asia/Almaty")).toBe("01-01-2026 05:30");
     expect(formatDatasetValue("2026-01-01T00:30:00", { ...base, data_type: "timestamp without time zone" }, "Asia/Almaty")).toBe("01-01-2026 00:30");
   });
+
+  it("formats columns without a display format readably for the interface language", () => {
+    const base = { ...columns[1], display_format: null };
+    expect(formatDatasetValue("1234567.5", { ...base, data_type: "numeric(12,2)" }, "UTC", "ru")).toBe("1\u00a0234\u00a0567,5");
+    expect(formatDatasetValue(9876543, { ...base, data_type: "bigint" })).toBe("9,876,543");
+    expect(formatDatasetValue(true, { ...base, data_type: "boolean" }, "UTC", "ru")).toBe("Да");
+    expect(formatDatasetValue("2026-02-02", { ...base, data_type: "date" }, "UTC", "ru")).toBe("2 февр. 2026 г.");
+    expect(
+      formatDatasetValue("2026-02-02T03:59:26.217390+00:00", { ...base, data_type: "timestamp with time zone" }, "Asia/Almaty", "en"),
+    ).toBe("2 Feb 2026, 08:59");
+  });
 });

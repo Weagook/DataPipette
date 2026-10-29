@@ -498,6 +498,16 @@ export async function previewChart(
   );
 }
 
+export type DatasetFreshness = ApiSchemas["DatasetFreshnessResponse"];
+
+export async function getDatasetFreshness(datasetId: string): Promise<DatasetFreshness> {
+  return unwrap(
+    await api.GET("/api/v1/datasets/{dataset_id}/freshness", {
+      params: { path: { dataset_id: datasetId } },
+    }),
+  );
+}
+
 export async function getDataset(datasetId: string): Promise<Dataset> {
   return unwrap(
     await api.GET("/api/v1/datasets/{dataset_id}", {

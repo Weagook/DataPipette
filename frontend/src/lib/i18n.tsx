@@ -1230,6 +1230,14 @@ const russian: Record<string, string> = {
   "Open dashboards": "Открыть дашборды",
   "Pick tables from your database and load them for analysis.": "Выберите таблицы из базы данных и загрузите их для анализа.",
   "Turn a dataset into a bar, line, pie, or single-number chart.": "Постройте по датасету столбчатый, линейный, круговой график или одно число.",
+  "Actions": "Действия",
+  "Not loaded yet": "Ещё не загружен",
+  "Last load failed": "Последняя загрузка не удалась",
+  "Load failed": "Загрузка не удалась",
+  "Open": "Открыть",
+  "Edit": "Изменить",
+  "All rows are shown.": "Показаны все строки.",
+  "Changes take effect when you press Apply.": "Изменения вступят в силу после нажатия «Применить фильтры».",
 };
 
 interface I18nValue {
