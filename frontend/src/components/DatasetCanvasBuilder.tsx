@@ -1,32 +1,37 @@
 import {
   Background,
   BackgroundVariant,
+  ConnectionMode,
   Controls,
+  Handle,
   MiniMap,
+  Position,
   ReactFlow,
+  ReactFlowProvider,
   applyNodeChanges,
+  useReactFlow,
+  type Connection,
   type Edge,
   type Node,
   type NodeChange,
+  type NodeProps,
   type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Columns3,
-  Database,
-  GitBranch,
-  LayoutDashboard,
-  ListChecks,
+  Crown,
+  EyeOff,
+  Link2,
   LoaderCircle,
   Plus,
   Redo2,
-  Save,
-  Settings2,
-  Sparkles,
+  Search,
+  Table2,
   Trash2,
   Undo2,
   WandSparkles,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -34,21 +39,27 @@ import {
   getCatalogRelation,
   listCatalogRelations,
   listCatalogSchemas,
-  problemMessage,
   suggestCatalogJoins,
-  type CatalogJoinSuggestion,
   type CatalogRelation,
 } from "../lib/api";
 import {
-  appendManualJoinedRelation,
-  appendRelationFromSuggestion,
+  MAX_CANVAS_TABLES,
+  addJoinCondition,
+  attachTable,
   autoLayoutCanvas,
   canvasNodeId,
   catalogTypesCompatible,
+  definitionFromMainTable,
+  detachTable,
+  directJoin,
   ensureCanvas,
-  removeJoinSubtree,
+  friendlyType,
+  removeJoinCondition,
+  setJoinType,
+  suggestionLink,
   updateCanvasNodePositions,
   updateCanvasViewport,
+  type JoinType,
 } from "../lib/canvasDefinition";
 import { useI18n } from "../lib/i18n";
 import { randomUuid } from "../lib/id";
@@ -58,47 +69,76 @@ import {
   type DisplayFormat,
   type VisualDefinition,
 } from "../lib/studioDefinition";
-import { InlineError } from "./Status";
 
-type CanvasNode = Node<{ label: React.ReactNode; kind: string }>;
-type Selection = string | "add-table";
-type SuggestedJoin = CatalogJoinSuggestion & { candidateId: string };
+type Translate = ReturnType<typeof useI18n>["t"];
+type PendingTable = { key: string; schema: string; name: string; x: number; y: number };
+type Notice = { tone: "info" | "error"; text: string };
+type SelectedLink = { joinId: string; conditionIndex: number };
+type TableNodeData = {
+  connectionId: string;
+  schema: string;
+  name: string;
+  isMain: boolean;
+  isPending: boolean;
+  selectedColumns: string[];
+  linkedColumns: string[];
+  onToggleColumn: (column: string, selected: boolean) => void;
+  onSelectAll: (columns: string[], selected: boolean) => void;
+  onRemove: () => void;
+};
+type TableNode = Node<TableNodeData, "table">;
 
+const TABLE_MIME = "application/x-datapipette-table";
+const COLLAPSED_COLUMNS = 12;
 const FORMATS: { value: "" | DisplayFormat; label: string }[] = [
-  { value: "", label: "Automatic" },
-  { value: "date_dd_mm_yyyy", label: "DD-MM-YYYY" },
-  { value: "date_yyyy_mm_dd", label: "YYYY-MM-DD" },
-  { value: "datetime_dd_mm_yyyy_hh_mm", label: "DD-MM-YYYY HH:mm" },
+  { value: "", label: "As in the source" },
+  { value: "date_dd_mm_yyyy", label: "Date 31-12-2026" },
+  { value: "date_yyyy_mm_dd", label: "Date 2026-12-31" },
+  { value: "datetime_dd_mm_yyyy_hh_mm", label: "Date and time" },
   { value: "number_integer", label: "Whole number" },
-  { value: "number_decimal_2", label: "2 decimal places" },
+  { value: "number_decimal_2", label: "Number with 2 decimals" },
   { value: "percent", label: "Percent" },
 ];
+const nodeTypes = { table: TableCard };
 
-export function DatasetCanvasBuilder({
+export function DatasetCanvasBuilder(props: {
+  connectionId: string;
+  definition: VisualDefinition | null;
+  onChange: (definition: VisualDefinition | null) => void;
+  allowEmpty?: boolean;
+}) {
+  return (
+    <ReactFlowProvider>
+      <CanvasBoard {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function CanvasBoard({
   connectionId,
   definition,
   onChange,
+  allowEmpty = false,
 }: {
   connectionId: string;
-  definition: VisualDefinition;
-  onChange: (definition: VisualDefinition) => void;
+  definition: VisualDefinition | null;
+  onChange: (definition: VisualDefinition | null) => void;
+  allowEmpty?: boolean;
 }) {
   const { t } = useI18n();
-  const past = useRef<VisualDefinition[]>([]);
-  const future = useRef<VisualDefinition[]>([]);
-  const [historyRevision, setHistoryRevision] = useState(0);
-  const [selection, setSelection] = useState<Selection>(canvasNodeId.output);
-  const stableDefinition = useMemo(() => ensureCanvas(definition), [definition]);
-  const [nodes, setNodes] = useState<CanvasNode[]>(() =>
-    buildNodes(stableDefinition, t),
-  );
-
-  useEffect(() => {
-    setNodes(buildNodes(stableDefinition, t));
-  }, [stableDefinition, t]);
+  const queryClient = useQueryClient();
+  const flow = useReactFlow();
+  const past = useRef<(VisualDefinition | null)[]>([]);
+  const future = useRef<(VisualDefinition | null)[]>([]);
+  const [, setHistoryRevision] = useState(0);
+  const [pending, setPending] = useState<PendingTable[]>([]);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [selectedLink, setSelectedLink] = useState<SelectedLink | null>(null);
+  const [adding, setAdding] = useState(false);
+  const stable = useMemo(() => (definition ? ensureCanvas(definition) : null), [definition]);
 
   const commit = useCallback(
-    (next: VisualDefinition, record = true) => {
+    (next: VisualDefinition | null, record = true) => {
       if (JSON.stringify(next) === JSON.stringify(definition)) return;
       if (record) {
         past.current.push(definition);
@@ -110,30 +150,26 @@ export function DatasetCanvasBuilder({
     },
     [definition, onChange],
   );
-
   const undo = useCallback(() => {
-    const previous = past.current.pop();
-    if (!previous) return;
+    if (!past.current.length) return;
     future.current.push(definition);
-    onChange(previous);
+    onChange(past.current.pop()!);
+    setSelectedLink(null);
     setHistoryRevision((value) => value + 1);
   }, [definition, onChange]);
-
   const redo = useCallback(() => {
-    const next = future.current.pop();
-    if (!next) return;
+    if (!future.current.length) return;
     past.current.push(definition);
-    onChange(next);
+    onChange(future.current.pop()!);
+    setSelectedLink(null);
     setHistoryRevision((value) => value + 1);
   }, [definition, onChange]);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z")
-        return;
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
       const target = event.target as HTMLElement | null;
-      if (target?.matches("input, textarea, select, [contenteditable='true']"))
-        return;
+      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
       event.preventDefault();
       if (event.shiftKey) redo();
       else undo();
@@ -142,270 +178,380 @@ export function DatasetCanvasBuilder({
     return () => window.removeEventListener("keydown", listener);
   }, [redo, undo]);
 
-  const edges = useMemo(() => buildEdges(stableDefinition, t), [stableDefinition, t]);
+  const freePosition = useCallback(() => {
+    const occupied = [
+      ...(stable?.canvas?.nodes ?? []),
+      ...pending.map((item) => ({ x: item.x, y: item.y })),
+    ];
+    if (!occupied.length) return { x: 40, y: 40 };
+    return { x: Math.max(...occupied.map((item) => item.x)) + 420, y: 40 };
+  }, [pending, stable]);
+
+  const loadTable = useCallback(
+    (schema: string, name: string) =>
+      queryClient.fetchQuery({
+        queryKey: queryKeys.catalogRelation(connectionId, schema, name),
+        queryFn: () => getCatalogRelation(connectionId, schema, name),
+      }),
+    [connectionId, queryClient],
+  );
+
+  const addTable = useCallback(
+    async (schema: string, name: string, position = freePosition()) => {
+      setNotice(null);
+      if ((stable?.source.relations.length ?? 0) + pending.length >= MAX_CANVAS_TABLES) {
+        setNotice({ tone: "error", text: t("A dataset can combine at most {count} tables.", { count: MAX_CANVAS_TABLES }) });
+        return;
+      }
+      setAdding(true);
+      try {
+        const detail = await loadTable(schema, name);
+        if (!stable) {
+          commit(definitionFromMainTable(detail, position));
+          setNotice({ tone: "info", text: t("“{table}” is the main table. Untick columns you do not need, or drag related tables next to it.", { table: name }) });
+          return;
+        }
+        const candidateId = randomUuid();
+        const suggestions = await suggestCatalogJoins(connectionId, [
+          ...stable.source.relations.map((item) => ({ id: item.id, schema: item.schema, name: item.name })),
+          { id: candidateId, schema, name },
+        ]).catch(() => []);
+        const link = suggestions
+          .map((suggestion) => suggestionLink(stable, suggestion, candidateId))
+          .find((item) => item !== null);
+        if (link) {
+          commit(attachTable(stable, { schema, name }, candidateId, link.linkedRelationId, link.conditions, position));
+          const linked = stable.source.relations.find((item) => item.id === link.linkedRelationId);
+          setNotice({
+            tone: "info",
+            text: t("Linked automatically: {left} → {right}. Click the line to change how rows are matched.", {
+              left: `${linked?.name}.${link.conditions[0].left_column}`,
+              right: `${name}.${link.conditions[0].right_column}`,
+            }),
+          });
+        } else {
+          setPending((current) => [...current, { key: candidateId, schema, name, ...position }]);
+          setNotice({ tone: "info", text: t("Now link “{table}”: drag from one of its columns to the matching column of another table.", { table: name }) });
+        }
+      } catch {
+        setNotice({ tone: "error", text: t("The table could not be loaded. Check the connection and try again.") });
+      } finally {
+        setAdding(false);
+      }
+    },
+    [commit, connectionId, freePosition, loadTable, pending.length, stable, t],
+  );
+
+  const keepAsPending = useCallback((removed: ReturnType<typeof detachTable>["removed"]) => {
+    if (!removed.length) return;
+    setPending((current) => [
+      ...current,
+      ...removed.map(({ relation, position }) => ({
+        key: relation.id,
+        schema: relation.schema,
+        name: relation.name,
+        ...position,
+      })),
+    ]);
+    setNotice({ tone: "info", text: t("Unlinked tables stay on the board with a dashed border until you link them again.") });
+  }, [t]);
+
+  const removeTable = useCallback(
+    (nodeId: string) => {
+      setSelectedLink(null);
+      if (nodeId.startsWith("pending:")) {
+        setPending((current) => current.filter((item) => `pending:${item.key}` !== nodeId));
+        return;
+      }
+      if (!stable) return;
+      const relationId = nodeId.slice("relation:".length);
+      if (relationId === stable.source.relations[0]?.id) {
+        if (stable.source.relations.length > 1) {
+          setNotice({ tone: "error", text: t("Remove the linked tables first: the main table holds the dataset together.") });
+        } else if (allowEmpty) {
+          commit(null);
+        } else {
+          setNotice({ tone: "error", text: t("A dataset needs at least one table.") });
+        }
+        return;
+      }
+      const { definition: next, removed } = detachTable(stable, relationId);
+      commit(next);
+      keepAsPending(removed.filter((item) => item.relation.id !== relationId));
+    },
+    [allowEmpty, commit, keepAsPending, stable, t],
+  );
+
+  const toggleColumn = useCallback(
+    (relationId: string, column: string, selected: boolean) => {
+      if (!stable) return;
+      commit(
+        selected
+          ? appendVisualField(stable, relationId, column)
+          : {
+              ...stable,
+              fields: stable.fields.filter(
+                (field) => !(field.source.relation_id === relationId && field.source.column === column),
+              ),
+            },
+      );
+    },
+    [commit, stable],
+  );
+  const selectAll = useCallback(
+    (relationId: string, columns: string[], selected: boolean) => {
+      if (!stable) return;
+      commit(
+        selected
+          ? columns.reduce((current, column) => appendVisualField(current, relationId, column), stable)
+          : { ...stable, fields: stable.fields.filter((field) => field.source.relation_id !== relationId) },
+      );
+    },
+    [commit, stable],
+  );
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      setNotice(null);
+      const sourceColumn = handleColumn(connection.sourceHandle);
+      const targetColumn = handleColumn(connection.targetHandle);
+      if (!sourceColumn || !targetColumn || connection.source === connection.target) return;
+      const ends = [
+        { node: connection.source, column: sourceColumn },
+        { node: connection.target, column: targetColumn },
+      ];
+      const tableOf = (nodeId: string) =>
+        nodeId.startsWith("pending:")
+          ? pending.find((item) => `pending:${item.key}` === nodeId)
+          : stable?.source.relations.find((item) => canvasNodeId.relation(item.id) === nodeId);
+      const types = ends.map((end) => {
+        const table = tableOf(end.node);
+        const detail = table
+          ? queryClient.getQueryData<CatalogRelation>(queryKeys.catalogRelation(connectionId, table.schema, table.name))
+          : undefined;
+        return detail?.columns.find((column) => column.name === end.column)?.data_type;
+      });
+      if (types[0] && types[1] && !catalogTypesCompatible(types[0], types[1])) {
+        setNotice({ tone: "error", text: t("These columns hold different kinds of values ({left} and {right}) and cannot be matched.", { left: t(friendlyType(types[0])), right: t(friendlyType(types[1])) }) });
+        return;
+      }
+      const pendingEnds = ends.filter((end) => end.node.startsWith("pending:"));
+      if (!stable || pendingEnds.length === 2) {
+        setNotice({ tone: "error", text: t("Link one of these tables to the dataset first, then link the other one to it.") });
+        return;
+      }
+      if (pendingEnds.length === 1) {
+        const loose = pendingEnds[0];
+        const anchored = ends.find((end) => end !== loose)!;
+        const table = pending.find((item) => `pending:${item.key}` === loose.node)!;
+        commit(
+          attachTable(
+            stable,
+            table,
+            table.key,
+            anchored.node.slice("relation:".length),
+            [{ left_column: anchored.column, right_column: loose.column }],
+            { x: table.x, y: table.y },
+          ),
+        );
+        setPending((current) => current.filter((item) => item.key !== table.key));
+        setNotice({ tone: "info", text: t("“{table}” is linked. Tick the columns you want to keep from it.", { table: table.name }) });
+        return;
+      }
+      const first = ends[0].node.slice("relation:".length);
+      const second = ends[1].node.slice("relation:".length);
+      const join = directJoin(stable, first, second);
+      if (!join) {
+        setNotice({ tone: "error", text: t("These tables are already connected through other tables. Each table can be linked only once.") });
+        return;
+      }
+      const leftEnd = join.left_relation_id === first ? ends[0] : ends[1];
+      const rightEnd = leftEnd === ends[0] ? ends[1] : ends[0];
+      commit(addJoinCondition(stable, join.id, { left_column: leftEnd.column, right_column: rightEnd.column }));
+      setNotice({ tone: "info", text: t("Added another matching column to this link. Rows must match on all linked columns.") });
+    },
+    [commit, connectionId, pending, queryClient, stable, t],
+  );
+
+  const removeLink = useCallback(
+    (link: SelectedLink) => {
+      if (!stable) return;
+      const { definition: next, removed } = removeJoinCondition(stable, link.joinId, link.conditionIndex);
+      commit(next);
+      keepAsPending(removed);
+      setSelectedLink(null);
+    },
+    [commit, keepAsPending, stable],
+  );
+
+  const derivedNodes = useMemo(
+    () => buildNodes(connectionId, stable, pending, { toggleColumn, selectAll, removeTable }),
+    [connectionId, pending, removeTable, selectAll, stable, toggleColumn],
+  );
+  const [nodes, setNodes] = useState<TableNode[]>(derivedNodes);
+  useEffect(() => setNodes(derivedNodes), [derivedNodes]);
+  const edges = useMemo(() => buildEdges(stable, selectedLink, t), [selectedLink, stable, t]);
+
   const onNodesChange = useCallback(
-    (changes: NodeChange<CanvasNode>[]) =>
-      setNodes((current) => applyNodeChanges(changes, current)),
+    (changes: NodeChange<TableNode>[]) =>
+      setNodes((current) => applyNodeChanges(changes.filter((change) => change.type !== "remove"), current)),
     [],
   );
   const onNodeDragStop = useCallback(
-    (_event: MouseEvent | TouchEvent, moved: CanvasNode) => {
-      commit(
-        updateCanvasNodePositions(stableDefinition, [
-          { id: moved.id, x: moved.position.x, y: moved.position.y },
-        ]),
-      );
+    (_event: unknown, moved: TableNode) => {
+      if (moved.id.startsWith("pending:")) {
+        setPending((current) =>
+          current.map((item) => (`pending:${item.key}` === moved.id ? { ...item, ...moved.position } : item)),
+        );
+      } else if (stable) {
+        commit(updateCanvasNodePositions(stable, [{ id: moved.id, ...moved.position }]));
+      }
     },
-    [commit, stableDefinition],
+    [commit, stable],
   );
   const onMoveEnd = useCallback(
     (event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
-      if (!definition.canvas && event === null) return;
-      const current = stableDefinition.canvas?.viewport ?? { x: 0, y: 0, zoom: 1 };
+      if (!stable || (!definition?.canvas && event === null)) return;
+      const current = stable.canvas?.viewport ?? { x: 0, y: 0, zoom: 1 };
       if (
         Math.abs(current.x - viewport.x) < 0.5 &&
         Math.abs(current.y - viewport.y) < 0.5 &&
         Math.abs(current.zoom - viewport.zoom) < 0.001
       )
         return;
-      commit(updateCanvasViewport(stableDefinition, viewport), false);
+      commit(updateCanvasViewport(stable, viewport), false);
     },
-    [commit, stableDefinition],
-  );
-  const removeJoin = useCallback(
-    (joinId: string) => {
-      commit(removeJoinSubtree(stableDefinition, joinId));
-      setSelection(canvasNodeId.output);
-    },
-    [commit, stableDefinition],
+    [commit, definition?.canvas, stable],
   );
 
+  const linkedJoin = selectedLink
+    ? stable?.joins?.find((join) => join.id === selectedLink.joinId)
+    : undefined;
+  const isEmpty = !stable && pending.length === 0;
+
   return (
-    <div className="dataset-canvas-shell" data-history={historyRevision}>
-      <header className="canvas-toolbar">
+    <div className="table-canvas">
+      <header className="table-canvas-toolbar">
         <div>
-          <span className="canvas-live-dot" />
-          <strong>{t("Canvas Builder")}</strong>
-          <small>{t("Drag nodes to shape the model. The same safe JSON draft stays authoritative.")}</small>
+          <strong>{t("Dataset builder")}</strong>
+          <small>{t("Drag tables from the list onto the board, then draw a line between matching columns to link them.")}</small>
         </div>
-        <nav aria-label={t("Canvas actions")}>
-          <button
-            className="icon-button"
-            type="button"
-            disabled={!past.current.length}
-            onClick={undo}
-            aria-label={t("Undo")}
-            title={`${t("Undo")} · Ctrl/⌘ Z`}
-          >
+        <nav aria-label={t("Builder actions")}>
+          <button className="icon-button" type="button" disabled={!past.current.length} onClick={undo} aria-label={t("Undo")} title={`${t("Undo")} · Ctrl/⌘ Z`}>
             <Undo2 />
           </button>
-          <button
-            className="icon-button"
-            type="button"
-            disabled={!future.current.length}
-            onClick={redo}
-            aria-label={t("Redo")}
-            title={`${t("Redo")} · Ctrl/⌘ Shift Z`}
-          >
+          <button className="icon-button" type="button" disabled={!future.current.length} onClick={redo} aria-label={t("Redo")} title={`${t("Redo")} · Ctrl/⌘ Shift Z`}>
             <Redo2 />
           </button>
-          <button
-            className="button secondary small"
-            type="button"
-            onClick={() => commit(autoLayoutCanvas(stableDefinition))}
-          >
-            <WandSparkles /> {t("Auto layout")}
-          </button>
-          <button
-            className="button primary small"
-            type="button"
-            disabled={stableDefinition.source.relations.length >= 10}
-            onClick={() => setSelection("add-table")}
-          >
-            <Plus /> {t("Add table")}
+          <button className="button secondary small" type="button" disabled={!stable} onClick={() => stable && commit(autoLayoutCanvas({ ...stable, canvas: undefined }))}>
+            <WandSparkles /> {t("Tidy up")}
           </button>
         </nav>
       </header>
-      <div className="dataset-canvas-workspace">
-        <div className="dataset-flow" aria-label={t("Dataset node canvas")}>
-          <ReactFlow<CanvasNode>
+      <div className="table-canvas-body">
+        <TableLibrary
+          connectionId={connectionId}
+          usedTables={[...(stable?.source.relations ?? []), ...pending].map((item) => `${item.schema}.${item.name}`)}
+          busy={adding}
+          onAdd={(schema, name) => void addTable(schema, name)}
+        />
+        <div
+          className="table-canvas-board"
+          aria-label={t("Dataset board")}
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes(TABLE_MIME)) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDrop={(event) => {
+            const raw = event.dataTransfer.getData(TABLE_MIME);
+            if (!raw) return;
+            event.preventDefault();
+            const table = JSON.parse(raw) as { schema: string; name: string };
+            void addTable(table.schema, table.name, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+          }}
+        >
+          <ReactFlow<TableNode>
             nodes={nodes}
             edges={edges}
+            nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onNodeDragStop={onNodeDragStop}
             onMoveEnd={onMoveEnd}
-            onNodeClick={(_event, node) => setSelection(node.id)}
+            onConnect={onConnect}
             onEdgeClick={(_event, edge) => {
-              const joinId = edge.data?.joinId;
-              if (typeof joinId === "string") setSelection(canvasNodeId.join(joinId));
+              const data = edge.data as SelectedLink | undefined;
+              if (data) setSelectedLink(data);
             }}
             onEdgesDelete={(deleted) => {
-              const joinId = deleted.find((edge) => edge.data?.joinId)?.data?.joinId;
-              if (typeof joinId === "string") removeJoin(joinId);
+              const data = deleted[0]?.data as SelectedLink | undefined;
+              if (data) removeLink(data);
             }}
-            defaultViewport={stableDefinition.canvas?.viewport ?? { x: 0, y: 0, zoom: 1 }}
+            onPaneClick={() => setSelectedLink(null)}
+            connectionMode={ConnectionMode.Loose}
+            // The mouse wheel keeps scrolling the page; zoom uses the controls or a pinch.
+            zoomOnScroll={false}
+            preventScrolling={false}
+            defaultViewport={stable?.canvas?.viewport ?? { x: 0, y: 0, zoom: 0.9 }}
+            fitView={Boolean(definition && !definition.canvas)}
+            fitViewOptions={{ padding: 0.2 }}
             minZoom={0.2}
-            maxZoom={2}
-            fitView={!definition.canvas}
-            fitViewOptions={{ padding: 0.18 }}
+            maxZoom={1.6}
             deleteKeyCode={["Backspace", "Delete"]}
-            nodesConnectable={false}
             nodesFocusable
             edgesFocusable
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} />
-            <MiniMap
-              pannable
-              zoomable
-              nodeColor={(node) => nodeColor(String(node.data?.kind ?? ""))}
-              maskColor="rgba(245, 245, 242, .72)"
-            />
+            <MiniMap pannable zoomable maskColor="rgba(245, 245, 242, .72)" />
             <Controls showInteractive={false} />
           </ReactFlow>
+          {isEmpty && (
+            <div className="table-canvas-empty">
+              <Table2 />
+              <strong>{t("Drag the first table here")}</strong>
+              <p>{t("It becomes the main table: every row of the dataset comes from it.")}</p>
+            </div>
+          )}
+          {selectedLink && linkedJoin && stable && (
+            <LinkPanel
+              definition={stable}
+              joinId={linkedJoin.id}
+              conditionIndex={selectedLink.conditionIndex}
+              onType={(type) => commit(setJoinType(stable, linkedJoin.id, type))}
+              onRemove={() => removeLink(selectedLink)}
+              onClose={() => setSelectedLink(null)}
+            />
+          )}
+          {notice && (
+            <div className={`table-canvas-notice ${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>
+              <span>{notice.text}</span>
+              <button className="icon-button" type="button" aria-label={t("Dismiss")} onClick={() => setNotice(null)}>
+                <X />
+              </button>
+            </div>
+          )}
         </div>
-        <aside className="canvas-inspector" aria-label={t("Selected node settings")}>
-          <CanvasInspector
-            connectionId={connectionId}
-            definition={stableDefinition}
-            selection={selection}
-            onSelect={setSelection}
-            onChange={commit}
-            onRemoveJoin={removeJoin}
-          />
-        </aside>
       </div>
+      {stable && <ResultColumns definition={stable} onChange={commit} />}
     </div>
   );
 }
 
-function CanvasInspector({
+function TableLibrary({
   connectionId,
-  definition,
-  selection,
-  onSelect,
-  onChange,
-  onRemoveJoin,
-}: {
-  connectionId: string;
-  definition: VisualDefinition;
-  selection: Selection;
-  onSelect: (selection: Selection) => void;
-  onChange: (definition: VisualDefinition) => void;
-  onRemoveJoin: (joinId: string) => void;
-}) {
-  const { t } = useI18n();
-  if (selection === "add-table")
-    return (
-      <AddTableInspector
-        connectionId={connectionId}
-        definition={definition}
-        onCancel={() => onSelect(canvasNodeId.output)}
-        onAdd={(next) => {
-          onChange(next);
-          const latest = next.source.relations.at(-1);
-          if (latest) onSelect(canvasNodeId.relation(latest.id));
-        }}
-      />
-    );
-  if (selection === canvasNodeId.select)
-    return (
-      <SelectColumnsInspector
-        connectionId={connectionId}
-        definition={definition}
-        onChange={onChange}
-      />
-    );
-  if (selection === canvasNodeId.format)
-    return <FormatInspector definition={definition} onChange={onChange} />;
-  if (selection === canvasNodeId.output)
-    return (
-      <InspectorFrame icon={<Save />} title={t("Dataset Output")} eyebrow={t("Final node")}>
-        <div className="canvas-output-summary">
-          <strong>{t("Ready for the governed workflow")}</strong>
-          <p>{t("Save the draft, then validate, preview, and publish it with the existing Dataset Studio steps.")}</p>
-          <dl>
-            <div><dt>{t("Tables")}</dt><dd>{definition.source.relations.length}</dd></div>
-            <div><dt>{t("Joins")}</dt><dd>{definition.joins?.length ?? 0}</dd></div>
-            <div><dt>{t("Output fields")}</dt><dd>{definition.fields.length}</dd></div>
-          </dl>
-        </div>
-      </InspectorFrame>
-    );
-  if (selection.startsWith("relation:")) {
-    const relationId = selection.slice("relation:".length);
-    const relation = definition.source.relations.find((item) => item.id === relationId);
-    if (!relation) return null;
-    const incoming = definition.joins?.find((join) => join.right_relation_id === relation.id);
-    return (
-      <InspectorFrame icon={<Database />} title={relation.alias} eyebrow={t("PostgreSQL Table")}>
-        <p className="canvas-source-path">{relation.schema}.{relation.name}</p>
-        <label>
-          <span>{t("Relation alias")}</span>
-          <input
-            value={relation.alias}
-            onChange={(event) =>
-              onChange({
-                ...definition,
-                source: {
-                  relations: definition.source.relations.map((item) =>
-                    item.id === relation.id ? { ...item, alias: event.target.value } : item,
-                  ),
-                },
-              })
-            }
-          />
-        </label>
-        <p className="canvas-inspector-hint">
-          {t("This node reads catalog metadata only while editing. Rows are queried only by preview or publication.")}
-        </p>
-        {incoming && (
-          <button className="button danger wide" type="button" onClick={() => onRemoveJoin(incoming.id)}>
-            <Trash2 /> {t("Remove table and downstream joins")}
-          </button>
-        )}
-      </InspectorFrame>
-    );
-  }
-  if (selection.startsWith("join:")) {
-    const joinId = selection.slice("join:".length);
-    const join = definition.joins?.find((item) => item.id === joinId);
-    return join ? (
-      <JoinInspector
-        connectionId={connectionId}
-        definition={definition}
-        join={join}
-        onChange={onChange}
-        onRemove={() => onRemoveJoin(join.id)}
-      />
-    ) : null;
-  }
-  return (
-    <InspectorFrame icon={<Settings2 />} title={t("Node settings")} eyebrow={t("Canvas")}>
-      <p>{t("Select a node to configure it.")}</p>
-    </InspectorFrame>
-  );
-}
-
-function AddTableInspector({
-  connectionId,
-  definition,
+  usedTables,
+  busy,
   onAdd,
-  onCancel,
 }: {
   connectionId: string;
-  definition: VisualDefinition;
-  onAdd: (definition: VisualDefinition) => void;
-  onCancel: () => void;
+  usedTables: string[];
+  busy: boolean;
+  onAdd: (schema: string, name: string) => void;
 }) {
   const { t } = useI18n();
   const [schema, setSchema] = useState("");
-  const [relationName, setRelationName] = useState("");
-  const [parentId, setParentId] = useState(definition.source.relations[0]?.id ?? "");
-  const [leftColumn, setLeftColumn] = useState("");
-  const [rightColumn, setRightColumn] = useState("");
-  const [suggestions, setSuggestions] = useState<SuggestedJoin[]>([]);
-  const [finding, setFinding] = useState("");
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [search, setSearch] = useState("");
   const schemas = useQuery({
     queryKey: queryKeys.catalogSchemas(connectionId),
     queryFn: () => listCatalogSchemas(connectionId),
@@ -415,238 +561,351 @@ function AddTableInspector({
     queryFn: () => listCatalogRelations(connectionId, schema),
     enabled: Boolean(schema),
   });
-  const detail = useQuery({
-    queryKey: queryKeys.catalogRelation(connectionId, schema, relationName),
-    queryFn: () => getCatalogRelation(connectionId, schema, relationName),
-    enabled: Boolean(schema && relationName),
-  });
-  const parent = definition.source.relations.find((item) => item.id === parentId);
-  const parentDetail = useQuery({
-    queryKey: queryKeys.catalogRelation(
-      connectionId,
-      parent?.schema ?? "",
-      parent?.name ?? "",
-    ),
-    queryFn: () => getCatalogRelation(connectionId, parent!.schema, parent!.name),
-    enabled: Boolean(parent),
-  });
   useEffect(() => {
-    if (!schema && schemas.data?.data[0]) setSchema(schemas.data.data[0].name);
+    const available = schemas.data?.data ?? [];
+    if (!schema && available.length)
+      setSchema((available.find((item) => item.name === "public") ?? available[0]).name);
   }, [schema, schemas.data]);
-  useEffect(() => {
-    setRelationName("");
-    setSuggestions([]);
-  }, [schema]);
-  useEffect(() => {
-    setSuggestions([]);
-    setFinding("");
-  }, [relationName]);
-  const selectedLeft = parentDetail.data?.columns.find((column) => column.name === leftColumn);
-  const compatibleRight = detail.data?.columns.filter(
-    (column) => !selectedLeft || catalogTypesCompatible(selectedLeft.data_type, column.data_type),
+  const needle = search.trim().toLocaleLowerCase();
+  const visible = (relations.data?.data ?? []).filter((item) =>
+    item.name.toLocaleLowerCase().includes(needle),
   );
-  async function findSuggestions() {
-    if (!detail.data) return;
-    setFinding("");
-    setLoadingSuggestions(true);
-    const candidateId = randomUuid();
-    try {
-      const found = await suggestCatalogJoins(connectionId, [
-        ...definition.source.relations.map((item) => ({
-          id: item.id,
-          schema: item.schema,
-          name: item.name,
-        })),
-        { id: candidateId, schema: detail.data.schema_name, name: detail.data.name },
-      ]);
-      const mapped = found.map((item) => ({ ...item, candidateId }));
-      setSuggestions(mapped);
-      if (!mapped.length) setFinding(t("No visible foreign key was found. Configure a manual compatible-column join below."));
-    } catch (error) {
-      setFinding(problemMessage(error));
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  }
   return (
-    <InspectorFrame icon={<Plus />} title={t("Add PostgreSQL table")} eyebrow={t("New source node")}>
-      <label><span>{t("Schema")}</span><select value={schema} onChange={(event) => setSchema(event.target.value)}><option value="">{t("Select schema")}</option>{schemas.data?.data.map((item) => <option key={item.name}>{item.name}</option>)}</select></label>
-      <label><span>{t("Table or view")}</span><select value={relationName} onChange={(event) => setRelationName(event.target.value)}><option value="">{t("Select relation")}</option>{relations.data?.data.map((item) => <option key={item.name} value={item.name}>{item.name} · {item.kind}</option>)}</select></label>
-      {detail.data && (
-        <>
-          <div className="canvas-relation-preview">
-            <Database />
-            <div><strong>{detail.data.schema_name}.{detail.data.name}</strong><small>{t("{count} columns", { count: detail.data.columns.length })}</small></div>
-          </div>
-          <button className="button primary wide" type="button" disabled={loadingSuggestions} onClick={() => void findSuggestions()}>
-            {loadingSuggestions ? <LoaderCircle className="spin" /> : <Sparkles />} {t("Find foreign-key joins")}
-          </button>
-        </>
+    <aside className="table-library" aria-label={t("Tables")}>
+      <header>
+        <strong>{t("Tables")}</strong>
+        {busy && <LoaderCircle className="spin" aria-label={t("Adding table")} />}
+      </header>
+      {(schemas.data?.data.length ?? 0) > 1 && (
+        <label>
+          <span>{t("Table group")}</span>
+          <select value={schema} onChange={(event) => setSchema(event.target.value)}>
+            {schemas.data?.data.map((item) => (
+              <option key={item.name} value={item.name}>{item.name}</option>
+            ))}
+          </select>
+        </label>
       )}
-      {suggestions.map((suggestion) => (
-        <button
-          className="canvas-suggestion"
-          type="button"
-          key={`${suggestion.foreign_key_name}:${suggestion.source_relation_id}`}
-          onClick={() => onAdd(appendRelationFromSuggestion(definition, detail.data!, suggestion, suggestion.candidateId))}
-        >
-          <GitBranch />
-          <span><strong>{suggestion.foreign_key_name}</strong><small>{suggestion.conditions.map((item) => `${item.source_column} = ${item.target_column}`).join(", ")}</small></span>
-        </button>
-      ))}
-      {finding && <InlineError message={finding} />}
-      {detail.data && (
-        <details className="manual-join" open={!suggestions.length && Boolean(finding)}>
-          <summary>{t("Configure manual join")}</summary>
-          <label><span>{t("Existing table")}</span><select value={parentId} onChange={(event) => { setParentId(event.target.value); setLeftColumn(""); setRightColumn(""); }}>{definition.source.relations.map((item) => <option value={item.id} key={item.id}>{item.alias}</option>)}</select></label>
-          <label><span>{t("Existing column")}</span><select value={leftColumn} onChange={(event) => { setLeftColumn(event.target.value); setRightColumn(""); }}><option value="">{t("Select column")}</option>{parentDetail.data?.columns.map((column) => <option value={column.name} key={column.name}>{column.name} · {column.data_type}</option>)}</select></label>
-          <label><span>{t("New table column")}</span><select value={rightColumn} onChange={(event) => setRightColumn(event.target.value)} disabled={!leftColumn}><option value="">{t("Select compatible column")}</option>{compatibleRight?.map((column) => <option value={column.name} key={column.name}>{column.name} · {column.data_type}</option>)}</select></label>
-          <button className="button secondary wide" type="button" disabled={!leftColumn || !rightColumn} onClick={() => onAdd(appendManualJoinedRelation(definition, detail.data!, parentId, leftColumn, rightColumn))}><GitBranch /> {t("Add manual LEFT JOIN")}</button>
-        </details>
+      <label className="table-library-search">
+        <Search />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Find a table")} aria-label={t("Find a table")} />
+      </label>
+      {(schemas.isError || relations.isError) && (
+        <p className="table-library-error">{t("The list of tables could not be loaded.")}</p>
       )}
-      <button className="button ghost wide" type="button" onClick={onCancel}>{t("Cancel")}</button>
-    </InspectorFrame>
+      <ul>
+        {visible.map((item) => {
+          const used = usedTables.includes(`${schema}.${item.name}`);
+          return (
+            <li
+              key={item.name}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData(TABLE_MIME, JSON.stringify({ schema, name: item.name }));
+                event.dataTransfer.effectAllowed = "copy";
+              }}
+              className={used ? "used" : ""}
+              title={t("Drag onto the board")}
+            >
+              <Table2 />
+              <span>
+                <strong>{item.name}</strong>
+                {used && <small>{t("on the board")}</small>}
+              </span>
+              <button className="icon-button" type="button" disabled={busy} aria-label={t("Add {table} to the board", { table: item.name })} onClick={() => onAdd(schema, item.name)}>
+                <Plus />
+              </button>
+            </li>
+          );
+        })}
+        {relations.isSuccess && !visible.length && <li className="table-library-none">{t("No tables found")}</li>}
+      </ul>
+    </aside>
   );
 }
 
-function JoinInspector({
-  connectionId,
+function TableCard({ data }: NodeProps<TableNode>) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const detail = useQuery({
+    queryKey: queryKeys.catalogRelation(data.connectionId, data.schema, data.name),
+    queryFn: () => getCatalogRelation(data.connectionId, data.schema, data.name),
+  });
+  const columns = detail.data?.columns ?? [];
+  const selected = new Set(data.selectedColumns);
+  const linked = new Set(data.linkedColumns);
+  const visible =
+    expanded || columns.length <= COLLAPSED_COLUMNS
+      ? columns
+      : columns.filter(
+          (column, index) => index < COLLAPSED_COLUMNS - 2 || selected.has(column.name) || linked.has(column.name),
+        );
+  const allSelected = columns.length > 0 && columns.every((column) => selected.has(column.name));
+  return (
+    <div className={`table-card${data.isPending ? " pending" : ""}${data.isMain ? " main" : ""}`}>
+      <header>
+        <span className="table-card-icon">{data.isMain ? <Crown /> : data.isPending ? <Link2 /> : <Table2 />}</span>
+        <div>
+          <strong title={`${data.schema}.${data.name}`}>{data.name}</strong>
+          <small>
+            {data.isMain
+              ? t("Main table")
+              : data.isPending
+                ? t("Not linked yet")
+                : t("{selected} of {total} columns", { selected: selected.size, total: columns.length })}
+          </small>
+        </div>
+        <button className="icon-button nodrag" type="button" aria-label={t("Remove {table} from the board", { table: data.name })} onClick={data.onRemove}>
+          <Trash2 />
+        </button>
+      </header>
+      {data.isPending && <p className="table-card-hint">{t("Drag from a column here to the matching column of another table.")}</p>}
+      {!data.isPending && columns.length > 0 && (
+        <button className="table-card-all nodrag" type="button" onClick={() => data.onSelectAll(columns.map((column) => column.name), !allSelected)}>
+          {allSelected ? t("Clear all") : t("Select all")}
+        </button>
+      )}
+      {detail.isPending && <p className="table-card-hint">{t("Loading columns…")}</p>}
+      {detail.isError && <p className="table-card-hint error">{t("Columns could not be loaded.")}</p>}
+      <ul>
+        {visible.map((column) => (
+          <li key={column.name} className={linked.has(column.name) ? "linked" : ""}>
+            <Handle type="source" position={Position.Left} id={`in:${encodeURIComponent(column.name)}`} className="column-handle" />
+            <label className="nodrag">
+              <input
+                type="checkbox"
+                aria-label={column.name}
+                checked={selected.has(column.name)}
+                disabled={data.isPending}
+                onChange={(event) => data.onToggleColumn(column.name, event.target.checked)}
+              />
+              <span>{column.name}</span>
+            </label>
+            <small className={`type-${friendlyType(column.data_type).replace("/", "")}`}>{t(friendlyType(column.data_type))}</small>
+            <Handle type="source" position={Position.Right} id={`out:${encodeURIComponent(column.name)}`} className="column-handle" />
+          </li>
+        ))}
+      </ul>
+      {!expanded && visible.length < columns.length && (
+        <button className="table-card-more nodrag" type="button" onClick={() => setExpanded(true)}>
+          {t("Show all {count} columns", { count: columns.length })}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LinkPanel({
   definition,
-  join,
-  onChange,
+  joinId,
+  conditionIndex,
+  onType,
   onRemove,
+  onClose,
 }: {
-  connectionId: string;
   definition: VisualDefinition;
-  join: NonNullable<VisualDefinition["joins"]>[number];
-  onChange: (definition: VisualDefinition) => void;
+  joinId: string;
+  conditionIndex: number;
+  onType: (type: JoinType) => void;
   onRemove: () => void;
+  onClose: () => void;
 }) {
   const { t } = useI18n();
+  const join = definition.joins!.find((item) => item.id === joinId)!;
   const left = definition.source.relations.find((item) => item.id === join.left_relation_id)!;
   const right = definition.source.relations.find((item) => item.id === join.right_relation_id)!;
-  const leftDetail = useQuery({ queryKey: queryKeys.catalogRelation(connectionId, left.schema, left.name), queryFn: () => getCatalogRelation(connectionId, left.schema, left.name) });
-  const rightDetail = useQuery({ queryKey: queryKeys.catalogRelation(connectionId, right.schema, right.name), queryFn: () => getCatalogRelation(connectionId, right.schema, right.name) });
-  function replaceJoin(next: typeof join) {
-    onChange({ ...definition, joins: definition.joins?.map((item) => item.id === join.id ? next : item) });
-  }
+  const condition = join.conditions[conditionIndex] ?? join.conditions[0];
   return (
-    <InspectorFrame icon={<GitBranch />} title={`${left.alias} → ${right.alias}`} eyebrow={t("Join node")}>
-      <label><span>{t("Join type")}</span><select value={join.type} onChange={(event) => replaceJoin({ ...join, type: event.target.value as "inner" | "left" })}><option value="left">LEFT JOIN</option><option value="inner">INNER JOIN</option></select></label>
-      <div className="canvas-condition-list">
-        {join.conditions.map((condition, index) => (
-          <div className="canvas-condition" key={`${index}:${condition.left_column}:${condition.right_column}`}>
-            <label><span>{left.alias}</span><select value={condition.left_column} onChange={(event) => replaceJoin({ ...join, conditions: join.conditions.map((item, itemIndex) => itemIndex === index ? { ...item, left_column: event.target.value } : item) })}>{leftDetail.data?.columns.map((column) => <option key={column.name}>{column.name}</option>)}</select></label>
-            <span>=</span>
-            <label><span>{right.alias}</span><select value={condition.right_column} onChange={(event) => replaceJoin({ ...join, conditions: join.conditions.map((item, itemIndex) => itemIndex === index ? { ...item, right_column: event.target.value } : item) })}>{rightDetail.data?.columns.map((column) => <option key={column.name}>{column.name}</option>)}</select></label>
-            {join.conditions.length > 1 && <button className="icon-button" type="button" aria-label={t("Remove condition")} onClick={() => replaceJoin({ ...join, conditions: join.conditions.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 /></button>}
-          </div>
-        ))}
-      </div>
-      {join.conditions.length < 8 && leftDetail.data?.columns[0] && rightDetail.data?.columns[0] && (
-        <button className="button secondary wide" type="button" onClick={() => replaceJoin({ ...join, conditions: [...join.conditions, { left_column: leftDetail.data!.columns[0].name, right_column: rightDetail.data!.columns[0].name }] })}><Plus /> {t("Add condition")}</button>
-      )}
-      <p className="canvas-inspector-hint">{t("Validation checks that every join column still exists and that the complete graph remains authorized.")}</p>
-      <button className="button danger wide" type="button" onClick={onRemove}><Trash2 /> {t("Delete join edge")}</button>
-    </InspectorFrame>
-  );
-}
-
-function SelectColumnsInspector({ connectionId, definition, onChange }: { connectionId: string; definition: VisualDefinition; onChange: (definition: VisualDefinition) => void }) {
-  const { t } = useI18n();
-  return (
-    <InspectorFrame icon={<ListChecks />} title={t("Select Columns")} eyebrow={t("Projection node")}>
-      <p className="canvas-inspector-hint">{t("Choose detailed source columns. Aggregations belong to charts, not datasets.")}</p>
-      {definition.source.relations.map((relation) => <CanvasRelationColumns key={relation.id} connectionId={connectionId} relation={relation} definition={definition} onChange={onChange} />)}
-    </InspectorFrame>
-  );
-}
-
-function CanvasRelationColumns({ connectionId, relation, definition, onChange }: { connectionId: string; relation: VisualDefinition["source"]["relations"][number]; definition: VisualDefinition; onChange: (definition: VisualDefinition) => void }) {
-  const { t } = useI18n();
-  const detail = useQuery({ queryKey: queryKeys.catalogRelation(connectionId, relation.schema, relation.name), queryFn: () => getCatalogRelation(connectionId, relation.schema, relation.name) });
-  const selected = new Set(definition.fields.filter((field) => field.source.relation_id === relation.id).map((field) => field.source.column));
-  return (
-    <section className="canvas-column-group">
-      <header><strong>{relation.alias}</strong><small>{t("{count} selected", { count: selected.size })}</small></header>
-      {detail.isError && <InlineError message={problemMessage(detail.error)} />}
-      {detail.data?.columns.map((column) => <label key={column.name}><input type="checkbox" checked={selected.has(column.name)} onChange={(event) => onChange(event.target.checked ? appendVisualField(definition, relation.id, column.name) : { ...definition, fields: definition.fields.filter((field) => !(field.source.relation_id === relation.id && field.source.column === column.name)) })} /><span><strong>{column.name}</strong><small>{column.data_type}</small></span></label>)}
+    <section className="link-panel nodrag" aria-label={t("Link settings")}>
+      <header>
+        <Link2 />
+        <strong>{left.name} ↔ {right.name}</strong>
+        <button className="icon-button" type="button" aria-label={t("Close")} onClick={onClose}>
+          <X />
+        </button>
+      </header>
+      <p className="link-panel-columns">
+        {t("Rows match when {left} equals {right}.", { left: `${left.name}.${condition.left_column}`, right: `${right.name}.${condition.right_column}` })}
+      </p>
+      <fieldset>
+        <legend>{t("Which rows to keep?")}</legend>
+        <label>
+          <input type="radio" name={`link-${join.id}`} checked={join.type === "left"} onChange={() => onType("left")} />
+          <span>
+            <strong>{t("All rows from “{table}”", { table: left.name })}</strong>
+            <small>{t("Rows without a match in “{other}” are kept with empty values.", { other: right.name })}</small>
+          </span>
+        </label>
+        <label>
+          <input type="radio" name={`link-${join.id}`} checked={join.type === "inner"} onChange={() => onType("inner")} />
+          <span>
+            <strong>{t("Only rows that match")}</strong>
+            <small>{t("Rows without a pair in both tables are left out.")}</small>
+          </span>
+        </label>
+      </fieldset>
+      <button className="button danger small" type="button" onClick={onRemove}>
+        <Trash2 /> {join.conditions.length > 1 ? t("Remove this matching column") : t("Unlink “{table}”", { table: right.name })}
+      </button>
     </section>
   );
 }
 
-function FormatInspector({ definition, onChange }: { definition: VisualDefinition; onChange: (definition: VisualDefinition) => void }) {
+function ResultColumns({
+  definition,
+  onChange,
+}: {
+  definition: VisualDefinition;
+  onChange: (definition: VisualDefinition) => void;
+}) {
   const { t } = useI18n();
+  const [editing, setEditing] = useState<string | null>(null);
+  const tableName = new Map(definition.source.relations.map((item) => [item.id, item.name]));
+  const field = definition.fields.find((item) => item.id === editing);
+  const update = (id: string, change: (item: VisualDefinition["fields"][number]) => VisualDefinition["fields"][number]) =>
+    onChange({ ...definition, fields: definition.fields.map((item) => (item.id === id ? change(item) : item)) });
   return (
-    <InspectorFrame icon={<Columns3 />} title={t("Rename & Format")} eyebrow={t("Presentation node")}>
-      <p className="canvas-inspector-hint">{t("Output names are stable API fields. Labels and formats control presentation only.")}</p>
-      <div className="canvas-format-list">
-        {definition.fields.map((field) => (
-          <article key={field.id}>
-            <strong>{field.source.column}</strong>
-            <label><span>{t("Output name")}</span><input value={field.name} onChange={(event) => onChange({ ...definition, fields: definition.fields.map((item) => item.id === field.id ? { ...item, name: event.target.value } : item) })} /></label>
-            <label><span>{t("Label")}</span><input value={field.display.label} onChange={(event) => onChange({ ...definition, fields: definition.fields.map((item) => item.id === field.id ? { ...item, display: { ...item.display, label: event.target.value } } : item) })} /></label>
-            <label><span>{t("Format")}</span><select value={field.display.format ?? ""} onChange={(event) => onChange({ ...definition, fields: definition.fields.map((item) => item.id === field.id ? { ...item, display: { ...item.display, format: (event.target.value || null) as DisplayFormat | null } } : item) })}>{FORMATS.map((format) => <option value={format.value} key={format.value}>{t(format.label)}</option>)}</select></label>
-            <label className="canvas-visible"><input type="checkbox" checked={field.display.visible} onChange={(event) => onChange({ ...definition, fields: definition.fields.map((item) => item.id === field.id ? { ...item, display: { ...item.display, visible: event.target.checked } } : item) })} /><span>{t("Visible")}</span></label>
-          </article>
+    <section className="result-columns" aria-label={t("Columns in the result")}>
+      <header>
+        <strong>{t("Columns in the result")}</strong>
+        <small>{definition.fields.length ? t("Click a column to rename it or change how values look.") : t("Tick columns on the tables above.")}</small>
+      </header>
+      <div className="result-column-chips">
+        {definition.fields.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`${editing === item.id ? "active" : ""}${item.display.visible ? "" : " hidden-column"}`}
+            onClick={() => setEditing(editing === item.id ? null : item.id)}
+            title={`${tableName.get(item.source.relation_id)}.${item.source.column}`}
+          >
+            {!item.display.visible && <EyeOff />}
+            {item.display.label}
+          </button>
         ))}
       </div>
-    </InspectorFrame>
+      {field && (
+        <div className="result-column-editor">
+          <small>{tableName.get(field.source.relation_id)}.{field.source.column}</small>
+          <label>
+            <span>{t("Name in the table")}</span>
+            <input value={field.display.label} onChange={(event) => update(field.id, (item) => ({ ...item, display: { ...item.display, label: event.target.value } }))} />
+          </label>
+          <label>
+            <span>{t("How values look")}</span>
+            <select value={field.display.format ?? ""} onChange={(event) => update(field.id, (item) => ({ ...item, display: { ...item.display, format: (event.target.value || null) as DisplayFormat | null } }))}>
+              {FORMATS.map((format) => (
+                <option key={format.value} value={format.value}>{t(format.label)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="result-column-visible">
+            <input type="checkbox" checked={!field.display.visible} onChange={(event) => update(field.id, (item) => ({ ...item, display: { ...item.display, visible: !event.target.checked } }))} />
+            <span>{t("Hide in the table (keep for charts)")}</span>
+          </label>
+          <button className="button ghost small" type="button" onClick={() => { setEditing(null); onChange({ ...definition, fields: definition.fields.filter((item) => item.id !== field.id) }); }}>
+            <Trash2 /> {t("Remove from result")}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
-function InspectorFrame({ icon, eyebrow, title, children }: { icon: React.ReactNode; eyebrow: string; title: string; children: React.ReactNode }) {
-  return <div className="canvas-inspector-frame"><header><span>{icon}</span><div><small>{eyebrow}</small><strong>{title}</strong></div></header><div className="canvas-inspector-body">{children}</div></div>;
-}
-
-function buildNodes(definition: VisualDefinition, t: ReturnType<typeof useI18n>["t"]): CanvasNode[] {
-  const positions = new Map((ensureCanvas(definition).canvas?.nodes ?? []).map((node) => [node.id, { x: node.x, y: node.y }]));
-  const relationNodes: CanvasNode[] = definition.source.relations.map((relation, index) => ({
-    id: canvasNodeId.relation(relation.id),
-    position: positions.get(canvasNodeId.relation(relation.id))!,
-    data: { kind: "relation", label: <NodeLabel icon={<Database />} eyebrow={index === 0 ? t("Root table") : t("Joined table")} title={relation.alias} detail={`${relation.schema}.${relation.name}`} badge={t("{count} fields", { count: definition.fields.filter((field) => field.source.relation_id === relation.id).length })} /> },
-    className: "dataset-node relation-node",
+function buildNodes(
+  connectionId: string,
+  definition: VisualDefinition | null,
+  pending: PendingTable[],
+  actions: {
+    toggleColumn: (relationId: string, column: string, selected: boolean) => void;
+    selectAll: (relationId: string, columns: string[], selected: boolean) => void;
+    removeTable: (nodeId: string) => void;
+  },
+): TableNode[] {
+  const positions = new Map((definition?.canvas?.nodes ?? []).map((node) => [node.id, { x: node.x, y: node.y }]));
+  const linked = new Map<string, string[]>();
+  for (const join of definition?.joins ?? []) {
+    for (const condition of join.conditions) {
+      linked.set(join.left_relation_id, [...(linked.get(join.left_relation_id) ?? []), condition.left_column]);
+      linked.set(join.right_relation_id, [...(linked.get(join.right_relation_id) ?? []), condition.right_column]);
+    }
+  }
+  const tables: TableNode[] = (definition?.source.relations ?? []).map((relation, index) => {
+    const id = canvasNodeId.relation(relation.id);
+    return {
+      id,
+      type: "table",
+      position: positions.get(id) ?? { x: 40, y: 40 },
+      deletable: false,
+      data: {
+        connectionId,
+        schema: relation.schema,
+        name: relation.name,
+        isMain: index === 0,
+        isPending: false,
+        selectedColumns: definition!.fields
+          .filter((field) => field.source.relation_id === relation.id)
+          .map((field) => field.source.column),
+        linkedColumns: linked.get(relation.id) ?? [],
+        onToggleColumn: (column, selected) => actions.toggleColumn(relation.id, column, selected),
+        onSelectAll: (columns, selected) => actions.selectAll(relation.id, columns, selected),
+        onRemove: () => actions.removeTable(id),
+      },
+    };
+  });
+  const loose: TableNode[] = pending.map((table) => ({
+    id: `pending:${table.key}`,
+    type: "table",
+    position: { x: table.x, y: table.y },
     deletable: false,
+    data: {
+      connectionId,
+      schema: table.schema,
+      name: table.name,
+      isMain: false,
+      isPending: true,
+      selectedColumns: [],
+      linkedColumns: [],
+      onToggleColumn: () => undefined,
+      onSelectAll: () => undefined,
+      onRemove: () => actions.removeTable(`pending:${table.key}`),
+    },
   }));
-  const joinNodes: CanvasNode[] = (definition.joins ?? []).map((join) => {
-    const left = definition.source.relations.find((item) => item.id === join.left_relation_id)?.alias;
-    const right = definition.source.relations.find((item) => item.id === join.right_relation_id)?.alias;
-    return { id: canvasNodeId.join(join.id), position: positions.get(canvasNodeId.join(join.id))!, data: { kind: "join", label: <NodeLabel icon={<GitBranch />} eyebrow={join.type === "left" ? "LEFT JOIN" : "INNER JOIN"} title={`${left} + ${right}`} detail={join.conditions.map((item) => `${item.left_column} = ${item.right_column}`).join(", ")} badge={t("{count} conditions", { count: join.conditions.length })} /> }, className: "dataset-node join-node", deletable: false };
-  });
-  const pipeline: CanvasNode[] = [
-    { id: canvasNodeId.select, position: positions.get(canvasNodeId.select)!, data: { kind: "select", label: <NodeLabel icon={<ListChecks />} eyebrow={t("Transform")} title={t("Select Columns")} detail={t("Detailed rows only")} badge={t("{count} selected", { count: definition.fields.length })} /> }, className: "dataset-node transform-node", deletable: false },
-    { id: canvasNodeId.format, position: positions.get(canvasNodeId.format)!, data: { kind: "format", label: <NodeLabel icon={<Columns3 />} eyebrow={t("Transform")} title={t("Rename & Format")} detail={t("Labels and display types")} badge={t("Non-destructive")} /> }, className: "dataset-node transform-node", deletable: false },
-    { id: canvasNodeId.output, position: positions.get(canvasNodeId.output)!, data: { kind: "output", label: <NodeLabel icon={<LayoutDashboard />} eyebrow={t("Output")} title={t("Dataset Output")} detail={t("Validate · Preview · Publish")} badge={t("Private draft")} /> }, className: "dataset-node output-node", deletable: false },
-  ];
-  return [...relationNodes, ...joinNodes, ...pipeline];
+  return [...tables, ...loose];
 }
 
-function buildEdges(definition: VisualDefinition, t: ReturnType<typeof useI18n>["t"]): Edge[] {
-  const joins = definition.joins ?? [];
-  const edges: Edge[] = [];
-  joins.forEach((join, index) => {
-    const previous = index === 0 ? canvasNodeId.relation(definition.source.relations[0].id) : canvasNodeId.join(joins[index - 1].id);
-    edges.push(
-      { id: `join-main:${join.id}`, source: previous, target: canvasNodeId.join(join.id), type: "smoothstep", label: join.type === "left" ? "LEFT" : "INNER", animated: false, data: { joinId: join.id }, className: "join-edge", ariaLabel: t("Join edge") },
-      { id: `join-table:${join.id}`, source: canvasNodeId.relation(join.right_relation_id), target: canvasNodeId.join(join.id), type: "smoothstep", data: { joinId: join.id }, className: "join-edge", ariaLabel: t("Join edge") },
-    );
-  });
-  const producer = joins.length ? canvasNodeId.join(joins.at(-1)!.id) : canvasNodeId.relation(definition.source.relations[0].id);
-  edges.push(
-    { id: "pipeline:select", source: producer, target: canvasNodeId.select, type: "smoothstep", deletable: false, className: "pipeline-edge" },
-    { id: "pipeline:format", source: canvasNodeId.select, target: canvasNodeId.format, type: "smoothstep", deletable: false, className: "pipeline-edge" },
-    { id: "pipeline:output", source: canvasNodeId.format, target: canvasNodeId.output, type: "smoothstep", deletable: false, className: "pipeline-edge" },
+function buildEdges(
+  definition: VisualDefinition | null,
+  selected: SelectedLink | null,
+  t: Translate,
+): Edge[] {
+  const names = new Map((definition?.source.relations ?? []).map((item) => [item.id, item.name]));
+  return (definition?.joins ?? []).flatMap((join) =>
+    join.conditions.map((condition, conditionIndex) => ({
+      id: `link:${join.id}:${conditionIndex}`,
+      source: canvasNodeId.relation(join.left_relation_id),
+      sourceHandle: `out:${encodeURIComponent(condition.left_column)}`,
+      target: canvasNodeId.relation(join.right_relation_id),
+      targetHandle: `in:${encodeURIComponent(condition.right_column)}`,
+      label:
+        conditionIndex === 0
+          ? join.type === "left"
+            ? t("all rows from “{table}”", { table: names.get(join.left_relation_id) ?? "" })
+            : t("only matches")
+          : undefined,
+      data: { joinId: join.id, conditionIndex },
+      selected: selected?.joinId === join.id && selected.conditionIndex === conditionIndex,
+      className: `table-link ${join.type}`,
+      ariaLabel: t("Link between {left} and {right}", {
+        left: names.get(join.left_relation_id) ?? "",
+        right: names.get(join.right_relation_id) ?? "",
+      }),
+    })),
   );
-  return edges;
 }
 
-function NodeLabel({ icon, eyebrow, title, detail, badge }: { icon: React.ReactNode; eyebrow: string; title: string; detail: string; badge: string }) {
-  return <div className="canvas-node-label"><header><span>{icon}</span><small>{eyebrow}</small></header><strong>{title}</strong><p>{detail}</p><span className="canvas-node-badge">{badge}</span></div>;
-}
-
-function nodeColor(kind: string): string {
-  if (kind === "relation") return "#5968ed";
-  if (kind === "join") return "#8b5cf6";
-  if (kind === "output") return "#15867b";
-  return "#64748b";
+function handleColumn(handle: string | null | undefined): string | null {
+  if (!handle) return null;
+  const separator = handle.indexOf(":");
+  return separator < 0 ? null : decodeURIComponent(handle.slice(separator + 1));
 }

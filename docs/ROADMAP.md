@@ -96,10 +96,10 @@ Outcome: every MVP capability is understandable and usable through a polished re
 
 - [x] Session login, restoration, logout, responsive shell, and role-aware navigation
 - [x] English-default interface with complete Russian localization and a persisted profile language preference; API error codes and technical identifiers remain stable
-- [x] Desktop-only node-canvas dataset authoring alongside the guided visual builder and Advanced SQL
-  - PostgreSQL Table, Join, Select Columns, Rename & Format, and Dataset Output nodes
-  - FK-suggested and manual compatible-column joins
-  - persisted graph and viewport, minimap, zoom, undo/redo, edge deletion, selected-node settings, and safe auto-layout
+- [x] Desktop drag-and-drop dataset board alongside the step-by-step builder and SQL
+  - searchable table list, table cards with column checkboxes, and column-to-column links
+  - automatic foreign-key links, plain-language link settings, and recoverable unlinking
+  - persisted layout and viewport, undo/redo, tidy-up, and one-click save, check, and load
 - [x] Dashboard collection and independent bar, line, pie/donut, and KPI item rendering
 - [x] Dataset exploration with typed Excel-like filters, pagination, freshness, and exports
 - [x] Visual/SQL dataset studio with validation, preview, impact, publication, refresh, and schedules

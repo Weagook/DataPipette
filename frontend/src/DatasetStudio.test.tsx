@@ -123,7 +123,7 @@ describe("dataset studio", () => {
     fireEvent.change(await screen.findByLabelText("PostgreSQL connection"), {
       target: { value: CONNECTION_ID },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /Advanced SQL/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /SQL \(for specialists\)/ }));
     fireEvent.change(
       await screen.findByLabelText("Read-only PostgreSQL query"),
       { target: { value: "SELECT id FROM public.orders" } },
