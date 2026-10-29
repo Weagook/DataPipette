@@ -158,7 +158,7 @@ export function buildChartOption(
         {
           type: "pie",
           radius:
-            result.meta.chart_type === "donut" ? ["48%", "72%"] : ["0%", "72%"],
+            result.meta.chart_type === "donut" ? ["44%", "64%"] : ["0%", "64%"],
           center: ["50%", "43%"],
           avoidLabelOverlap: true,
           itemStyle: {
@@ -166,7 +166,9 @@ export function buildChartOption(
             borderWidth: 2,
             borderRadius: 5,
           },
-          label: { show: result.data.rows.length <= 8, formatter: "{b}" },
+          label: { show: result.data.rows.length <= 8, formatter: "{b}", overflow: "truncate", minMargin: 4 },
+          labelLine: { length: 8, length2: 6 },
+          labelLayout: { hideOverlap: true },
           data: result.data.rows.map((row, index) => ({
             name: labels[index] ?? `Row ${index + 1}`,
             value: numericValue(measure ? row[measure.key] : null),

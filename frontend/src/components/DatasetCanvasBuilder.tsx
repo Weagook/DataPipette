@@ -563,9 +563,10 @@ function TableLibrary({
   });
   useEffect(() => {
     const available = schemas.data?.data ?? [];
+    const preferred = usedTables[0]?.split(".")[0] ?? "public";
     if (!schema && available.length)
-      setSchema((available.find((item) => item.name === "public") ?? available[0]).name);
-  }, [schema, schemas.data]);
+      setSchema((available.find((item) => item.name === preferred) ?? available.find((item) => item.name === "public") ?? available[0]).name);
+  }, [schema, schemas.data, usedTables]);
   const needle = search.trim().toLocaleLowerCase();
   const visible = (relations.data?.data ?? []).filter((item) =>
     item.name.toLocaleLowerCase().includes(needle),

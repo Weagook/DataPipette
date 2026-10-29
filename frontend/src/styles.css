@@ -194,11 +194,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .chart-card-head h2 { min-height: 19px; margin: 0; font-size: 15px; letter-spacing: -.25px; }
 .chart-card-head p { margin: 5px 0 0; color: #8b909a; font-size: 12px; }
 .title-skeleton { display: block; position: relative; overflow: hidden; width: 140px; height: 13px; border-radius: 5px; background: #e7e8e6; }
+.dashboard-grid > .chart-card, .dashboard-grid .chart-card-body, .dashboard-grid .chart-canvas { min-height: 0; }
+.chart-card-body > .kpi-view { container-type: size; padding-bottom: 8px; }
+.chart-card-body > .kpi-view > strong { margin: 6px 0; font-size: clamp(22px, min(13cqi, 42cqh), 69px); }
+@container (max-height: 96px) { .kpi-view > small { display: none; } }
 .chart-card-body { flex: 1; min-width: 0; min-height: 190px; padding: 0 13px 10px; display: flex; flex-direction: column; }
 .chart-canvas { width: 100%; min-width: 0; flex: 1; min-height: 205px; }
-.kpi-view { flex: 1; padding: 10px 18px 25px; display: flex; flex-direction: column; justify-content: center; }
+.kpi-view { container-type: inline-size; min-width: 0; flex: 1; padding: 0 5px 12px; display: flex; flex-direction: column; justify-content: center; }
 .kpi-view > span { color: #7b808c; font-size: 13px; font-weight: 650; }
-.kpi-view > strong { margin: 10px 0; font-size: clamp(40px, 5vw, 69px); line-height: 1; letter-spacing: -3px; }
+.kpi-view > strong { margin: 10px 0; font-size: clamp(26px, 13cqi, 69px); white-space: nowrap; line-height: 1; letter-spacing: -0.045em; }
 .kpi-view > small { color: #969aa3; font-size: 12px; }
 .chart-data { margin-top: auto; padding: 0 8px; font-size: 13px; color: #7a7f8a; }
 .chart-data summary { cursor: pointer; width: max-content; }
@@ -1050,6 +1054,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .filter-row { grid-template-columns: 1fr 1fr; }
   .filter-remove { align-self: end; }
   .chart-card { grid-column: 1 / -1 !important; }
+  .dashboard-grid { grid-auto-rows: auto; }
+  .dashboard-grid > .chart-card { grid-row: auto !important; min-height: 320px; }
+  .dashboard-grid > .chart-card:has(.kpi-view) { min-height: 200px; }
   .studio-layout { grid-template-columns: 1fr; }
   .studio-side { grid-template-columns: 1fr 1fr; }
   .new-dataset-workspace { grid-template-columns: 1fr; }

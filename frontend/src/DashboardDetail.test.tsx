@@ -30,7 +30,7 @@ describe("dashboard reading", () => {
             updated_at: "2026-10-16T00:00:00Z",
             definition: {
               schema_version: 1,
-              items: [{ id: ITEM_ID, chart_id: "00000000-0000-4000-8000-000000000103", x: 0, y: 0, width: 6, height: 4 }],
+              items: [{ id: ITEM_ID, chart_id: "00000000-0000-4000-8000-000000000103", x: 0, y: 0, width: 6, height: 2 }],
             },
           });
         }
@@ -50,6 +50,8 @@ describe("dashboard reading", () => {
     );
 
     const refresh = await screen.findByRole("button", { name: /Refresh charts/ });
+    // A short tile keeps the height set in the editor, so it never overlaps the row below.
+    expect(document.querySelector<HTMLElement>(".chart-card")?.style.gridRow).toBe("1 / span 2");
     await waitFor(() => expect(itemRequests).toBe(1));
     await waitFor(() => expect(refresh).toBeEnabled());
     fireEvent.click(refresh);
