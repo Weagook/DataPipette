@@ -1,16 +1,22 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { ArrowRight, Database, Layers3, Plus, Search } from "lucide-react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { BarChart3, Database, Pencil, Plus, Search, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, Navigate, useOutletContext } from "react-router-dom";
 
 import { InlineError } from "../components/Status";
-import { listDatasets, problemMessage, type CurrentUser } from "../lib/api";
-import { formatDateTime } from "../lib/format";
+import {
+  getDatasetFreshness,
+  listDatasets,
+  problemMessage,
+  type CurrentUser,
+  type Dataset,
+} from "../lib/api";
+import { formatDateTime, relativeTime } from "../lib/format";
 import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function DatasetsPage() {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const [search, setSearch] = useState("");
   const datasets = useInfiniteQuery({
@@ -62,46 +68,30 @@ export function DatasetsPage() {
           onRetry={() => void datasets.refetch()}
         />
       )}
-      <section className="dataset-cards" aria-label={t("Datasets")}>
-        {datasets.isPending &&
-          [0, 1, 2, 3, 4, 5].map((item) => (
-            <div className="dataset-card skeleton" key={item} />
-          ))}
-        {values.map((dataset) => {
-          const published = dataset.active_snapshot_id !== null;
-          const content = (
-            <>
-              <div className="dataset-card-top">
-                <span className="dataset-icon">
-                  <Database size={20} />
-                </span>
-                <span className={`state-pill ${published ? "ready" : "draft"}`}>
-                  {t(published ? "Snapshot ready" : "Draft only")}
-                </span>
-              </div>
-              <div className="dataset-card-copy">
-                <h2>{dataset.name}</h2>
-                <p>{t("Draft revision {revision}", { revision: dataset.draft_revision })}</p>
-              </div>
-              <footer>
-                <time dateTime={dataset.updated_at}>
-                  {t("Updated {date}", { date: formatDateTime(dataset.updated_at, locale) })}
-                </time>
-                {published ? <ArrowRight size={17} /> : <Layers3 size={17} />}
-              </footer>
-            </>
-          );
-          return (
-            <Link
-              className="dataset-card"
-              key={dataset.id}
-              to={`/datasets/${dataset.id}/draft`}
-            >
-              {content}
-            </Link>
-          );
-        })}
-      </section>
+      {(datasets.isPending || values.length > 0) && (
+        <div className="dataset-list-scroll">
+          <table className="dataset-list" aria-label={t("Datasets")}>
+            <thead>
+              <tr>
+                <th>{t("Name")}</th>
+                <th>{t("Status")}</th>
+                <th className="numeric">{t("Rows")}</th>
+                <th>{t("Data loaded")}</th>
+                <th><span className="sr-only">{t("Actions")}</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {datasets.isPending &&
+                [0, 1, 2].map((item) => (
+                  <tr key={item}><td colSpan={5}><span className="cell-skeleton" /></td></tr>
+                ))}
+              {values.map((dataset) => (
+                <DatasetRow key={dataset.id} dataset={dataset} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {!datasets.isPending && values.length === 0 && (
         <div className="empty-state">
           <Database />
@@ -126,5 +116,70 @@ export function DatasetsPage() {
         </button>
       )}
     </div>
+  );
+}
+
+const STATUS: Record<string, { tone: string; label: string }> = {
+  not_published: { tone: "draft", label: "Not loaded yet" },
+  refreshing: { tone: "working", label: "Loading data…" },
+  ready: { tone: "ready", label: "Up to date" },
+  stale: { tone: "stale", label: "Last load failed" },
+  failed: { tone: "failed", label: "Load failed" },
+};
+
+function DatasetRow({ dataset }: { dataset: Dataset }) {
+  const { locale, t } = useI18n();
+  const loaded = dataset.active_snapshot_id !== null;
+  const freshness = useQuery({
+    queryKey: queryKeys.datasetFreshness(dataset.id),
+    queryFn: () => getDatasetFreshness(dataset.id),
+  });
+  const state = freshness.data
+    ? freshness.data.refresh_state !== "idle"
+      ? "refreshing"
+      : freshness.data.data_state
+    : loaded
+      ? "ready"
+      : "not_published";
+  const status = STATUS[state] ?? STATUS.ready;
+  const loadedAt = freshness.data?.last_success_at;
+  return (
+    <tr>
+      <td>
+        <Link className="dataset-list-name" to={loaded ? `/datasets/${dataset.id}/table` : `/datasets/${dataset.id}/draft`}>
+          <Database size={16} /> {dataset.name}
+        </Link>
+      </td>
+      <td>
+        <span className={`dataset-status ${status.tone}`} title={freshness.data?.last_refresh_error ?? undefined}>
+          {t(status.label)}
+        </span>
+      </td>
+      <td className="numeric">
+        {freshness.data?.snapshot_row_count != null
+          ? freshness.data.snapshot_row_count.toLocaleString(locale === "ru" ? "ru-RU" : "en-US")
+          : "—"}
+      </td>
+      <td>
+        {loadedAt ? <time dateTime={loadedAt} title={formatDateTime(loadedAt, locale)}>{relativeTime(loadedAt, locale)}</time> : "—"}
+      </td>
+      <td>
+        <div className="dataset-list-actions">
+          {loaded && (
+            <Link className="button ghost small" to={`/datasets/${dataset.id}/table`}>
+              <Table2 size={14} /> {t("Open")}
+            </Link>
+          )}
+          <Link className="button ghost small" to={`/datasets/${dataset.id}/draft`}>
+            <Pencil size={14} /> {t("Edit")}
+          </Link>
+          {loaded && (
+            <Link className="button ghost small" to={`/charts/new?dataset=${dataset.id}`}>
+              <BarChart3 size={14} /> {t("Chart")}
+            </Link>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }

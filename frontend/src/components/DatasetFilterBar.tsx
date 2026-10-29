@@ -18,6 +18,7 @@ interface DatasetFilterBarProps {
   onChange: (drafts: FilterDraft[]) => void;
   onApply: () => void;
   onClear: () => void;
+  appliedCount?: number;
 }
 
 export function DatasetFilterBar({
@@ -27,6 +28,7 @@ export function DatasetFilterBar({
   onChange,
   onApply,
   onClear,
+  appliedCount = 0,
 }: DatasetFilterBarProps) {
   const { t } = useI18n();
   const filterable = columns.filter((column) => column.filter_operators.length > 0);
@@ -36,11 +38,11 @@ export function DatasetFilterBar({
   }
 
   return (
-    <section className="filter-panel" aria-label={t("Dataset filters")}>
+    <section className={`filter-panel${drafts.length === 0 && appliedCount === 0 ? " idle" : ""}`} aria-label={t("Dataset filters")}>
       <header>
         <div>
           <span className="panel-icon"><Filter size={16} /></span>
-          <div><strong>{t("Filters")}</strong><small>{t("Draft changes apply only when you confirm them.")}</small></div>
+          <div><strong>{t("Filters")}</strong><small>{t(drafts.length === 0 && appliedCount === 0 ? "All rows are shown." : "Changes take effect when you press Apply.")}</small></div>
         </div>
         <button
           className="button secondary small"
@@ -51,9 +53,7 @@ export function DatasetFilterBar({
           <Plus size={15} /> {t("Add filter")}
         </button>
       </header>
-      {drafts.length === 0 ? (
-        <p className="filter-hint">{t("No filters applied. Add one to narrow the current snapshot.")}</p>
-      ) : (
+      {drafts.length === 0 ? null : (
         <div className="filter-rows">
           {drafts.map((draft) => {
             const column = columns.find((candidate) => candidate.field_id === draft.fieldId) ?? filterable[0];
@@ -130,10 +130,10 @@ export function DatasetFilterBar({
         </div>
       )}
       {error && <p className="filter-error" role="alert">{error}</p>}
-      <footer>
+      {(drafts.length > 0 || appliedCount > 0) && <footer>
         <button className="button secondary small" type="button" onClick={onClear} disabled={drafts.length === 0}>{t("Clear all")}</button>
         <button className="button primary small" type="button" onClick={onApply}>{t("Apply filters")}</button>
-      </footer>
+      </footer>}
     </section>
   );
 }

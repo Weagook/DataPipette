@@ -15,7 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 
 import { InlineError } from "../components/Status";
 import {
@@ -99,8 +99,9 @@ function NewChartStudio() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [name, setName] = useState("");
-  const [datasetId, setDatasetId] = useState("");
+  const [datasetId, setDatasetId] = useState(() => searchParams.get("dataset") ?? "");
   const [definition, setDefinition] = useState<ChartDefinition | null>(null);
   const [filters, setFilters] = useState<FilterDraft[]>([]);
   const [setupError, setSetupError] = useState("");
