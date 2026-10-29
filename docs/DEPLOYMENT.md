@@ -79,6 +79,8 @@ ssh -L 8080:127.0.0.1:8080 user@server
 
 Then open `http://127.0.0.1:8080` locally. To bind the evaluation gateway to every server interface, explicitly set `DATAPIPETTE_HTTP_BIND_ADDRESS=0.0.0.0`; do this only behind an appropriate firewall and TLS reverse proxy. PostgreSQL, Redis, MinIO API, and the MinIO console remain loopback-only.
 
+Interactive queries and exports read snapshots through a verified local cache on the `snapshot-cache` volume, shared by the API and worker. `DATAPIPETTE_SNAPSHOT_CACHE_MAX_MB` limits it (8,192 MB by default in Compose; `0` disables it); keep that much free disk space on the host. The cache is regenerable and is not part of backups.
+
 The bundled stack sets `DATAPIPETTE_S3_DOWNLOAD_DELIVERY=proxy`: CSV/XLSX downloads stay on the public application origin while the API retrieves and verifies the object from private MinIO, streams the attachment, and deletes its temporary copy. A deployment with browser-reachable HTTPS S3 should use the default `redirect` mode to avoid proxying large files through the API.
 
 ## Operations

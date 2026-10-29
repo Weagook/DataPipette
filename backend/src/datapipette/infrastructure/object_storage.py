@@ -2,6 +2,9 @@
 
 import hashlib
 import os
+import re
+import threading
+import time
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
@@ -20,6 +23,7 @@ from datapipette.config import Settings
 from datapipette.domain.exports import ExportDownload
 
 _TRANSFER_CHUNK_BYTES = 8 * 1024 * 1024
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ObjectStorageUnavailableError(OSError):
@@ -111,6 +115,82 @@ def _verify(
         raise ObjectStorageUnavailableError("Object size verification failed")
     if expected_checksum_sha256 is not None and _checksum(path) != expected_checksum_sha256:
         raise ObjectStorageUnavailableError("Object checksum verification failed")
+
+
+class VerifiedObjectCache:
+    """Content-addressed local copies of immutable objects, verified once on insert.
+
+    Snapshot objects never change after publication, so a copy whose SHA-256
+    was checked when it entered the cache can serve every later read. Entries
+    are evicted least-recently-used once the cache exceeds its byte budget,
+    but never while recently used, because a reader may be about to open it.
+    """
+
+    def __init__(self, root: Path, *, max_bytes: int, min_idle_seconds: float = 300.0) -> None:
+        if max_bytes < 1:
+            raise ValueError("Object cache budget must be positive")
+        self.root = root.resolve()
+        self.max_bytes = max_bytes
+        self._min_idle_seconds = min_idle_seconds
+        self._guard = threading.Lock()
+        self._locks: dict[str, threading.Lock] = {}
+
+    def accepts(self, *, byte_size: int | None, checksum_sha256: str | None) -> bool:
+        return (
+            byte_size is not None
+            and 0 <= byte_size <= self.max_bytes
+            and checksum_sha256 is not None
+            and _SHA256.fullmatch(checksum_sha256) is not None
+        )
+
+    def lock(self, checksum_sha256: str) -> threading.Lock:
+        with self._guard:
+            return self._locks.setdefault(checksum_sha256, threading.Lock())
+
+    def staging_directory(self) -> Path:
+        directory = self.root / ".incoming"
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return directory
+
+    def _path(self, checksum_sha256: str) -> Path:
+        return self.root / checksum_sha256[:2] / f"{checksum_sha256}.object"
+
+    def lookup(self, checksum_sha256: str, *, byte_size: int) -> Path | None:
+        path = self._path(checksum_sha256)
+        try:
+            if path.stat().st_size != byte_size:
+                path.unlink(missing_ok=True)
+                return None
+            # The modification time records the last use for eviction order.
+            os.utime(path)
+        except FileNotFoundError:
+            return None
+        return path
+
+    def install(self, verified_candidate: Path, checksum_sha256: str) -> Path:
+        path = self._path(checksum_sha256)
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.replace(verified_candidate, path)
+        self._evict(keep=path)
+        return path
+
+    def _evict(self, *, keep: Path) -> None:
+        entries: list[tuple[float, int, Path]] = []
+        for candidate in self.root.glob("??/*.object"):
+            try:
+                status = candidate.stat()
+            except FileNotFoundError:
+                continue
+            entries.append((status.st_mtime, status.st_size, candidate))
+        total = sum(size for _modified, size, _path in entries)
+        idle_before = time.time() - self._min_idle_seconds
+        for modified, size, candidate in sorted(entries):
+            if total <= self.max_bytes:
+                return
+            if candidate == keep or modified > idle_before:
+                continue
+            candidate.unlink(missing_ok=True)
+            total -= size
 
 
 class LocalObjectStorage:
@@ -266,11 +346,13 @@ class S3ObjectStorage:
         bucket: str,
         work_root: Path,
         server_side_encryption: str | None,
+        cache: VerifiedObjectCache | None = None,
     ) -> None:
         self._client = client
         self._bucket = bucket
         self._work_root = work_root.resolve()
         self._server_side_encryption = server_side_encryption
+        self._cache = cache
         self._transfer = TransferConfig(
             multipart_threshold=_TRANSFER_CHUNK_BYTES,
             multipart_chunksize=_TRANSFER_CHUNK_BYTES,
@@ -325,6 +407,14 @@ class S3ObjectStorage:
         expected_byte_size: int | None,
         expected_checksum_sha256: str | None,
     ) -> Iterator[Path]:
+        cached = self._cached_copy(
+            object_key,
+            expected_byte_size=expected_byte_size,
+            expected_checksum_sha256=expected_checksum_sha256,
+        )
+        if cached is not None:
+            yield cached
+            return
         target = self._download_to_temporary_file(
             object_key,
             expected_byte_size=expected_byte_size,
@@ -335,16 +425,54 @@ class S3ObjectStorage:
         finally:
             target.unlink(missing_ok=True)
 
+    def _cached_copy(
+        self,
+        object_key: str,
+        *,
+        expected_byte_size: int | None,
+        expected_checksum_sha256: str | None,
+    ) -> Path | None:
+        cache = self._cache
+        if cache is None or not cache.accepts(
+            byte_size=expected_byte_size,
+            checksum_sha256=expected_checksum_sha256,
+        ):
+            return None
+        assert expected_byte_size is not None and expected_checksum_sha256 is not None
+        try:
+            # One download per object and process; concurrent first readers wait.
+            with cache.lock(expected_checksum_sha256):
+                cached = cache.lookup(expected_checksum_sha256, byte_size=expected_byte_size)
+                if cached is not None:
+                    return cached
+                downloaded = self._download_to_temporary_file(
+                    object_key,
+                    expected_byte_size=expected_byte_size,
+                    expected_checksum_sha256=expected_checksum_sha256,
+                    directory=cache.staging_directory(),
+                )
+                try:
+                    return cache.install(downloaded, expected_checksum_sha256)
+                finally:
+                    downloaded.unlink(missing_ok=True)
+        except ObjectStorageUnavailableError:
+            raise
+        except OSError:
+            # A full or unavailable cache volume must not make snapshots unreadable.
+            return None
+
     def _download_to_temporary_file(
         self,
         object_key: str,
         *,
         expected_byte_size: int | None,
         expected_checksum_sha256: str | None,
+        directory: Path | None = None,
     ) -> Path:
         key = _key(object_key)
-        directory = self._work_root / ".object-tmp"
-        directory.mkdir(parents=True, exist_ok=True)
+        if directory is None:
+            directory = self._work_root / ".object-tmp"
+            directory.mkdir(parents=True, exist_ok=True)
         target = directory / f"{uuid4().hex}.object"
         candidate = target.with_suffix(".part")
         try:
@@ -554,11 +682,20 @@ def create_object_storage_registry(settings: Settings) -> ObjectStorageRegistry:
     storages: dict[str, ObjectStorage] = {local.backend: local}
     if settings.s3_bucket is not None and settings.s3_access_key_id is not None:
         client = create_s3_client(settings)
+        cache = (
+            VerifiedObjectCache(
+                settings.snapshot_cache_path or settings.snapshot_storage_path / ".object-cache",
+                max_bytes=settings.snapshot_cache_max_mb * 1024 * 1024,
+            )
+            if settings.snapshot_cache_max_mb > 0
+            else None
+        )
         s3 = S3ObjectStorage(
             client=client,
             bucket=settings.s3_bucket,
             work_root=settings.snapshot_storage_path,
             server_side_encryption=settings.s3_server_side_encryption,
+            cache=cache,
         )
         storages[s3.backend] = s3
     return ObjectStorageRegistry(settings.object_storage_backend, storages)
