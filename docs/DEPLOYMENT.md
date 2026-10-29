@@ -162,11 +162,17 @@ Use the same two `-f` options for every later `up`, `ps`, `logs`, `stop`, and `d
 
 ### Daily backup
 
-Install the daily backup from [Backup and restore](#backup-and-restore) with the production Compose files, for example at 03:00 server time:
+Schedule the backup from [Backup and restore](#backup-and-restore) with the production Compose files. As root, create `/etc/cron.d/datapipette-backup` to run it every day at 03:00 server time and keep the seven most recent sets:
 
-```cron
-0 3 * * * cd /opt/DataPipette && DATAPIPETTE_COMPOSE_FILES=deploy/compose/compose.yaml:deploy/compose/compose.production.yaml deploy/compose/backup.sh create /var/backups/datapipette --keep 7 >>/var/log/datapipette-backup.log 2>&1
+```bash
+cat >/etc/cron.d/datapipette-backup <<'EOF'
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+0 3 * * * root cd /opt/DataPipette && DATAPIPETTE_COMPOSE_FILES=deploy/compose/compose.yaml:deploy/compose/compose.production.yaml deploy/compose/backup.sh create /var/backups/datapipette --keep 7 >>/var/log/datapipette-backup.log 2>&1
+EOF
 ```
+
+Run the same command once by hand to confirm it works, then check `/var/log/datapipette-backup.log` the next morning.
 
 Copy the backups to another machine as well; a backup on the same disk does not survive the loss of that disk.
 
