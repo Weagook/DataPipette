@@ -53,6 +53,7 @@ export const queryKeys = {
     ["catalog", connectionId, schema, "relations"] as const,
   catalogRelation: (connectionId: string, schema: string, relation: string) =>
     ["catalog", connectionId, schema, relation] as const,
+  datasetFreshness: (id: string) => ["dataset-freshness", id] as const,
   dataset: (id: string) => ["dataset", id] as const,
   datasetDraft: (id: string) => ["dataset", id, "draft"] as const,
   refreshRun: (datasetId: string, runId: string) =>

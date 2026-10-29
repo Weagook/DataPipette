@@ -1242,6 +1242,14 @@ const russian: Record<string, string> = {
   "You have no charts yet": "У вас пока нет диаграмм",
   "Your charts": "Ваши диаграммы",
   "People you add here see the saved dashboard, but not the underlying rows.": "Те, кого вы добавите, увидят сохранённый дашборд, но не исходные строки данных.",
+  "Actions": "Действия",
+  "Not loaded yet": "Ещё не загружен",
+  "Last load failed": "Последняя загрузка не удалась",
+  "Load failed": "Загрузка не удалась",
+  "Open": "Открыть",
+  "Edit": "Изменить",
+  "All rows are shown.": "Показаны все строки.",
+  "Changes take effect when you press Apply.": "Изменения вступят в силу после нажатия «Применить фильтры».",
 };
 
 interface I18nValue {

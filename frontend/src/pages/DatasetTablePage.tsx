@@ -175,6 +175,7 @@ function DatasetWorkspace({ exploration }: { exploration: DatasetExploration }) 
         onChange={(next) => { setDrafts(next); setFilterError(null); }}
         onApply={applyFilters}
         onClear={clearFilters}
+        appliedCount={appliedFilters.length}
       />
 
       <section className="table-card" aria-label={t("Dataset rows")}>
@@ -193,7 +194,7 @@ function DatasetWorkspace({ exploration }: { exploration: DatasetExploration }) 
                 {visibleColumns.map((column) => (
                   <label key={column.field_id}>
                     <input type="checkbox" checked={selectedFields.includes(column.field_id)} onChange={() => toggleField(column.field_id)} />
-                    <span>{column.label}<small>{column.data_type}</small></span>
+                    <span>{column.label}</span>
                   </label>
                 ))}
               </div>
@@ -222,14 +223,14 @@ function DatasetWorkspace({ exploration }: { exploration: DatasetExploration }) 
                 return (
                   <th key={column.field_id} aria-sort={sort?.direction === "asc" ? "ascending" : sort?.direction === "desc" ? "descending" : "none"}>
                     <button type="button" disabled={!column.sortable} onClick={() => cycleSort(column)} title={t(column.sortable ? "Cycle sort order" : "This column cannot be sorted")}>
-                      <span>{column.label}<small>{column.data_type}</small></span><SortIcon size={14} />
+                      <span>{column.label}</span><SortIcon size={14} />
                     </button>
                   </th>
                 );
               })}</tr></thead>
               <tbody>
                 {rows.isPending && Array.from({ length: 8 }, (_, rowIndex) => <tr key={rowIndex}>{selectedColumns.map((column) => <td key={column.field_id}><span className="cell-skeleton" /></td>)}</tr>)}
-                {rows.data?.data.rows.map((row, rowIndex) => <tr key={`${pageIndex}-${rowIndex}`}>{selectedColumns.map((column) => <td key={column.field_id} title={formatDatasetValue(row[column.name], column, exploration.installation_timezone)}>{formatDatasetValue(row[column.name], column, exploration.installation_timezone)}</td>)}</tr>)}
+                {rows.data?.data.rows.map((row, rowIndex) => <tr key={`${pageIndex}-${rowIndex}`}>{selectedColumns.map((column) => <td key={column.field_id} title={formatDatasetValue(row[column.name], column, exploration.installation_timezone, locale)}>{formatDatasetValue(row[column.name], column, exploration.installation_timezone, locale)}</td>)}</tr>)}
               </tbody>
             </table>
             {!rows.isPending && rows.data?.data.rows.length === 0 && <div className="empty-state table-empty"><DatabaseZap /><strong>{t("No matching rows")}</strong><p>{t("Adjust the filters and apply them again.")}</p></div>}
