@@ -98,6 +98,7 @@ Dashboard filters ([ADR-0052](adr/0052-dashboard-filters.md)) let anyone who can
 - Advanced SQL accepts one bounded PostgreSQL-dialect query expression with optional read-only CTEs. AST inspection rejects multiple statements, DDL/DML, data-modifying CTEs, `SELECT INTO`, row locks, external parameters, unqualified base relations, and cross-database names.
 - SQL definitions preserve original editor text but derive canonical execution SQL and schema-qualified source relations on every load. Every relation is scope-authorized at create/replace, validation, preview, refresh request, and worker execution.
 - SQL validation uses `EXPLAIN (FORMAT JSON)` without `ANALYZE` plus a zero-row wrapper for result metadata. Preview and refresh rebuild and wrap execution SQL from the definition; they never trust a stored validation artifact as executable authority.
+- AST inspection also rejects functions that run SQL given as text (`query_to_xml`, `table_to_xml` and related XML functions, `ts_stat`, `crosstab`, `connectby`), open other connections (`dblink*`), read server files or large objects (`pg_read_file`, `pg_ls_*`, `lo_*`), change settings, take advisory locks, sleep, or control backends and replication. Such calls would read relations outside the scope-authorized lineage or affect the server.
 - SQL parsing is defense in depth, not the primary security boundary. Database privileges and read-only transactions remain mandatory. The dedicated source role should have `EXECUTE` only on trusted functions because functions and views can hide behavior that static relation lineage cannot fully describe.
 - Connection scopes narrow but never expand the configured PostgreSQL role. They are enforced during discovery, dataset create/replace, validation, preview, refresh request, and refresh worker execution.
 - Analyst catalog collections are filtered before pagination. Inaccessible connections, schemas, and relations are concealed with the same not-found boundaries used for absent resources.
@@ -162,7 +163,7 @@ Dashboard filters ([ADR-0052](adr/0052-dashboard-filters.md)) let anyone who can
 - XLSX generation must preserve types and must not embed executable macros.
 - Implemented exports are bound to the immutable snapshot selected at creation; Celery receives only the export UUID and duplicate delivery cannot rerun a terminal job.
 - CSV and XLSX string cells beginning with spreadsheet formula/control prefixes are escaped with a leading apostrophe. Precision-sensitive decimal values remain text.
-- Download capabilities are issued only after dataset and job-ownership authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. A capability already issued before grant revocation remains valid until this short expiry. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
+- Download capabilities are issued only after dataset and job-ownership authorization, AES-GCM encrypted/authenticated, expire in at most five minutes, and are never stored in metadata or audit events. Redeeming a capability reloads the person it was issued to and requires an active account, ownership of the job (or the administrator role), and current `export` permission, so revocation, disabling, or a role change ends an issued link immediately. Logical file access ends 24 hours after successful generation even if physical cleanup has not yet removed the private object.
 - S3 download resolution verifies the private object before issuing a `307` redirect. When object storage is private to the deployment network, DataPipette instead downloads and verifies a unique temporary copy, sends it as an attachment, and removes it after the response. A redirect remains a bearer capability and is never treated as proof of authorization after its expiry.
 - Physical export deletion waits until logical expiry plus a delivery grace. Snapshot deletion waits for supersession grace and the absence of queued, running, or unexpired export references.
 
@@ -178,7 +179,7 @@ Query Safety planner thresholds and source, interactive, export, and background-
 
 - Production endpoints require TLS at the ingress or application boundary.
 - Metadata PostgreSQL, Redis, and object storage must not be publicly reachable.
-- CORS defaults to the official frontend origin and is explicitly configured for integrations.
+- The API sends no CORS headers: browsers may call it only from the same origin as the official frontend. Integrations call it server-to-server with bearer tokens.
 - Debug mode and interactive API documentation require deliberate production configuration.
 - Containers run as non-root where supported and receive only required filesystem access.
 - The evaluation Compose topology binds every published port to loopback by default and exposes browser traffic through one same-origin Nginx gateway. Deliberately changing the gateway bind address does not make the topology production-ready.
@@ -187,6 +188,8 @@ Query Safety planner thresholds and source, interactive, export, and background-
 - `.env` must be permission-restricted and excluded from backups or support bundles unless encrypted. Production deployments must replace its secret-delivery role with an appropriate secret manager.
 
 ## Security verification
+
+The most recent release-candidate review is recorded in [SECURITY_REVIEW_2026-10-29.md](SECURITY_REVIEW_2026-10-29.md).
 
 Security-sensitive changes require tests for unauthorized access, cross-resource access, token expiry/revocation, scope narrowing, dashboard indirect access, SQL restrictions, secret redaction, export ownership, and stale session behavior.
 

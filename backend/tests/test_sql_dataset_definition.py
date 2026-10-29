@@ -113,3 +113,44 @@ def test_legacy_visual_document_without_kind_remains_readable() -> None:
 
     assert isinstance(parsed, VisualDatasetDefinition)
     assert parsed.to_document()["kind"] == DatasetDefinitionKind.VISUAL.value
+
+
+@pytest.mark.parametrize(
+    ("statement", "function"),
+    [
+        # Reads a relation outside the lineage the connection scopes authorize.
+        (
+            "SELECT x.q AS customer_id FROM crm.customer AS c, "
+            "LATERAL (SELECT query_to_xml('SELECT * FROM hr.salary', TRUE, TRUE, '') AS q) AS x",
+            "query_to_xml",
+        ),
+        (
+            "SELECT pg_catalog.TABLE_TO_XML('hr.salary', TRUE, TRUE, '') AS customer_id "
+            "FROM crm.customer",
+            "table_to_xml",
+        ),
+        ("SELECT ts_stat('SELECT body FROM hr.notes') AS customer_id FROM crm.customer", "ts_stat"),
+        ("SELECT dblink('dbname=hr', 'SELECT 1') AS customer_id FROM crm.customer", "dblink"),
+        ("SELECT pg_read_file('/etc/passwd') AS customer_id FROM crm.customer", "pg_read_file"),
+        ("SELECT lo_import('/etc/passwd') AS customer_id FROM crm.customer", "lo_import"),
+        ("SELECT pg_sleep(600) AS customer_id FROM crm.customer", "pg_sleep"),
+        (
+            "SELECT set_config('search_path', 'hr', FALSE) AS customer_id FROM crm.customer",
+            "set_config",
+        ),
+        ("SELECT pg_terminate_backend(1) AS customer_id FROM crm.customer", "pg_terminate_backend"),
+    ],
+)
+def test_sql_definition_rejects_functions_that_escape_lineage_or_touch_the_server(
+    statement: str, function: str
+) -> None:
+    with pytest.raises(ValueError, match=f"cannot call the function {function}"):
+        _definition(statement)
+
+
+def test_sql_definition_allows_ordinary_functions() -> None:
+    definition = _definition(
+        "SELECT lower(customer.name) AS customer_id FROM crm.customer "
+        "WHERE coalesce(customer.region, '') <> '' AND length(customer.name) > 2"
+    )
+    assert [relation.relation_name for relation in definition.source_relations] == ["customer"]

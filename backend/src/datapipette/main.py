@@ -343,6 +343,7 @@ def create_app(
                 s3_download_delivery=resolved_settings.s3_download_delivery,
             ),
             access_authorizer,
+            SqlAlchemyUserAdministrationStore(resources.session_factory),
         )
         try:
             yield

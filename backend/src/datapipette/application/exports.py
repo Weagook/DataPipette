@@ -26,7 +26,7 @@ from datapipette.domain.exports import (
     ExportJob,
     ExportRequestOutcome,
 )
-from datapipette.domain.identity import SystemRole, User
+from datapipette.domain.identity import AccountStatus, SystemRole, User
 from datapipette.domain.snapshot_queries import (
     ActiveSnapshotQueryContext,
     SnapshotFilterOperator,
@@ -120,6 +120,10 @@ class ExportExecutor(Protocol):
 class ExportDownloadTokenCodec(Protocol):
     def encode(self, *, export_id: UUID, actor_id: UUID, expires_at: datetime) -> str: ...
     def decode(self, value: str) -> tuple[UUID, UUID, datetime]: ...
+
+
+class ExportActorReader(Protocol):
+    async def get_user(self, user_id: UUID) -> User | None: ...
 
 
 class ExportFileResolver(Protocol):
@@ -328,11 +332,13 @@ class ExportDownloadService:
         codec: ExportDownloadTokenCodec,
         resolver: ExportFileResolver,
         authorizer: DatasetAccessAuthorizer,
+        actors: ExportActorReader,
     ) -> None:
         self._store = store
         self._codec = codec
         self._resolver = resolver
         self._authorizer = authorizer
+        self._actors = actors
 
     async def issue(
         self, *, actor: User, dataset_id: UUID, export_id: UUID
@@ -360,7 +366,7 @@ class ExportDownloadService:
 
     async def resolve(self, token: str) -> ExportDownload:
         try:
-            export_id, _actor_id, token_expiry = self._codec.decode(token)
+            export_id, actor_id, token_expiry = self._codec.decode(token)
         except (TypeError, ValueError) as exc:
             raise InvalidExportDownloadTokenError from exc
         now = datetime.now(UTC)
@@ -370,6 +376,23 @@ class ExportDownloadService:
         job = await self._find_by_id(export_id)
         if job is None:
             raise InvalidExportDownloadTokenError
+        # The link stays bound to the person it was issued to: a disabled account,
+        # a lost export permission, or a role change ends it before it expires.
+        actor = await self._actors.get_user(actor_id)
+        if (
+            actor is None
+            or actor.status is not AccountStatus.ACTIVE
+            or (actor.role is not SystemRole.ADMIN and job.requested_by != actor.id)
+        ):
+            raise InvalidExportDownloadTokenError
+        try:
+            await self._authorizer.require(
+                actor=actor,
+                dataset_id=job.dataset_id,
+                permissions=frozenset({DatasetPermission.EXPORT}),
+            )
+        except DatasetAccessDeniedError as exc:
+            raise InvalidExportDownloadTokenError from exc
         if now >= job.expires_at:
             raise ExportExpiredError
         if (

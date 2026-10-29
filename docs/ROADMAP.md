@@ -88,7 +88,7 @@ Outcome: another application can securely embed DataPipette backend capabilities
 - Rate limiting, idempotency, optimistic concurrency, and deprecation policy
 - [x] Backup and restore procedures for the Compose installation (off-host replication and point-in-time recovery remain production work)
 - Operational dashboards, alerts, and capacity guidance
-- Threat-model review and release-candidate security hardening
+- [x] Threat-model review and release-candidate security hardening ([review](SECURITY_REVIEW_2026-10-29.md))
 - [x] Single-server production Compose overlay with automatic HTTPS, closed internal ports, generated secrets, encryption-key rotation, and scheduled backups
 
 ## Phase 6 — Official frontend

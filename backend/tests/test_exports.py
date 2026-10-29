@@ -454,11 +454,21 @@ def test_download_tokens_and_service_are_reissuable_and_bounded(tmp_path: Path) 
         storage_backend="local",
     )
     local = LocalObjectStorage(tmp_path)
+
+    class Actors:
+        def __init__(self) -> None:
+            self.user: User | None = _admin()
+
+        async def get_user(self, user_id: UUID) -> User | None:
+            return self.user if self.user is not None and self.user.id == user_id else None
+
+    actors = Actors()
     service = ExportDownloadService(
         store,
         codec,
         ObjectExportDownloadResolver(ObjectStorageRegistry(local.backend, {local.backend: local})),
         DatasetAccessAuthorizer(store),
+        actors,
     )
     token, expires_at = asyncio.run(
         service.issue(actor=_admin(), dataset_id=DATASET_ID, export_id=store.job.id)
@@ -472,6 +482,18 @@ def test_download_tokens_and_service_are_reissuable_and_bounded(tmp_path: Path) 
     tampered = token[:middle] + ("A" if token[middle] != "A" else "B") + token[middle + 1 :]
     with pytest.raises(InvalidExportDownloadTokenError):
         asyncio.run(service.resolve(tampered))
+
+    # A link issued before the account was disabled or downgraded stops working.
+    actors.user = replace(_admin(), status=AccountStatus.DISABLED)
+    with pytest.raises(InvalidExportDownloadTokenError):
+        asyncio.run(service.resolve(token))
+    actors.user = _admin(SystemRole.VIEWER)
+    with pytest.raises(InvalidExportDownloadTokenError):
+        asyncio.run(service.resolve(token))
+    actors.user = None
+    with pytest.raises(InvalidExportDownloadTokenError):
+        asyncio.run(service.resolve(token))
+    actors.user = _admin()
 
     store.job = replace(store.job, state=ExportState.RUNNING)
     with pytest.raises(ExportNotReadyError):

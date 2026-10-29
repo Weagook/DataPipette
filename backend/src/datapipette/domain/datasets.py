@@ -440,6 +440,60 @@ class SqlSourceRelation:
     relation_name: str
 
 
+# Functions that run SQL given as text, open other connections, touch server
+# files, change settings, take locks, or control backends. They would let a
+# statement read relations outside its authorized lineage or affect the
+# server, so they are rejected even though the source role should also lack
+# EXECUTE on them. Names are compared without a schema and case-insensitively.
+_FORBIDDEN_SQL_FUNCTIONS = frozenset(
+    {
+        "query_to_xml",
+        "query_to_xmlschema",
+        "query_to_xml_and_xmlschema",
+        "cursor_to_xml",
+        "cursor_to_xmlschema",
+        "ts_stat",
+        "crosstab",
+        "crosstab2",
+        "crosstab3",
+        "crosstab4",
+        "connectby",
+        "set_config",
+        "pg_reload_conf",
+        "pg_rotate_logfile",
+        "pg_promote",
+        "pg_cancel_backend",
+        "pg_terminate_backend",
+        "pg_read_file",
+        "pg_read_binary_file",
+        "pg_stat_file",
+        "pg_import_system_collations",
+        "pg_logical_emit_message",
+    }
+)
+_FORBIDDEN_SQL_FUNCTION_PREFIXES = (
+    "table_to_xml",
+    "schema_to_xml",
+    "database_to_xml",
+    "dblink",
+    "lo_",
+    "pg_ls_",
+    "pg_file_",
+    "pg_sleep",
+    "pg_advisory",
+    "pg_try_advisory",
+    "pg_switch_",
+    "pg_create_",
+    "pg_drop_",
+    "pg_replication_",
+)
+
+
+def _function_name(node: exp.Func) -> str:
+    name = node.name if isinstance(node, exp.Anonymous) else node.sql_name()
+    return name.rsplit(".", maxsplit=1)[-1].strip('"').lower()
+
+
 def _inspect_sql(statement: str) -> tuple[str, tuple[SqlSourceRelation, ...]]:
     normalized_input = statement.strip()
     if not normalized_input:
@@ -459,6 +513,10 @@ def _inspect_sql(statement: str) -> tuple[str, tuple[SqlSourceRelation, ...]]:
         raise ValueError("SQL statement must be read-only and cannot lock rows")
     if root.find(exp.Parameter) is not None or root.find(exp.Placeholder) is not None:
         raise ValueError("SQL dataset statements cannot contain external parameters")
+    for function in root.find_all(exp.Func):
+        name = _function_name(function)
+        if name in _FORBIDDEN_SQL_FUNCTIONS or name.startswith(_FORBIDDEN_SQL_FUNCTION_PREFIXES):
+            raise ValueError(f"SQL statement cannot call the function {name}")
     relations: set[SqlSourceRelation] = set()
     for scope in traverse_scope(root):
         for source in scope.sources.values():
