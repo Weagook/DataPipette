@@ -24,7 +24,7 @@ export function DashboardItemCard({ dashboardId, item }: { dashboardId: string; 
       className="chart-card"
       style={{
         gridColumn: `${item.x + 1} / span ${item.width}`,
-        gridRow: `${item.y + 1} / span ${Math.max(item.height, 3)}`,
+        gridRow: `${item.y + 1} / span ${item.height}`,
       }}
     >
       <header className="chart-card-head">

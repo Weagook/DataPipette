@@ -68,7 +68,7 @@ describe("chart options", () => {
     expect(option.series).toEqual([
       expect.objectContaining({
         type: "pie",
-        radius: ["48%", "72%"],
+        radius: ["44%", "64%"],
         data: [
           { name: "North", value: 120.5 },
           { name: "South", value: 80 },
