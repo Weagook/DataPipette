@@ -10,7 +10,7 @@ This directory contains the reproducible workload for the DataPipette MVP perfor
 
 The accepted reference target is a 5-million-row, 50-column snapshot on a 4 CPU / 8 GB DataPipette node, 20 active interactive clients, and two admitted heavy background jobs. One environment cannot prove universal production capacity, so every published result must include hardware, storage topology, configuration, dataset shape, run duration, success/capacity responses, and known limitations.
 
-The first measured baseline is published in [`REPORT_2026-10-19.md`](REPORT_2026-10-19.md). It records a failed 50-column acceptance run and a successful 20-column diagnostic run; keep that distinction explicit when comparing future results. The first refresh-path optimization and its unchanged-policy timeout are recorded separately in [`OPTIMIZATION_2026-10-20.md`](OPTIMIZATION_2026-10-20.md). The columnar CSV refresh stream and its colocated 5M × 50 measurement are recorded in [`OPTIMIZATION_2026-10-29.md`](OPTIMIZATION_2026-10-29.md).
+The first measured baseline is published in [`REPORT_2026-10-19.md`](REPORT_2026-10-19.md). It records a failed 50-column acceptance run and a successful 20-column diagnostic run; keep that distinction explicit when comparing future results. The first refresh-path optimization and its unchanged-policy timeout are recorded separately in [`OPTIMIZATION_2026-10-20.md`](OPTIMIZATION_2026-10-20.md). The columnar CSV refresh stream and its colocated 5M × 50 measurement are recorded in [`OPTIMIZATION_2026-10-29.md`](OPTIMIZATION_2026-10-29.md). Dashboard-viewer capacity of a 4 CPU single-server installation is recorded in [`CAPACITY_2026-10-30.md`](CAPACITY_2026-10-30.md).
 
 ## Safety boundary
 

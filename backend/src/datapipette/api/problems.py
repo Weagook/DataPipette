@@ -89,3 +89,22 @@ async def validation_problem_handler(
         },
         media_type="application/problem+json",
     )
+
+
+async def database_unavailable_handler(_request: Request, _error: Exception) -> JSONResponse:
+    """Answer a transient metadata-database failure with a retryable problem, not a crash."""
+
+    return JSONResponse(
+        status_code=503,
+        content={
+            "type": "https://docs.datapipette.dev/problems/service-temporarily-unavailable",
+            "title": "Service temporarily unavailable",
+            "status": 503,
+            "code": "service_temporarily_unavailable",
+            "detail": "The service is overloaded or restarting. Retry shortly.",
+            "request_id": request_id_context.get(),
+            "errors": [],
+        },
+        headers={"Retry-After": "2"},
+        media_type="application/problem+json",
+    )

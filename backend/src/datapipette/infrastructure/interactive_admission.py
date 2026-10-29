@@ -14,6 +14,11 @@ from datapipette.infrastructure.duckdb_runtime import (
 _LOCK_NAMESPACE = 1_145_658_453
 _ADMISSION_GUARD_SLOT = -1
 _MAXIMUM_QUERY_SLOTS = 64
+# Admission attempts beyond the limit plus this headroom are refused in-process.
+# Every attempt holds its own PostgreSQL session, so an unbounded burst of
+# chart requests would otherwise exhaust max_connections for the whole
+# installation instead of receiving an ordinary capacity rejection.
+_IN_FLIGHT_HEADROOM = 4
 
 
 class PostgresInteractiveQueryAdmission:
@@ -21,9 +26,22 @@ class PostgresInteractiveQueryAdmission:
 
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
+        self._in_flight = 0
 
     @asynccontextmanager
     async def slot(self, maximum_concurrent_queries: int) -> AsyncIterator[bool]:
+        if self._in_flight >= maximum_concurrent_queries + _IN_FLIGHT_HEADROOM:
+            yield False
+            return
+        self._in_flight += 1
+        try:
+            async with self._database_slot(maximum_concurrent_queries) as admitted:
+                yield admitted
+        finally:
+            self._in_flight -= 1
+
+    @asynccontextmanager
+    async def _database_slot(self, maximum_concurrent_queries: int) -> AsyncIterator[bool]:
         connection = None
         try:
             connection = await self._engine.connect()

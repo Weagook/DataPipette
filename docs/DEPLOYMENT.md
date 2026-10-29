@@ -176,6 +176,10 @@ Run the same command once by hand to confirm it works, then check `/var/log/data
 
 Copy the backups to another machine as well; a backup on the same disk does not survive the loss of that disk.
 
+### Capacity
+
+On 4 CPUs and 8 GB with three API processes, about 80 people can work with small and medium dashboards at the same time, with views opening in about half a second ([measurement](../benchmarks/CAPACITY_2026-10-30.md)). `DATAPIPETTE_API_WORKERS` sets the number of API processes. `new-env.sh` sets it to one per CPU minus one, up to four. Each process uses about 150 MB of memory, and the managed interactive concurrency limit stays installation-wide across them. Charts over multi-million-row snapshots spend more time in DuckDB; measure with your own dashboards using the [dashboard workload](../benchmarks/README.md#4-simulate-dashboard-viewers).
+
 ### Health checks and alerts
 
 `deploy/compose/healthcheck.sh` checks the installation and sends a message when something breaks and again when it recovers ([ADR-0054](adr/0054-host-health-checks-and-alerts.md)). Each run checks:

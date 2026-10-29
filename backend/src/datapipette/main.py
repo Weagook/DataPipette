@@ -7,12 +7,14 @@ from zoneinfo import ZoneInfo
 import uvicorn
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import OperationalError
 
 from datapipette import __version__
 from datapipette.api.middleware import RequestContextMiddleware
 from datapipette.api.problems import (
     ApiProblem,
     api_problem_handler,
+    database_unavailable_handler,
     validation_problem_handler,
 )
 from datapipette.api.router import api_v1_router
@@ -363,6 +365,10 @@ def create_app(
     application.add_middleware(RequestContextMiddleware)
     application.add_exception_handler(ApiProblem, api_problem_handler)
     application.add_exception_handler(RequestValidationError, validation_problem_handler)
+    # Connection and server failures of metadata PostgreSQL (for example
+    # "too many clients") are transient; integrity and programming errors
+    # still surface as server errors.
+    application.add_exception_handler(OperationalError, database_unavailable_handler)
     application.include_router(api_v1_router)
     return application
 

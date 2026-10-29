@@ -3,6 +3,7 @@
 import asyncio
 
 import pytest
+from sqlalchemy import event
 from sqlalchemy.exc import SQLAlchemyError
 
 from datapipette.config import Settings
@@ -71,5 +72,35 @@ def test_admission_releases_slot_without_reclassifying_consumer_failure() -> Non
                 assert admitted_after_failure
         finally:
             await engine.dispose()
+
+    asyncio.run(exercise())
+
+
+def test_admission_refuses_bursts_in_process_before_opening_database_sessions() -> None:
+    async def exercise() -> None:
+        settings = Settings(environment="test")
+        engine = create_database_engine(settings)
+        opened = 0
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def count(*_args: object) -> None:
+            nonlocal opened
+            opened += 1
+
+        admission = PostgresInteractiveQueryAdmission(engine)
+        contexts = [admission.slot(1) for _ in range(6)]
+        try:
+            results = [await context.__aenter__() for context in contexts[:5]]
+            # One admitted query plus four rejected attempts still in flight.
+            assert results == [True, False, False, False, False]
+            sessions_before_burst = opened
+            assert not await contexts[5].__aenter__()
+            assert opened == sessions_before_burst
+        finally:
+            for context in contexts:
+                await context.__aexit__(None, None, None)
+            await engine.dispose()
+        async with admission.slot(1) as admitted_after_burst:
+            assert admitted_after_burst
 
     asyncio.run(exercise())

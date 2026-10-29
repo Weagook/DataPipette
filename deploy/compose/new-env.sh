@@ -44,6 +44,9 @@ done
 command -v openssl >/dev/null || fail "openssl is required"
 
 hex() { openssl rand -hex "$1"; }
+# One API process per core, leaving one core for the worker, database, and gateway.
+cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
+api_workers=$(( cores > 4 ? 4 : (cores > 1 ? cores - 1 : 1) ))
 # URL-safe base64 of exactly 32 random bytes, without padding.
 encryption_key() { openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'; }
 
@@ -54,6 +57,7 @@ cat >"${output}.partial" <<ENV
 # DATAPIPETTE_CONNECTION_ENCRYPTION_KEY saved source passwords cannot be read.
 DATAPIPETTE_DOMAIN=${domain}
 DATAPIPETTE_INSTALLATION_TIMEZONE=${timezone}
+DATAPIPETTE_API_WORKERS=${api_workers}
 DATAPIPETTE_BOOTSTRAP_ADMIN_EMAIL=${admin_email}
 DATAPIPETTE_BOOTSTRAP_ADMIN_DISPLAY_NAME="${admin_name}"
 DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD=$(hex 18)
