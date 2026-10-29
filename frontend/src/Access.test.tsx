@@ -36,7 +36,7 @@ describe("access administration", () => {
 
     renderAccess();
 
-    expect(await screen.findByRole("heading", { name: "Good data should feel quiet." })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeVisible();
     expect(requests).not.toContain("/api/v1/users");
     expect(requests).not.toContain("/api/v1/groups");
     expect(requests).not.toContain("/api/v1/service-accounts");

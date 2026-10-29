@@ -642,9 +642,9 @@ function TableCard({ data }: NodeProps<TableNode>) {
         );
   const allSelected = columns.length > 0 && columns.every((column) => selected.has(column.name));
   return (
-    <div className={`table-card${data.isPending ? " pending" : ""}${data.isMain ? " main" : ""}`}>
+    <div className={`board-card${data.isPending ? " pending" : ""}${data.isMain ? " main" : ""}`}>
       <header>
-        <span className="table-card-icon">{data.isMain ? <Crown /> : data.isPending ? <Link2 /> : <Table2 />}</span>
+        <span className="board-card-icon">{data.isMain ? <Crown /> : data.isPending ? <Link2 /> : <Table2 />}</span>
         <div>
           <strong title={`${data.schema}.${data.name}`}>{data.name}</strong>
           <small>
@@ -659,14 +659,14 @@ function TableCard({ data }: NodeProps<TableNode>) {
           <Trash2 />
         </button>
       </header>
-      {data.isPending && <p className="table-card-hint">{t("Drag from a column here to the matching column of another table.")}</p>}
+      {data.isPending && <p className="board-card-hint">{t("Drag from a column here to the matching column of another table.")}</p>}
       {!data.isPending && columns.length > 0 && (
-        <button className="table-card-all nodrag" type="button" onClick={() => data.onSelectAll(columns.map((column) => column.name), !allSelected)}>
+        <button className="board-card-all nodrag" type="button" onClick={() => data.onSelectAll(columns.map((column) => column.name), !allSelected)}>
           {allSelected ? t("Clear all") : t("Select all")}
         </button>
       )}
-      {detail.isPending && <p className="table-card-hint">{t("Loading columns…")}</p>}
-      {detail.isError && <p className="table-card-hint error">{t("Columns could not be loaded.")}</p>}
+      {detail.isPending && <p className="board-card-hint">{t("Loading columns…")}</p>}
+      {detail.isError && <p className="board-card-hint error">{t("Columns could not be loaded.")}</p>}
       <ul>
         {visible.map((column) => (
           <li key={column.name} className={linked.has(column.name) ? "linked" : ""}>
@@ -687,7 +687,7 @@ function TableCard({ data }: NodeProps<TableNode>) {
         ))}
       </ul>
       {!expanded && visible.length < columns.length && (
-        <button className="table-card-more nodrag" type="button" onClick={() => setExpanded(true)}>
+        <button className="board-card-more nodrag" type="button" onClick={() => setExpanded(true)}>
           {t("Show all {count} columns", { count: columns.length })}
         </button>
       )}

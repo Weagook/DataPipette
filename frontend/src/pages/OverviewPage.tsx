@@ -1,15 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Database, LayoutDashboard, ShieldCheck, Sparkles } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ArrowUpRight, BarChart3, Database, LayoutDashboard } from "lucide-react";
+import { Link, useOutletContext } from "react-router-dom";
 
 import { InlineError } from "../components/Status";
-import { listDashboards, problemMessage } from "../lib/api";
+import { listDashboards, problemMessage, type CurrentUser } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
 
 export function OverviewPage() {
   const { locale, t } = useI18n();
+  const user = useOutletContext<CurrentUser | undefined>();
   const dashboards = useQuery({
     queryKey: queryKeys.dashboardOverview,
     queryFn: () => listDashboards(),
@@ -19,11 +20,9 @@ export function OverviewPage() {
     <div className="page-stack">
       <header className="page-heading overview-heading">
         <div>
-          <span className="eyebrow">{t("Today’s workspace")}</span>
-          <h1>{t("Good data should feel quiet.")}</h1>
-          <p>{t("Start from a trusted dashboard. Freshness and failures stay visible while every chart loads independently.")}</p>
+          <h1>{t("Overview")}</h1>
+          <p>{t("Open a dashboard, or prepare new data and charts.")}</p>
         </div>
-        <div className="trust-pill"><ShieldCheck size={17} /> {t("Snapshot reads active")}</div>
       </header>
 
       {dashboards.isError ? (
@@ -31,26 +30,30 @@ export function OverviewPage() {
       ) : (
         <section className="overview-grid" aria-label={t("Workspace summary")}>
           <article className="metric-card primary-metric">
-            <span>{t("Accessible dashboards")}</span>
+            <span>{t("Dashboards you can open")}</span>
             <strong>{dashboards.data?.data.length ?? "—"}</strong>
-            <Link to="/dashboards">{t("Open collection")} <ArrowUpRight size={16} /></Link>
+            <Link to="/dashboards">{t("Open dashboards")} <ArrowUpRight size={16} /></Link>
           </article>
-          <article className="metric-card">
-            <span>{t("Analytics engine")}</span>
-            <strong className="metric-word">{t("Ready")}</strong>
-            <p>{t("Queries run against governed Parquet snapshots.")}</p>
-          </article>
-          <article className="metric-card">
-            <span>{t("Access model")}</span>
-            <strong className="metric-word">{t("Private")}</strong>
-            <p>{t("Resources remain owner-only until explicitly shared.")}</p>
-          </article>
+          {user && user.role !== "viewer" && (
+            <>
+              <Link className="metric-card action-card" to="/datasets/new">
+                <Database />
+                <strong>{t("New dataset")}</strong>
+                <p>{t("Pick tables from your database and load them for analysis.")}</p>
+              </Link>
+              <Link className="metric-card action-card" to="/charts/new">
+                <BarChart3 />
+                <strong>{t("New chart")}</strong>
+                <p>{t("Turn a dataset into a bar, line, pie, or single-number chart.")}</p>
+              </Link>
+            </>
+          )}
         </section>
       )}
 
       <section className="section-block">
         <div className="section-heading">
-          <div><span className="eyebrow">{t("Continue reading")}</span><h2>{t("Recent dashboards")}</h2></div>
+          <div><h2>{t("Recent dashboards")}</h2></div>
           <Link className="text-link" to="/dashboards">{t("View all")} <ArrowUpRight size={15} /></Link>
         </div>
         <div className="recent-list">
@@ -69,13 +72,6 @@ export function OverviewPage() {
         </div>
       </section>
 
-      <section className="capability-strip" aria-label={t("DataPipette workflow")}>
-        <div><Database /><span><strong>{t("Connect")}</strong><small>{t("PostgreSQL sources")}</small></span></div>
-        <i />
-        <div><Sparkles /><span><strong>{t("Shape")}</strong><small>{t("Visual or SQL datasets")}</small></span></div>
-        <i />
-        <div><LayoutDashboard /><span><strong>{t("Share")}</strong><small>{t("Governed insight")}</small></span></div>
-      </section>
     </div>
   );
 }

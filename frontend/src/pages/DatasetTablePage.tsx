@@ -147,16 +147,15 @@ function DatasetWorkspace({ exploration }: { exploration: DatasetExploration }) 
       <Link className="back-link" to="/datasets"><ArrowLeft size={16} /> {t("All datasets")}</Link>
       <header className="page-heading dataset-titlebar">
         <div>
-          <span className="eyebrow">{t("Snapshot table")}</span>
           <h1>{exploration.dataset_name}</h1>
           <p>
-            {t("{count} rows · Snapshot activated {date}", { count: exploration.snapshot_row_count.toLocaleString(), date: formatDateTime(exploration.snapshot_activated_at, locale) })}
+            {t("{count} rows · updated {date}", { count: exploration.snapshot_row_count.toLocaleString(), date: formatDateTime(exploration.snapshot_activated_at, locale) })}
           </p>
         </div>
         <div className="heading-actions">
           <span className={`freshness-pill ${exploration.is_stale ? "stale" : "fresh"}`}>
             {exploration.is_stale ? <TriangleAlert size={15} /> : <Check size={15} />}
-            {t(exploration.is_stale ? "Showing last good snapshot" : "Snapshot current")}
+            {t(exploration.is_stale ? "Showing the last successful load" : "Up to date")}
           </span>
           {exploration.can_export && <ExportPanel datasetId={exploration.dataset_id} query={activeSnapshotQuery} />}
         </div>

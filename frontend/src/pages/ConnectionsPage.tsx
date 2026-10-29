@@ -63,10 +63,9 @@ function ConnectionsAdmin() {
     <div className="page-stack connections-page">
       <header className="page-heading split-heading">
         <div>
-          <span className="eyebrow">{t("Source control plane")}</span>
           <h1>{t("Connections")}</h1>
           <p>
-            {t("Configure PostgreSQL once, then expose only the schemas and tables each analyst should discover.")}
+            {t("Databases DataPipette reads from, and who may use which tables.")}
           </p>
         </div>
         <Link className="button primary" to="/connections/new">

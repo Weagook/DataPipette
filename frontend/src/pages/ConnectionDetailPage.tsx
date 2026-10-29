@@ -178,9 +178,8 @@ function ConnectionWorkspace({ connection, form, onFormChange, onSave, savePendi
       <Link className="back-link" to="/connections"><ArrowLeft size={16} /> {t("Connections")}</Link>
       <header className="page-heading connection-titlebar">
         <div>
-          <span className="eyebrow">{t(connection ? "Source configuration" : "New PostgreSQL source")}</span>
           <h1>{connection ? connection.name : t("Add a connection")}</h1>
-          <p>{t(connection ? "Manage safe connectivity, inspect the live catalog, and control analyst visibility." : "Credentials are encrypted at rest and are never returned by the API.")}</p>
+          <p>{t(connection ? "Check the connection, browse its tables, and choose who may use them." : "The password is stored encrypted and is never shown again.")}</p>
         </div>
         {connection && <ConnectionStatus connection={connection} result={test.data} />}
       </header>
@@ -291,7 +290,7 @@ function CatalogAndAccess({ connection }: { connection: Connection }) {
 
   return (
     <section className="catalog-access-section">
-      <header className="section-heading"><div><span className="eyebrow">{t("Live source boundary")}</span><h2>{t("Catalog & access")}</h2><p>{t("Browse what the configured PostgreSQL role can see, then narrow it for DataPipette analysts.")}</p></div></header>
+      <header className="section-heading"><div><h2>{t("Catalog & access")}</h2><p>{t("Browse what the configured PostgreSQL role can see, then narrow it for DataPipette analysts.")}</p></div></header>
       {(schemas.isError || relations.isError || detail.isError) && <InlineError message={problemMessage(schemas.error ?? relations.error ?? detail.error)} onRetry={() => void schemas.refetch()} />}
       <div className="catalog-access-grid">
         <div className="catalog-browser-card">
