@@ -180,6 +180,39 @@ class SqlAlchemyChartStore:
             self._translate_integrity_error(exc)
             raise
 
+    async def record_preview(
+        self,
+        *,
+        dataset_id: UUID,
+        context: ActiveSnapshotQueryContext,
+        actor_id: UUID,
+        policy_revision: int,
+        returned_rows: int,
+        truncated_by_bytes: bool,
+        error_code: str | None,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> None:
+        async with self._session_factory() as session, session.begin():
+            session.add(
+                self._audit(
+                    actor_id=actor_id,
+                    action="chart.previewed" if error_code is None else "chart.preview_failed",
+                    resource_type="dataset",
+                    resource_id=dataset_id,
+                    occurred_at=occurred_at,
+                    request_id=request_id,
+                    outcome=(AuditOutcome.SUCCESS if error_code is None else AuditOutcome.FAILURE),
+                    details={
+                        "snapshot_id": str(context.snapshot_id),
+                        "policy_revision": policy_revision,
+                        "returned_rows": returned_rows,
+                        "truncated_by_bytes": truncated_by_bytes,
+                        "error_code": error_code,
+                    },
+                )
+            )
+
     async def record_query(
         self,
         *,
@@ -248,6 +281,7 @@ class SqlAlchemyChartStore:
         details: dict[str, object],
         outcome: AuditOutcome = AuditOutcome.SUCCESS,
         actor_type: AuditActorType = AuditActorType.USER,
+        resource_type: str = "chart",
     ) -> AuditEventModel:
         return AuditEventModel(
             id=uuid4(),
@@ -256,7 +290,7 @@ class SqlAlchemyChartStore:
             actor_id=actor_id,
             action=action,
             outcome=outcome.value,
-            resource_type="chart",
+            resource_type=resource_type,
             resource_id=resource_id,
             request_id=request_id,
             details=details,

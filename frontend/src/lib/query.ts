@@ -65,6 +65,8 @@ export const queryKeys = {
   charts: ["charts", "infinite"] as const,
   chartDatasets: ["charts", "datasets"] as const,
   chart: (id: string) => ["chart", id] as const,
+  chartDraftPreview: (datasetId: string, definition: string) =>
+    ["chart-draft-preview", datasetId, definition] as const,
   chartPreview: (id: string, revision: number) =>
     ["chart", id, "preview", revision] as const,
   querySafetyPolicy: ["governance", "query-safety-policy"] as const,

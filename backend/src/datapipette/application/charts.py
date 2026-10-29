@@ -26,6 +26,7 @@ from datapipette.domain.charts import (
     Chart,
     ChartAggregation,
     ChartDefinition,
+    ChartPreviewResult,
     ChartQueryExecution,
     ChartQueryResult,
     ChartSortTargetType,
@@ -131,6 +132,20 @@ class ChartStore(Protocol):
         occurred_at: datetime,
         request_id: str,
     ) -> Chart | None: ...
+
+    async def record_preview(
+        self,
+        *,
+        dataset_id: UUID,
+        context: ActiveSnapshotQueryContext,
+        actor_id: UUID,
+        policy_revision: int,
+        returned_rows: int,
+        truncated_by_bytes: bool,
+        error_code: str | None,
+        request_id: str,
+        occurred_at: datetime,
+    ) -> None: ...
 
     async def record_query(
         self,
@@ -357,6 +372,72 @@ class ChartService:
         if updated is None:
             raise ChartNotFoundError
         return updated
+
+    async def preview(
+        self,
+        *,
+        actor: User,
+        dataset_id: UUID,
+        definition: ChartDefinition,
+        request_id: str,
+    ) -> ChartPreviewResult:
+        """Run an unsaved definition with exactly the rights and limits of saving it."""
+        if actor.status is not AccountStatus.ACTIVE or actor.role not in {
+            SystemRole.ADMIN,
+            SystemRole.ANALYST,
+        }:
+            raise ChartDatasetNotAvailableError
+        context = await self._authorized_context(actor=actor, dataset_id=dataset_id)
+        prepared = prepare_chart_query(context, definition)
+        managed_policy = await self._policy_store.get()
+        runtime = InteractiveQueryRuntime.from_policy(managed_policy.policy)
+
+        async def record(returned_rows: int, truncated: bool, error_code: str | None) -> None:
+            await self._store.record_preview(
+                dataset_id=dataset_id,
+                context=context,
+                actor_id=actor.id,
+                policy_revision=managed_policy.revision,
+                returned_rows=returned_rows,
+                truncated_by_bytes=truncated,
+                error_code=error_code,
+                request_id=request_id,
+                occurred_at=datetime.now(UTC),
+            )
+
+        try:
+            execution = await self._executor.query(
+                context=context,
+                prepared=prepared,
+                runtime=runtime,
+            )
+        except (
+            ChartQueryCapacityExceededError,
+            ChartQueryTimeoutError,
+            ChartQueryResultTooLargeError,
+            ChartQueryUnavailableError,
+        ) as exc:
+            await record(
+                0,
+                False,
+                "interactive_query_capacity_exceeded"
+                if isinstance(exc, ChartQueryCapacityExceededError)
+                else "execution_failed",
+            )
+            raise
+        await record(len(execution.rows), execution.truncated_by_bytes, None)
+        return ChartPreviewResult(
+            policy_revision=managed_policy.revision,
+            chart_type=definition.chart_type,
+            dataset_id=dataset_id,
+            snapshot_id=context.snapshot_id,
+            snapshot_activated_at=context.activated_at,
+            refresh_state=context.refresh_state,
+            is_stale=context.is_stale,
+            columns=execution.columns,
+            rows=execution.rows,
+            truncated_by_bytes=execution.truncated_by_bytes,
+        )
 
     async def query(
         self,

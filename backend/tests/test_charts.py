@@ -17,6 +17,7 @@ from datapipette.application.charts import (
     ChartCreate,
     ChartDatasetNotAvailableError,
     ChartNotFoundError,
+    ChartQueryCapacityExceededError,
     ChartRevisionConflictError,
     ChartService,
     InvalidChartCursorError,
@@ -205,6 +206,9 @@ class FakeChartStore:
 
     async def record_query(self, **values: Any) -> None:
         self.audits.append(values)
+
+    async def record_preview(self, **values: Any) -> None:
+        self.audits.append({"preview": True, **values})
 
 
 class RecordingExecutor:
@@ -623,5 +627,93 @@ def test_viewer_cannot_create_chart_even_with_nominal_dataset_access() -> None:
                 value=ChartCreate("Revenue", DATASET_ID, _definition()),
                 request_id="req-viewer",
             )
+
+    asyncio.run(exercise())
+
+
+def test_chart_preview_runs_unsaved_definitions_with_authoring_rights() -> None:
+    actor = _user()
+    access = FakeAccessStore(actor.id)
+    store = FakeChartStore()
+    service = ChartService(
+        store,
+        FakeSnapshotStore(_context()),
+        RecordingExecutor(),
+        DatasetAccessAuthorizer(access),
+        FakePolicyStore(),
+    )
+
+    async def exercise() -> None:
+        result = await service.preview(
+            actor=actor,
+            dataset_id=DATASET_ID,
+            definition=_definition(),
+            request_id="req-preview",
+        )
+        assert result.rows == ({"ok": True},)
+        assert result.chart_type is ChartType.BAR
+        assert result.policy_revision == 9
+        assert store.chart is None
+        assert store.audits[-1]["preview"] is True
+        assert store.audits[-1]["dataset_id"] == DATASET_ID
+        assert store.audits[-1]["returned_rows"] == 1
+        assert store.audits[-1]["error_code"] is None
+
+        with pytest.raises(InvalidChartDefinitionError):
+            await service.preview(
+                actor=actor,
+                dataset_id=DATASET_ID,
+                definition=replace(
+                    _definition(),
+                    measures=(ChartMeasure(MEASURE_ID, uuid4(), ChartAggregation.SUM, "Revenue"),),
+                    sorts=(),
+                ),
+                request_id="req-unknown-field",
+            )
+        with pytest.raises(ChartDatasetNotAvailableError):
+            await service.preview(
+                actor=_user(SystemRole.VIEWER),
+                dataset_id=DATASET_ID,
+                definition=_definition(),
+                request_id="req-viewer",
+            )
+        access.allowed = False
+        with pytest.raises(ChartDatasetNotAvailableError):
+            await service.preview(
+                actor=actor,
+                dataset_id=DATASET_ID,
+                definition=_definition(),
+                request_id="req-denied",
+            )
+
+    asyncio.run(exercise())
+
+
+def test_chart_preview_records_failed_executions() -> None:
+    actor = _user()
+    store = FakeChartStore()
+
+    class BusyExecutor:
+        async def query(self, **values: Any) -> Any:
+            raise ChartQueryCapacityExceededError
+
+    service = ChartService(
+        store,
+        FakeSnapshotStore(_context()),
+        BusyExecutor(),
+        DatasetAccessAuthorizer(FakeAccessStore(actor.id)),
+        FakePolicyStore(),
+    )
+
+    async def exercise() -> None:
+        with pytest.raises(ChartQueryCapacityExceededError):
+            await service.preview(
+                actor=actor,
+                dataset_id=DATASET_ID,
+                definition=_definition(),
+                request_id="req-busy",
+            )
+        assert store.audits[-1]["error_code"] == "interactive_query_capacity_exceeded"
+        assert store.audits[-1]["returned_rows"] == 0
 
     asyncio.run(exercise())

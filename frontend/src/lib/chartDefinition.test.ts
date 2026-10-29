@@ -6,6 +6,8 @@ import {
   changeChartType,
   createChartDefinition,
   definitionWithFilters,
+  isRowCount,
+  withNaturalOrder,
 } from "./chartDefinition";
 
 const columns: DatasetColumn[] = [
@@ -43,15 +45,40 @@ describe("chart studio definition model", () => {
     expect(definition).toMatchObject({
       schema_version: 2,
       chart_type: "bar",
-      dimensions: [{ field_id: columns[0].field_id }],
+      dimensions: [{ field_id: columns[0].field_id, time_bucket: "month" }],
       measures: [
         {
           id: "00000000-0000-4000-8000-000000000010",
-          field_id: columns[1].field_id,
-          aggregation: "sum",
+          field_id: columns[0].field_id,
+          aggregation: "count",
         },
       ],
+      sorts: [{ target_type: "dimension", target_id: columns[0].field_id, direction: "asc" }],
+      limit: 100,
     });
+    expect(isRowCount(definition.measures[0], columns)).toBe(true);
+  });
+
+  it("prefers a readable category and shows the biggest groups first", () => {
+    const category: DatasetColumn = {
+      ...columns[1],
+      field_id: "00000000-0000-4000-8000-000000000003",
+      name: "region",
+      label: "Region",
+      data_type: "text",
+      nullable: true,
+    };
+    const identifier: DatasetColumn = {
+      ...category,
+      field_id: "00000000-0000-4000-8000-000000000004",
+      name: "customer_id",
+      data_type: "bigint",
+    };
+    const definition = createChartDefinition([identifier, category, ...columns]);
+
+    expect(definition.dimensions).toEqual([{ field_id: category.field_id, time_bucket: null }]);
+    expect(definition.sorts?.[0]).toMatchObject({ target_type: "measure", direction: "desc" });
+    expect(definition.limit).toBe(20);
   });
 
   it("normalizes KPI shape to one measure and no dimension", () => {
@@ -93,5 +120,15 @@ describe("chart studio definition model", () => {
       },
     ]);
     expect(aggregationsFor(columns[1])).toContain("avg");
+  });
+
+  it("keeps dates in time order and categories biggest first", () => {
+    const definition = { ...createChartDefinition(columns), sorts: [], limit: 10 };
+
+    expect(withNaturalOrder(definition, columns)).toMatchObject({
+      sorts: [{ target_type: "dimension", target_id: columns[0].field_id, direction: "asc" }],
+      limit: 100,
+    });
+    expect(changeChartType(definition, "kpi", columns).sorts).toEqual([]);
   });
 });

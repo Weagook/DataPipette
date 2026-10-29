@@ -483,6 +483,21 @@ export async function queryChart(chartId: string): Promise<ChartQueryResult> {
   );
 }
 
+export type ChartPreview = ApiSchemas["ChartPreviewResponse"];
+
+export async function previewChart(
+  datasetId: string,
+  definition: ChartDefinition,
+  signal?: AbortSignal,
+): Promise<ChartPreview> {
+  return unwrap(
+    await api.POST("/api/v1/charts/data:preview", {
+      body: { dataset_id: datasetId, definition },
+      signal,
+    }),
+  );
+}
+
 export async function getDataset(datasetId: string): Promise<Dataset> {
   return unwrap(
     await api.GET("/api/v1/datasets/{dataset_id}", {

@@ -28,31 +28,63 @@ export const aggregationLabels: Record<ChartAggregation, string> = {
   max: "Maximum",
 };
 
+/** Pick defaults a non-specialist would expect: a category, counted rows, biggest first. */
 export function createChartDefinition(
   columns: DatasetColumn[],
   chartType: ChartType = "bar",
 ): ChartDefinition {
-  const dimension = columns.find(isDimensionColumn);
-  const measure =
-    columns.find((column) => isNumeric(column.data_type)) ??
-    columns.find((column) => aggregationsFor(column).length > 0);
-  if (!measure)
-    throw new Error("The published dataset has no chartable fields.");
+  const counted = rowCountColumn(columns);
+  if (!counted) throw new Error("The published dataset has no chartable fields.");
+  const dimension = defaultDimension(columns);
   if (chartType !== "kpi" && !dimension) {
     throw new Error("The published dataset has no valid dimension field.");
   }
+  const temporal = dimension ? isTemporalColumn(dimension) : false;
+  const measure = newMeasure(counted, "count");
   return {
     schema_version: 2,
     chart_type: chartType,
     dimensions:
       chartType === "kpi" || !dimension
         ? []
-        : [{ field_id: dimension.field_id, time_bucket: null }],
-    measures: [newMeasure(measure)],
+        : [{ field_id: dimension.field_id, time_bucket: temporal ? "month" : null }],
+    measures: [measure],
     filters: [],
-    sorts: [],
-    limit: chartType === "kpi" ? 1 : 100,
+    sorts:
+      chartType === "kpi" || !dimension
+        ? []
+        : temporal
+          ? [{ target_type: "dimension", target_id: dimension.field_id, direction: "asc" }]
+          : [{ target_type: "measure", target_id: measure.id, direction: "desc" }],
+    limit: chartType === "kpi" ? 1 : temporal ? 100 : 20,
   };
+}
+
+/** A column whose non-null count equals the number of rows, when one exists. */
+export function rowCountColumn(columns: DatasetColumn[]): DatasetColumn | undefined {
+  return (
+    columns.find((column) => !column.nullable && aggregationsFor(column).length > 0) ??
+    columns.find((column) => aggregationsFor(column).length > 0)
+  );
+}
+
+export function isRowCount(
+  measure: ChartDefinition["measures"][number],
+  columns: DatasetColumn[],
+): boolean {
+  return measure.aggregation === "count" && measure.field_id === rowCountColumn(columns)?.field_id;
+}
+
+function defaultDimension(columns: DatasetColumn[]): DatasetColumn | undefined {
+  const candidates = columns.filter(isDimensionColumn);
+  const identifier = (column: DatasetColumn) =>
+    /(^id$|_id$|^uuid$)/i.test(column.name) || /uuid/i.test(column.data_type);
+  return (
+    candidates.find((column) => typeFamily(column.data_type) === "text" && !identifier(column)) ??
+    candidates.find(isTemporalColumn) ??
+    candidates.find((column) => !identifier(column)) ??
+    candidates[0]
+  );
 }
 
 export function changeChartType(
@@ -73,22 +105,33 @@ export function changeChartType(
   const measures = ["pie", "donut", "kpi"].includes(chartType)
     ? definition.measures.slice(0, 1)
     : definition.measures;
+  return withNaturalOrder(
+    { ...definition, chart_type: chartType, dimensions, measures, sorts: [], limit: chartType === "kpi" ? 1 : Math.max(definition.limit, 10) },
+    columns,
+  );
+}
+
+/** Dates read left to right in time; categories read biggest first. */
+export function withNaturalOrder(definition: ChartDefinition, columns: DatasetColumn[]): ChartDefinition {
+  const dimension = definition.dimensions?.[0];
+  const column = columns.find((item) => item.field_id === dimension?.field_id);
+  if (definition.chart_type === "kpi" || !dimension || !column) return { ...definition, sorts: [] };
+  if (isTemporalColumn(column))
+    return {
+      ...definition,
+      sorts: [{ target_type: "dimension", target_id: dimension.field_id, direction: "asc" }],
+      limit: Math.max(definition.limit, 100),
+    };
   return {
     ...definition,
-    chart_type: chartType,
-    dimensions,
-    measures,
-    sorts: [],
-    limit: chartType === "kpi" ? 1 : Math.max(definition.limit, 10),
+    sorts: [{ target_type: "measure", target_id: definition.measures[0].id, direction: "desc" }],
   };
 }
 
 export function newMeasure(
   column: DatasetColumn,
+  aggregation: ChartAggregation = isNumeric(column.data_type) ? "sum" : "count",
 ): ChartDefinition["measures"][number] {
-  const aggregation: ChartAggregation = isNumeric(column.data_type)
-    ? "sum"
-    : "count";
   return {
     id: randomUuid(),
     field_id: column.field_id,

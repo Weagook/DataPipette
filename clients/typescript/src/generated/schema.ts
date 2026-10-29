@@ -142,6 +142,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/charts/data:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Chart Data
+         * @description Run an unsaved chart definition against the dataset's active snapshot.
+         */
+        post: operations["preview_chart_data_api_v1_charts_data_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connections": {
         parameters: {
             query?: never;
@@ -1279,6 +1299,37 @@ export interface components {
             id: string;
             /** Label */
             label: string;
+        };
+        /** ChartPreviewMetaResponse */
+        ChartPreviewMetaResponse: {
+            chart_type: components["schemas"]["ChartType"];
+            /**
+             * Dataset Id
+             * Format: uuid
+             */
+            dataset_id: string;
+            /** Is Stale */
+            is_stale: boolean;
+            /** Policy Revision */
+            policy_revision: number;
+            refresh_state: components["schemas"]["SnapshotRefreshState"];
+            /**
+             * Snapshot Activated At
+             * Format: date-time
+             */
+            snapshot_activated_at: string;
+            /**
+             * Snapshot Id
+             * Format: uuid
+             */
+            snapshot_id: string;
+            /** Truncated By Bytes */
+            truncated_by_bytes: boolean;
+        };
+        /** ChartPreviewResponse */
+        ChartPreviewResponse: {
+            data: components["schemas"]["ChartQueryDataResponse"];
+            meta: components["schemas"]["ChartPreviewMetaResponse"];
         };
         /** ChartQueryDataResponse */
         ChartQueryDataResponse: {
@@ -2517,6 +2568,15 @@ export interface components {
          * @enum {string}
          */
         PostgresSslMode: "disable" | "require" | "verify-ca" | "verify-full";
+        /** PreviewChartRequest */
+        PreviewChartRequest: {
+            /**
+             * Dataset Id
+             * Format: uuid
+             */
+            dataset_id: string;
+            definition: components["schemas"]["ChartDefinitionPayload"];
+        };
         /** PreviewDatasetDraftRequest */
         PreviewDatasetDraftRequest: {
             /**
@@ -4071,6 +4131,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChartQueryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Seconds to wait after interactive capacity exhaustion. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Gateway Timeout */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_chart_data_api_v1_charts_data_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewChartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartPreviewResponse"];
                 };
             };
             /** @description Bad Request */

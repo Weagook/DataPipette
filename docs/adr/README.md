@@ -78,3 +78,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0048](0048-columnar-csv-refresh-stream.md): Columnar CSV refresh stream
 - [ADR-0049](0049-verified-snapshot-object-cache.md): Verified local cache for snapshot objects
 - [ADR-0050](0050-table-and-link-dataset-board.md): Table-and-link dataset board
+- [ADR-0051](0051-unsaved-chart-preview.md): Live preview of unsaved chart definitions

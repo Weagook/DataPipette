@@ -14,6 +14,7 @@ describe("chart studio", () => {
   it("creates a saved aggregate chart through the public API", async () => {
     document.cookie = "datapipette_csrf=test-token; path=/";
     let createBody: unknown;
+    const previewBodies: { definition: { chart_type: string } }[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -100,6 +101,23 @@ describe("chart studio", () => {
             { status: 201, headers: { ETag: '"chart-1"' } },
           );
         }
+        if (request.url.endsWith("/api/v1/charts/data:preview")) {
+          const body = (await request.json()) as { definition: { chart_type: string } };
+          previewBodies.push(body);
+          return Response.json({
+            data: { columns: [], rows: [] },
+            meta: {
+              chart_type: body.definition.chart_type,
+              dataset_id: DATASET_ID,
+              snapshot_id: "snapshot-1",
+              snapshot_activated_at: "2026-10-16T00:00:00Z",
+              refresh_state: "idle",
+              is_stale: false,
+              policy_revision: 1,
+              truncated_by_bytes: false,
+            },
+          });
+        }
         if (request.url.endsWith(`/api/v1/charts/${CHART_ID}`))
           return Response.json(
             {
@@ -150,25 +168,24 @@ describe("chart studio", () => {
       </QueryClientProvider>,
     );
 
-    expect(
-      await screen.findByRole(
-        "heading",
-        { name: "Build a visual answer" },
-        { timeout: 5_000 },
-      ),
-    ).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Chart name"), {
+    fireEvent.change(await screen.findByLabelText("Chart name", {}, { timeout: 5_000 }), {
       target: { value: "Revenue trend" },
     });
-    fireEvent.change(await screen.findByLabelText("Published dataset"), {
+    fireEvent.change(await screen.findByLabelText("Data"), {
       target: { value: DATASET_ID },
     });
-    await screen.findByRole("button", { name: /Line/ });
-    fireEvent.click(screen.getByRole("button", { name: /Line/ }));
-    fireEvent.change(screen.getByLabelText("Time bucket"), {
-      target: { value: "month" },
+    fireEvent.click(await screen.findByRole("radio", { name: "Line" }));
+    fireEvent.change(screen.getByLabelText("Time step"), {
+      target: { value: "week" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save and preview" }));
+    fireEvent.change(screen.getByLabelText("How to count"), {
+      target: { value: "sum" },
+    });
+    expect(screen.getByLabelText("Of which column")).toHaveValue(REVENUE_ID);
+
+    await waitFor(() => expect(previewBodies.at(-1)?.definition.chart_type).toBe("line"));
+    expect(await screen.findByText("Nothing to show")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Save chart" }));
 
     await waitFor(() =>
       expect(createBody).toMatchObject({
@@ -177,8 +194,8 @@ describe("chart studio", () => {
         definition: {
           schema_version: 2,
           chart_type: "line",
-          dimensions: [{ field_id: DATE_ID, time_bucket: "month" }],
-          measures: [{ field_id: REVENUE_ID, aggregation: "sum" }],
+          dimensions: [{ field_id: DATE_ID, time_bucket: "week" }],
+          measures: [{ field_id: REVENUE_ID, aggregation: "sum", label: "Sum: Revenue" }],
         },
       }),
     );

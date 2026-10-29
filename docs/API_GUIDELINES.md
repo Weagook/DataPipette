@@ -48,6 +48,7 @@ The DataPipette backend is a public product surface. The official frontend and e
 /api/v1/datasets/{dataset_id}/grants
 /api/v1/charts
 /api/v1/charts/{chart_id}/data:query
+/api/v1/charts/data:preview
 /api/v1/dashboards
 /api/v1/datasets/{dataset_id}/exports
 /api/v1/datasets/{dataset_id}/exports/{export_id}
@@ -311,6 +312,7 @@ Complex table and chart queries use typed request bodies rather than user-writte
 - Creation and replacement require CSRF, chart ownership (or administrator role), current effective dataset `view_rows`, and validation against the active published field contract. A chart never grants dataset access.
 - `POST /api/v1/charts/{chart_id}/data:query` executes only the saved definition against the current active Parquet snapshot. It returns stable result keys, column roles and identifiers, chart revision, snapshot identity, freshness, stale error metadata, and response truncation state.
 - Chart definition version 2 adds an optional dimension `time_bucket` of `hour`, `day`, `week`, `month`, `quarter`, or `year`. Bucketed timestamp result columns include the installation timezone; version-1 definitions remain valid without buckets.
+- `POST /api/v1/charts/data:preview` accepts `dataset_id` and a complete chart definition, validates it exactly like creation, and executes it against the active snapshot without saving anything. It requires an active Admin or Analyst browser session with effective dataset `view_rows`, uses the same managed interactive-query limits and admission as saved charts, and returns the same `data` plus snapshot, freshness, and truncation metadata without chart identity or revision. Each preview is audited as `chart.previewed` or `chart.preview_failed` on the dataset.
 - Direct chart querying is owner/administrator-only. Dashboard recipients, including Viewers, execute a saved chart only through the dashboard-item query described below, which never accepts arbitrary chart definitions.
 - Deletion is intentionally absent until chart archival and dashboard dependency semantics are accepted.
 
