@@ -2,10 +2,13 @@
 
 import asyncio
 import hashlib
+import io
 import json
 import os
+import queue
 import re
-from collections.abc import Callable, Sequence
+import threading
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -16,7 +19,9 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pyarrow as pa  # type: ignore[import-untyped]
+import pyarrow.csv as pacsv  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
+from psycopg import sql
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from datapipette.application.connection_access import (
@@ -52,10 +57,30 @@ from datapipette.infrastructure.repositories.authentication import to_user
 from datapipette.infrastructure.repositories.connections import to_connection
 from datapipette.infrastructure.source_postgres import open_read_only_source
 
+# Session settings that make PostgreSQL's CSV text round-trip exactly into
+# Arrow: UTC offsets, ISO dates, and shortest-exact floating-point output.
+_CSV_SESSION_SETTINGS = (
+    ("TimeZone", "UTC"),
+    ("DateStyle", "ISO, YMD"),
+    ("extra_float_digits", "3"),
+)
+
 _TIMESTAMP = re.compile(r"^timestamp(?:\([0-6]\))? (with|without) time zone$")
 _TIME = re.compile(r"^time(?:\([0-6]\))? (with|without) time zone$")
 _NUMERIC = re.compile(r"^(?:numeric|decimal)\(([0-9]+),(-?[0-9]+)\)$")
 _CHARACTER = re.compile(r"^(?:character varying|varchar|character|char)(?:\([0-9]+\))?$")
+_CSV_NATIVE_TYPES: dict[str, pa.DataType] = {
+    "boolean": pa.bool_(),
+    "smallint": pa.int16(),
+    "integer": pa.int32(),
+    "bigint": pa.int64(),
+    "real": pa.float32(),
+    "double precision": pa.float64(),
+    "date": pa.date32(),
+}
+_CSV_CHUNK_BYTES = 4 * 1024 * 1024
+_CSV_BLOCK_BYTES = 16 * 1024 * 1024
+_CSV_QUEUE_CHUNKS = 8
 
 
 class UnsupportedSourceTypeError(ValueError):
@@ -100,6 +125,9 @@ class _ColumnAdapter:
     arrow_type: pa.DataType
     nullable: bool
     convert: Callable[[Any], Any]
+    # PostgreSQL's CSV text for this type parses in Arrow to the same value the
+    # row path would store, so the column can use the columnar COPY stream.
+    csv_compatible: bool = False
 
 
 def _identity(value: Any) -> Any:
@@ -143,22 +171,16 @@ def _adapter(
     normalized = " ".join(data_type.lower().split())
     arrow_type: pa.DataType
     converter: Callable[[Any], Any] = _identity
-    if normalized == "boolean":
-        arrow_type = pa.bool_()
-    elif normalized == "smallint":
-        arrow_type = pa.int16()
-    elif normalized == "integer":
-        arrow_type = pa.int32()
-    elif normalized == "bigint":
-        arrow_type = pa.int64()
-    elif normalized == "real":
-        arrow_type = pa.float32()
-    elif normalized == "double precision":
-        arrow_type = pa.float64()
+    csv_compatible = False
+    if normalized in _CSV_NATIVE_TYPES:
+        arrow_type = _CSV_NATIVE_TYPES[normalized]
+        csv_compatible = True
     elif match := _NUMERIC.fullmatch(normalized):
         precision, scale = int(match.group(1)), int(match.group(2))
         if precision <= 38:
             arrow_type = pa.decimal128(precision, scale)
+            # Arrow parses CSV decimals only into 128-bit, non-negative scales.
+            csv_compatible = scale >= 0
         elif precision <= 76:
             arrow_type = pa.decimal256(precision, scale)
         else:
@@ -171,16 +193,18 @@ def _adapter(
     }:
         arrow_type = pa.string()
         converter = _text
+        # PostgreSQL's canonical UUID text is exactly Python's str(UUID).
+        csv_compatible = normalized == "uuid"
     elif normalized in {"text", "name", "citext"} or _CHARACTER.fullmatch(normalized):
         arrow_type = pa.string()
-    elif normalized == "date":
-        arrow_type = pa.date32()
+        csv_compatible = True
     elif timestamp_match := _TIMESTAMP.fullmatch(normalized):
         arrow_type = (
             pa.timestamp("us", tz="UTC")
             if timestamp_match.group(1) == "with"
             else pa.timestamp("us")
         )
+        csv_compatible = True
     elif time_match := _TIME.fullmatch(normalized):
         if time_match.group(1) == "with":
             arrow_type = pa.string()
@@ -211,6 +235,7 @@ def _adapter(
         arrow_type,
         nullable,
         converter,
+        csv_compatible,
     )
 
 
@@ -285,6 +310,116 @@ def _append_rows(
     batch = _record_batch_from_rows(rows, schema=schema, adapters=adapters)
     writer.write_batch(batch)
     return int(batch.num_rows)
+
+
+class _CsvStreamRejectedError(Exception):
+    """Arrow could not parse the CSV stream; the row path must produce the snapshot."""
+
+
+class _CsvConsumerStoppedError(Exception):
+    """The CSV consumer finished early and stopped accepting chunks."""
+
+
+_CsvChunk = bytes | None
+
+
+class _CsvChunkReader(io.RawIOBase):
+    """Expose queued COPY chunks to Arrow's blocking CSV reader."""
+
+    def __init__(self, chunks: "queue.Queue[_CsvChunk]", producer_failed: threading.Event) -> None:
+        self._chunks = chunks
+        self._producer_failed = producer_failed
+        self._pending = memoryview(b"")
+        self._finished = False
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: Any) -> int:
+        while not self._pending:
+            if self._finished:
+                return 0
+            try:
+                chunk = self._chunks.get(timeout=0.1)
+            except queue.Empty:
+                if self._producer_failed.is_set():
+                    raise _CsvConsumerStoppedError from None
+                continue
+            if chunk is None:
+                self._finished = True
+                return 0
+            self._pending = memoryview(chunk)
+        size = min(len(buffer), len(self._pending))
+        buffer[:size] = self._pending[:size]
+        self._pending = self._pending[size:]
+        return size
+
+
+def _write_csv_stream(
+    writer: pq.ParquetWriter,
+    chunks: "queue.Queue[_CsvChunk]",
+    *,
+    schema: pa.Schema,
+    adapters: tuple[_ColumnAdapter, ...],
+    maximum_rows: int,
+    producer_failed: threading.Event,
+) -> int:
+    """Parse PostgreSQL CSV into typed Arrow batches and append them to the snapshot."""
+
+    try:
+        reader = pacsv.open_csv(
+            io.BufferedReader(
+                _CsvChunkReader(chunks, producer_failed),
+                buffer_size=_CSV_CHUNK_BYTES,
+            ),
+            read_options=pacsv.ReadOptions(
+                column_names=[adapter.storage_name for adapter in adapters],
+                block_size=_CSV_BLOCK_BYTES,
+            ),
+            parse_options=pacsv.ParseOptions(newlines_in_values=True),
+            convert_options=pacsv.ConvertOptions(
+                column_types=schema,
+                true_values=["t"],
+                false_values=["f"],
+                null_values=[""],
+                strings_can_be_null=True,
+                quoted_strings_can_be_null=False,
+            ),
+        )
+    except pa.ArrowInvalid as exc:
+        # An empty result has no first block from which to infer anything.
+        if "Empty CSV file" in str(exc):
+            return 0
+        raise _CsvStreamRejectedError from exc
+    row_count = 0
+    while True:
+        try:
+            parsed = reader.read_next_batch()
+        except StopIteration:
+            return row_count
+        except (pa.ArrowInvalid, pa.ArrowNotImplementedError) as exc:
+            raise _CsvStreamRejectedError from exc
+        if row_count + parsed.num_rows > maximum_rows:
+            raise RefreshRowLimitExceededError
+        for adapter, column in zip(adapters, parsed.columns, strict=True):
+            if not adapter.nullable and column.null_count:
+                raise ValueError("Non-nullable source field returned null")
+        writer.write_batch(pa.RecordBatch.from_arrays(parsed.columns, schema=schema))
+        row_count += parsed.num_rows
+
+
+def _put_csv_chunk(
+    chunks: "queue.Queue[_CsvChunk]",
+    chunk: _CsvChunk,
+    consumer_stopped: threading.Event,
+) -> bool:
+    while not consumer_stopped.is_set():
+        try:
+            chunks.put(chunk, timeout=0.1)
+            return True
+        except queue.Full:
+            continue
+    return False
 
 
 class ParquetSnapshotExecutor:
@@ -420,63 +555,29 @@ class ParquetSnapshotExecutor:
         if validated_fields != expected_fields:
             raise ValueError("Validated result schema no longer matches definition")
         schema, adapters = arrow_schema(context.validation)
-        row_count = 0
+        row_count: int | None = None
         writer: pq.ParquetWriter | None = None
         try:
             _raise_if_cancelled(cancellation)
-            writer = pq.ParquetWriter(
-                staging_path,
-                schema,
-                version="2.6",
-                compression="zstd",
-                use_dictionary=False,
-                write_statistics=True,
-                write_page_checksum=True,
-            )
-            async with open_read_only_source(
-                context.connection,
-                password=context.password,
-                ca_certificate=context.ca_certificate,
-                connect_timeout_seconds=self._connect_timeout,
-                statement_timeout_seconds=self._statement_timeout,
-            ) as source:
-                cursor_name = f"datapipette_refresh_{run.id.hex}"
-                source_cancellation = asyncio.create_task(
-                    _cancel_source_when_requested(source, cancellation)
-                )
+            if all(adapter.csv_compatible for adapter in adapters):
+                writer = _open_snapshot_writer(staging_path, schema)
                 try:
-                    async with source.cursor(name=cursor_name, binary=True) as cursor:
-                        _raise_if_cancelled(cancellation)
-                        await cursor.execute(compile_dataset_select(context.definition))
-                        rows = await cursor.fetchmany(self._batch_rows)
-                        while rows:
-                            _raise_if_cancelled(cancellation)
-                            if row_count + len(rows) > self._maximum_rows:
-                                raise RefreshRowLimitExceededError
-                            next_rows = asyncio.create_task(cursor.fetchmany(self._batch_rows))
-                            try:
-                                written_rows = await asyncio.to_thread(
-                                    _append_rows,
-                                    writer,
-                                    rows,
-                                    schema=schema,
-                                    adapters=adapters,
-                                )
-                                rows = await next_rows
-                            except BaseException:
-                                next_rows.cancel()
-                                with suppress(asyncio.CancelledError, psycopg.Error):
-                                    await next_rows
-                                raise
-                            row_count += written_rows
-                            _raise_if_cancelled(cancellation)
-                except psycopg.errors.QueryCanceled:
-                    _raise_if_cancelled(cancellation)
-                    raise
-                finally:
-                    source_cancellation.cancel()
-                    with suppress(asyncio.CancelledError, psycopg.Error):
-                        await source_cancellation
+                    row_count = await self._extract(
+                        context,
+                        cancellation,
+                        self._csv_stream(writer, context, schema, adapters, cancellation),
+                    )
+                except _CsvStreamRejectedError:
+                    writer.close()
+                    writer = None
+            if row_count is None:
+                writer = _open_snapshot_writer(staging_path, schema)
+                row_count = await self._extract(
+                    context,
+                    cancellation,
+                    self._row_stream(writer, run, context, schema, adapters, cancellation),
+                )
+            assert writer is not None
             writer.close()
             writer = None
             with staging_path.open("rb") as stream:
@@ -514,6 +615,157 @@ class ParquetSnapshotExecutor:
             if writer is not None:
                 writer.close()
             staging_path.unlink(missing_ok=True)
+
+    async def _extract(
+        self,
+        context: _ExecutionContext,
+        cancellation: asyncio.Event,
+        stream: "Callable[[psycopg.AsyncConnection[Any]], Awaitable[int]]",
+    ) -> int:
+        async with open_read_only_source(
+            context.connection,
+            password=context.password,
+            ca_certificate=context.ca_certificate,
+            connect_timeout_seconds=self._connect_timeout,
+            statement_timeout_seconds=self._statement_timeout,
+        ) as source:
+            source_cancellation = asyncio.create_task(
+                _cancel_source_when_requested(source, cancellation)
+            )
+            try:
+                return await stream(source)
+            except psycopg.errors.QueryCanceled:
+                _raise_if_cancelled(cancellation)
+                raise
+            finally:
+                source_cancellation.cancel()
+                with suppress(asyncio.CancelledError, psycopg.Error):
+                    await source_cancellation
+
+    def _row_stream(
+        self,
+        writer: pq.ParquetWriter,
+        run: RefreshRun,
+        context: _ExecutionContext,
+        schema: pa.Schema,
+        adapters: tuple[_ColumnAdapter, ...],
+        cancellation: asyncio.Event,
+    ) -> "Callable[[psycopg.AsyncConnection[Any]], Awaitable[int]]":
+        async def stream(source: psycopg.AsyncConnection[Any]) -> int:
+            row_count = 0
+            cursor_name = f"datapipette_refresh_{run.id.hex}"
+            async with source.cursor(name=cursor_name, binary=True) as cursor:
+                _raise_if_cancelled(cancellation)
+                await cursor.execute(compile_dataset_select(context.definition))
+                rows = await cursor.fetchmany(self._batch_rows)
+                while rows:
+                    _raise_if_cancelled(cancellation)
+                    if row_count + len(rows) > self._maximum_rows:
+                        raise RefreshRowLimitExceededError
+                    next_rows = asyncio.create_task(cursor.fetchmany(self._batch_rows))
+                    try:
+                        written_rows = await asyncio.to_thread(
+                            _append_rows,
+                            writer,
+                            rows,
+                            schema=schema,
+                            adapters=adapters,
+                        )
+                        rows = await next_rows
+                    except BaseException:
+                        next_rows.cancel()
+                        with suppress(asyncio.CancelledError, psycopg.Error):
+                            await next_rows
+                        raise
+                    row_count += written_rows
+                    _raise_if_cancelled(cancellation)
+            return row_count
+
+        return stream
+
+    def _csv_stream(
+        self,
+        writer: pq.ParquetWriter,
+        context: _ExecutionContext,
+        schema: pa.Schema,
+        adapters: tuple[_ColumnAdapter, ...],
+        cancellation: asyncio.Event,
+    ) -> "Callable[[psycopg.AsyncConnection[Any]], Awaitable[int]]":
+        """Stream server-side CSV text into Arrow's multithreaded parser.
+
+        PostgreSQL encodes wide rows far faster as text than in binary result
+        format, and Arrow converts CSV columns natively without one Python
+        object per cell.
+        """
+
+        async def stream(source: psycopg.AsyncConnection[Any]) -> int:
+            chunks: queue.Queue[_CsvChunk] = queue.Queue(maxsize=_CSV_QUEUE_CHUNKS)
+            consumer_stopped = threading.Event()
+            producer_failed = threading.Event()
+
+            async def put(chunk: _CsvChunk) -> None:
+                if not await asyncio.to_thread(_put_csv_chunk, chunks, chunk, consumer_stopped):
+                    raise _CsvConsumerStoppedError
+
+            async with source.cursor() as cursor:
+                for name, value in _CSV_SESSION_SETTINGS:
+                    await cursor.execute("SELECT set_config(%s, %s, true)", (name, value))
+                _raise_if_cancelled(cancellation)
+
+                def consume() -> int:
+                    # Whatever ends the consumer must release a producer
+                    # blocked on a full queue.
+                    try:
+                        return _write_csv_stream(
+                            writer,
+                            chunks,
+                            schema=schema,
+                            adapters=adapters,
+                            maximum_rows=self._maximum_rows,
+                            producer_failed=producer_failed,
+                        )
+                    finally:
+                        consumer_stopped.set()
+
+                consumer = asyncio.create_task(asyncio.to_thread(consume))
+                try:
+                    statement = sql.SQL("COPY ({}) TO STDOUT (FORMAT csv)").format(
+                        compile_dataset_select(context.definition)
+                    )
+                    async with cursor.copy(statement) as copy:
+                        pending = bytearray()
+                        async for block in copy:
+                            pending += block
+                            if len(pending) >= _CSV_CHUNK_BYTES:
+                                _raise_if_cancelled(cancellation)
+                                await put(bytes(pending))
+                                pending.clear()
+                        if pending:
+                            await put(bytes(pending))
+                    await put(None)
+                except _CsvConsumerStoppedError:
+                    # The consumer stopped early; its own exception explains why.
+                    return await consumer
+                except BaseException:
+                    producer_failed.set()
+                    with suppress(BaseException):
+                        await consumer
+                    raise
+                return await consumer
+
+        return stream
+
+
+def _open_snapshot_writer(path: Path, schema: pa.Schema) -> pq.ParquetWriter:
+    return pq.ParquetWriter(
+        path,
+        schema,
+        version="2.6",
+        compression="zstd",
+        use_dictionary=False,
+        write_statistics=True,
+        write_page_checksum=True,
+    )
 
 
 class LocalParquetSnapshotExecutor(ParquetSnapshotExecutor):
