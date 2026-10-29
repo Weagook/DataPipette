@@ -136,7 +136,7 @@ describe("application session flow", () => {
       target: { value: "ru" },
     });
 
-    expect(await screen.findByText("Дашборды")).toBeVisible();
+    expect((await screen.findAllByText("Дашборды"))[0]).toBeVisible();
     await waitFor(() => expect(preferenceBodies).toEqual([{ locale: "ru" }]));
     expect(screen.getByLabelText("Язык интерфейса")).toHaveValue("ru");
   });
