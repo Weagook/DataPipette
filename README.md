@@ -115,7 +115,7 @@ Open [http://127.0.0.1:8080](http://127.0.0.1:8080) and sign in with the bootstr
 
 The Compose dependency graph applies migrations, initializes private object storage, creates the first administrator only when necessary, and starts the frontend gateway, API, worker, scheduler, metadata PostgreSQL, Redis, and MinIO. Repeating the command converges the installation without resetting the existing administrator.
 
-See the [evaluation deployment guide](docs/DEPLOYMENT.md) for secret generation, remote access, health checks, updates, source-database networking, and the production boundary.
+See the [deployment guide](docs/DEPLOYMENT.md) for secret generation, remote access, health checks, updates, source-database networking, and a single-server production installation with automatic HTTPS.
 
 ## Architecture
 
@@ -178,7 +178,7 @@ The [documentation index](docs/README.md) is the best entry point for the comple
 - [Official frontend](docs/FRONTEND.md)
 - [API guidelines](docs/API_GUIDELINES.md)
 - [Security model](docs/SECURITY.md)
-- [Evaluation deployment](docs/DEPLOYMENT.md)
+- [Deployment](docs/DEPLOYMENT.md)
 - [Roadmap and implementation status](docs/ROADMAP.md)
 - [Architecture decision records](docs/adr/README.md)
 

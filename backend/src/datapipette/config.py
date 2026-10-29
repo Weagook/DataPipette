@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     s3_access_key_id: SecretStr | None = None
     s3_secret_access_key: SecretStr | None = None
     s3_addressing_style: Literal["path", "virtual"] = "path"
+    # The bundled single-host topology reaches MinIO over the private Docker
+    # network, where the traffic never leaves the host.
+    s3_private_network_http: bool = False
     s3_server_side_encryption: Literal["AES256"] | None = None
     s3_connect_timeout_seconds: int = Field(default=5, ge=1, le=60)
     s3_read_timeout_seconds: int = Field(default=60, ge=1, le=600)
@@ -135,7 +138,8 @@ class Settings(BaseSettings):
             raise ValueError("Production requires S3-compatible object storage")
         if self.environment == "production" and self.s3_endpoint_url is not None:
             endpoint = urlparse(self.s3_endpoint_url)
-            if endpoint.scheme != "https" or not endpoint.netloc:
+            allowed = {"https", "http"} if self.s3_private_network_http else {"https"}
+            if endpoint.scheme not in allowed or not endpoint.netloc:
                 raise ValueError("Production S3 endpoints must use HTTPS")
         if self.refresh_run_lease_seconds <= self.refresh_cancel_poll_seconds:
             raise ValueError("Refresh run lease must exceed the heartbeat polling interval")

@@ -7,9 +7,7 @@ on:
       - "benchmarks/**"
       - ".dockerignore"
       - "deploy/docker/backend.Dockerfile"
-      - "deploy/compose/backup.sh"
-      - "deploy/compose/compose.yaml"
-      - "deploy/compose/.env.example"
+      - "deploy/compose/**"
       - "docs/openapi.json"
       - "pyproject.toml"
       - "tools/export_openapi.py"
@@ -23,9 +21,7 @@ on:
       - "benchmarks/**"
       - ".dockerignore"
       - "deploy/docker/backend.Dockerfile"
-      - "deploy/compose/backup.sh"
-      - "deploy/compose/compose.yaml"
-      - "deploy/compose/.env.example"
+      - "deploy/compose/**"
       - "docs/openapi.json"
       - "pyproject.toml"
       - "tools/export_openapi.py"
@@ -90,8 +86,14 @@ jobs:
       - name: Test benchmark tooling
         run: uv run python -m unittest discover -s benchmarks/tests
 
-      - name: Check backup script
-        run: shellcheck deploy/compose/backup.sh
+      - name: Check deployment scripts
+        run: shellcheck deploy/compose/backup.sh deploy/compose/new-env.sh
+
+      - name: Check production Compose overlay
+        run: |
+          env_file="$(mktemp -d)/.env"
+          deploy/compose/new-env.sh --domain bi.example.com --admin-email admin@example.com --output "${env_file}"
+          docker compose --env-file "${env_file}" -f deploy/compose/compose.yaml -f deploy/compose/compose.production.yaml config --quiet
 
       - name: Apply migrations
         run: uv run --package datapipette alembic -c backend/alembic.ini upgrade head

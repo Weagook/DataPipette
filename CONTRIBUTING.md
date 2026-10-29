@@ -151,6 +151,8 @@ API documentation is enabled by default only in the `development` environment. C
 
 ## Verification
 
+Integration tests reset metadata tables with `TRUNCATE` before each test. Point them at a dedicated database, never at the `datapipette` database of a Compose stack you use; for example, create `datapipette_test` in the local metadata container, migrate it, and export both `DATAPIPETTE_METADATA_DATABASE_URL` and `DATAPIPETTE_TEST_DATABASE_URL` with that database name before running `pytest`.
+
 Run the same essential checks as CI from the repository root:
 
 ```bash
@@ -159,7 +161,7 @@ uv run --package datapipette ruff format --check backend
 uv run --package datapipette ruff check backend
 uv run --package datapipette mypy
 uv run python -m unittest discover -s benchmarks/tests
-shellcheck deploy/compose/backup.sh
+shellcheck deploy/compose/backup.sh deploy/compose/new-env.sh
 uv run --package datapipette alembic -c backend/alembic.ini upgrade head
 uv run --package datapipette alembic -c backend/alembic.ini check
 uv run --package datapipette pytest
@@ -167,6 +169,9 @@ uv run --package datapipette alembic -c backend/alembic.ini heads
 uv run --package datapipette python tools/export_openapi.py
 git diff --exit-code -- docs/openapi.json
 docker compose --env-file .env -f deploy/compose/compose.yaml config --quiet
+deploy/compose/new-env.sh --domain bi.example.com --admin-email admin@example.com --output /tmp/datapipette-production.env
+docker compose --env-file /tmp/datapipette-production.env -f deploy/compose/compose.yaml -f deploy/compose/compose.production.yaml config --quiet
+rm /tmp/datapipette-production.env
 npm ci --prefix clients/typescript
 npm run generate:check --prefix clients/typescript
 npm run typecheck --prefix clients/typescript

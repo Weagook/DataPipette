@@ -1,8 +1,8 @@
-# Evaluation deployment
+# Deployment
 
-DataPipette ships a self-contained Docker Compose topology for evaluation on one machine. The host needs only Git, Docker Engine, and Docker Compose v2; Python, uv, Node.js, PostgreSQL, Redis, and MinIO are contained in the deployment.
+DataPipette ships a self-contained Docker Compose topology for one machine. Used alone, `compose.yaml` is an evaluation installation that listens on plain HTTP; adding `compose.production.yaml` turns the same topology into a single-server production installation with HTTPS (see [Production on one server](#production-on-one-server)). The host needs only Git, Docker Engine, and Docker Compose v2; Python, uv, Node.js, PostgreSQL, Redis, and MinIO are contained in the deployment.
 
-This topology is not yet the production reference architecture. It uses an embedded MinIO-compatible object store and an environment file as the source for local secrets, and it does not provision DNS, TLS certificates, off-host backup storage, or external observability. Local backup and restore commands are described in [Backup and restore](#backup-and-restore).
+The evaluation topology alone is not meant for real users. It uses an embedded MinIO-compatible object store and an environment file as the source for local secrets, and it does not provision DNS, TLS certificates, off-host backup storage, or external observability. Local backup and restore commands are described in [Backup and restore](#backup-and-restore).
 
 ## Upgrade from the former DatePipette name
 
@@ -77,7 +77,7 @@ By default, the application listens only on `http://127.0.0.1:8080`. Use an SSH 
 ssh -L 8080:127.0.0.1:8080 user@server
 ```
 
-Then open `http://127.0.0.1:8080` locally. To bind the evaluation gateway to every server interface, explicitly set `DATAPIPETTE_HTTP_BIND_ADDRESS=0.0.0.0`; do this only behind an appropriate firewall and TLS reverse proxy. PostgreSQL, Redis, MinIO API, and the MinIO console remain loopback-only.
+Then open `http://127.0.0.1:8080` locally. To bind the evaluation gateway to every server interface, explicitly set `DATAPIPETTE_HTTP_BIND_ADDRESS=0.0.0.0`; do this only behind an appropriate firewall and TLS reverse proxy, or use the [production overlay](#production-on-one-server) instead. The gateway and API trust `X-Forwarded-For` only from private network addresses, so sign-in throttling counts each browser separately behind such a proxy. PostgreSQL, Redis, MinIO API, and the MinIO console remain loopback-only.
 
 Interactive queries and exports read snapshots through a verified local cache on the `snapshot-cache` volume, shared by the API and worker. `DATAPIPETTE_SNAPSHOT_CACHE_MAX_MB` limits it (8,192 MB by default in Compose; `0` disables it); keep that much free disk space on the host. The cache is regenerable and is not part of backups.
 
@@ -123,6 +123,75 @@ docker compose --env-file .env -f deploy/compose/compose.yaml down
 
 Do not add `--volumes` unless permanent deletion of metadata, object storage, and queued state is intended and independently backed up.
 
+## Production on one server
+
+`deploy/compose/compose.production.yaml` is an overlay for one Linux server that people reach over the internet or an office network. The design is recorded in [ADR-0053](adr/0053-single-server-production-compose.md). On top of `compose.yaml` it:
+
+- adds a Caddy gateway that obtains and renews a TLS certificate for your domain automatically, redirects HTTP to HTTPS, and sends HSTS;
+- publishes only ports 80 and 443; PostgreSQL, Redis, MinIO, the Nginx gateway, and the API have no host ports at all;
+- runs the API, worker, and scheduler with `DATAPIPETTE_ENVIRONMENT=production`, which forces secure session cookies, disables `/docs`, and rejects the development encryption key;
+- refuses to start when the domain, database password, object-storage credentials, or encryption key are missing.
+
+Embedded MinIO is reached over plain HTTP inside the private Compose network, which never leaves the host; `DATAPIPETTE_S3_PRIVATE_NETWORK_HTTP=true` allows exactly that, and any other production S3 endpoint must still use HTTPS.
+
+### Requirements
+
+- a Linux server with Docker Engine and Docker Compose v2.24 or newer;
+- a domain name whose DNS `A` (and, if used, `AAAA`) record points to the server;
+- inbound TCP 80 and 443 (and UDP 443 for HTTP/3) open in any firewall; port 80 is needed for certificate issuance and renewal.
+
+### Install
+
+```bash
+git clone git@github.com:Weagook/DataPipette.git /opt/DataPipette
+cd /opt/DataPipette
+deploy/compose/new-env.sh --domain bi.example.com --admin-email you@example.com --admin-name "Your Name" --timezone Europe/Moscow
+```
+
+The script writes `.env` with mode `600` and unique random values for the database password, object-storage credentials, connection-encryption key, and first administrator password. It prints no secret and never overwrites an existing file. Copy `.env` to a password manager now: the encryption key cannot be recovered, and backups deliberately do not contain it.
+
+Start the installation:
+
+```bash
+docker compose --env-file .env -f deploy/compose/compose.yaml -f deploy/compose/compose.production.yaml up -d --build --wait
+```
+
+Open `https://bi.example.com` and sign in as the administrator with `DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD` from `.env`. The first certificate is usually issued within a minute; `docker compose ... logs gateway` shows progress and any DNS or firewall problem.
+
+Use the same two `-f` options for every later `up`, `ps`, `logs`, `stop`, and `down`.
+
+### Daily backup
+
+Schedule the backup from [Backup and restore](#backup-and-restore) with the production Compose files. As root, create `/etc/cron.d/datapipette-backup` to run it every day at 03:00 server time and keep the seven most recent sets:
+
+```bash
+cat >/etc/cron.d/datapipette-backup <<'EOF'
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+0 3 * * * root cd /opt/DataPipette && DATAPIPETTE_COMPOSE_FILES=deploy/compose/compose.yaml:deploy/compose/compose.production.yaml deploy/compose/backup.sh create /var/backups/datapipette --keep 7 >>/var/log/datapipette-backup.log 2>&1
+EOF
+```
+
+Run the same command once by hand to confirm it works, then check `/var/log/datapipette-backup.log` the next morning.
+
+Copy the backups to another machine as well; a backup on the same disk does not survive the loss of that disk.
+
+### Move an evaluation installation to production
+
+An installation that started from `compose.yaml` alone keeps its data. First check `.env`:
+
+1. Create a backup with `deploy/compose/backup.sh create /var/backups/datapipette`.
+2. If `DATAPIPETTE_CONNECTION_ENCRYPTION_KEY` is still the development value, rotate it. The command stops the application, re-encrypts every saved source password in one transaction, writes the new key into `.env`, starts the application, and proves every secret decrypts. If any secret cannot be decrypted, nothing is changed.
+
+   ```bash
+   DATAPIPETTE_NEW_CONNECTION_ENCRYPTION_KEY="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')" \
+     deploy/compose/backup.sh rotate-key --yes
+   ```
+
+   Backups made before the rotation can only be restored with the old key, so keep both keys until a new backup exists. Open table pages and pending download links signed with the old key stop working.
+3. If `DATAPIPETTE_POSTGRES_PASSWORD` or the MinIO credentials are still the development values, replace them before exposing the server. PostgreSQL applies its password only when the volume is first created, so also run `ALTER USER datapipette PASSWORD '<new value>'` in the `metadata-db` container before restarting; MinIO picks up new root credentials on restart.
+4. Add `DATAPIPETTE_DOMAIN`, start with both Compose files as shown above, and create a new backup.
+
 ## Backup and restore
 
 `deploy/compose/backup.sh` backs up and restores the running installation. It uses the backend image already built by Compose, so the host still needs only Docker. The target objectives for this topology are one backup per day (at most 24 hours of lost changes) and a restore within one hour. The design is recorded in [ADR-0047](adr/0047-compose-backup-and-restore.md).
@@ -142,7 +211,7 @@ Create a backup and keep the seven most recent sets:
 deploy/compose/backup.sh create /var/backups/datapipette --keep 7
 ```
 
-Run it daily from the repository directory with cron, for example at 03:00 server time:
+Run it daily from the repository directory with cron, for example at 03:00 server time (add `DATAPIPETTE_COMPOSE_FILES` as shown in [Daily backup](#daily-backup) for a production installation):
 
 ```cron
 0 3 * * * cd /opt/DataPipette && deploy/compose/backup.sh create /var/backups/datapipette --keep 7 >>/var/log/datapipette-backup.log 2>&1
@@ -172,13 +241,11 @@ Prefer `verify-full` with an explicit CA certificate. Source credentials are enc
 
 ## Production boundary
 
-Before an internet-facing production rollout, replace or extend this evaluation topology with:
+The single-server overlay covers TLS, closed ports, production settings, required secrets, key rotation, and scheduled backups. It still keeps every component on one host and one disk. For larger or regulated installations, also plan for:
 
-- TLS and an owned domain at the ingress;
 - managed or independently backed-up PostgreSQL, Redis, and S3-compatible storage;
-- a production secret manager or Docker/Kubernetes secret delivery;
+- a production secret manager or Docker/Kubernetes secret delivery instead of `.env`;
 - immutable published images rather than server-side source builds;
-- off-host backup replication, regular restore drills, metrics, logs, alerts, and capacity benchmarks;
-- `DATAPIPETTE_ENVIRONMENT=production` with an HTTPS S3 endpoint.
+- off-host backup replication, regular restore drills, metrics, logs, alerts, and capacity benchmarks.
 
-Production mode intentionally rejects the built-in development encryption key, local object storage, and non-HTTPS custom S3 endpoints.
+Production mode intentionally rejects the built-in development encryption key, local object storage, and non-HTTPS S3 endpoints other than the embedded private-network MinIO.

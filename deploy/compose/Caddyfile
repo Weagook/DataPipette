@@ -1,0 +1,8 @@
+# Public HTTPS entry point for the single-host production topology.
+# Caddy obtains and renews the certificate for DATAPIPETTE_DOMAIN automatically
+# and redirects plain HTTP to HTTPS.
+{$DATAPIPETTE_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy frontend:8080
+}

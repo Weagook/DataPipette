@@ -89,7 +89,7 @@ Outcome: another application can securely embed DataPipette backend capabilities
 - [x] Backup and restore procedures for the Compose installation (off-host replication and point-in-time recovery remain production work)
 - Operational dashboards, alerts, and capacity guidance
 - Threat-model review and release-candidate security hardening
-- Production Docker Compose documentation
+- [x] Single-server production Compose overlay with automatic HTTPS, closed internal ports, generated secrets, encryption-key rotation, and scheduled backups
 
 ## Phase 6 — Official frontend
 

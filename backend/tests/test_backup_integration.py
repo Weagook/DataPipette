@@ -4,9 +4,14 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import text
 
-from datapipette.backup import verify_connection_secrets
+from datapipette.backup import (
+    KeyRotationError,
+    rotate_connection_secrets,
+    verify_connection_secrets,
+)
 from datapipette.config import Settings
 from datapipette.infrastructure.crypto import AesGcmSecretCipher
 from datapipette.infrastructure.database import create_database_engine, create_session_factory
@@ -91,3 +96,34 @@ def test_key_verification_decrypts_every_secret_and_names_failures() -> None:
     assert result.connections == 3
     assert result.secrets == 3
     assert result.failed_connection_ids == (foreign_id,)
+
+
+def test_key_rotation_reencrypts_every_secret_or_changes_nothing() -> None:
+    asyncio.run(_seed())
+
+    with pytest.raises(KeyRotationError, match="1 connections cannot be decrypted"):
+        asyncio.run(rotate_connection_secrets(SETTINGS, OTHER_KEY))
+    unchanged = asyncio.run(verify_connection_secrets(SETTINGS))
+    assert unchanged.secrets == 3
+    with pytest.raises(KeyRotationError, match="same as the configured key"):
+        asyncio.run(rotate_connection_secrets(SETTINGS, KEY))
+
+    async def drop_foreign() -> None:
+        engine = create_database_engine(SETTINGS)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text("DELETE FROM postgresql_connections WHERE name = 'Foreign'")
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(drop_foreign())
+    new_key = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI"
+    rotated = asyncio.run(rotate_connection_secrets(SETTINGS, new_key))
+    assert (rotated.connections, rotated.secrets) == (2, 3)
+    assert asyncio.run(verify_connection_secrets(SETTINGS)).failed_connection_ids != ()
+    after = asyncio.run(
+        verify_connection_secrets(Settings(environment="test", connection_encryption_key=new_key))
+    )
+    assert (after.secrets, after.failed_connection_ids) == (3, ())

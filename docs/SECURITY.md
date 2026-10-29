@@ -32,7 +32,7 @@ Source databases, SQL text, filter values, filenames, object metadata, API clien
 - Browser sessions are opaque, server-side, revocable, and stored only as SHA-256 token digests.
 - Session cookies use `HttpOnly` and `SameSite=Strict`; production forces `Secure`.
 - State-changing cookie requests use a session-bound double-submit CSRF token.
-- Redis limits login attempts independently by normalized account and client address.
+- Redis limits login attempts independently by normalized account and client address. Behind the bundled gateways the client address comes from `X-Forwarded-For`, which Nginx and Uvicorn accept only from private network addresses; a client that can reach Nginx directly from a private network could choose its address and weaken only the per-client limit.
 - Successful and failed login activity is audited without recording passwords or token plaintext.
 - User administration requires an active administrator session and CSRF validation for mutations.
 - Disabling an account atomically revokes its sessions; supported APIs preserve at least one active administrator.
@@ -120,7 +120,8 @@ Dashboard filters ([ADR-0052](adr/0052-dashboard-filters.md)) let anyone who can
 - Secret values are write-only through the API.
 - Connection test errors are redacted before reaching users or logs.
 - `verify-full` is recommended for production; custom CA material exists as a restricted temporary file only while libpq establishes a connection.
-- The key must be stored separately from metadata backups. Compose backup sets record only a domain-separated SHA-256 fingerprint of the decoded key; restore refuses a mismatched key and then proves that every stored secret decrypts. Key rotation and production key storage must be documented before production readiness.
+- The key must be stored separately from metadata backups. Compose backup sets record only a domain-separated SHA-256 fingerprint of the decoded key; restore refuses a mismatched key and then proves that every stored secret decrypts.
+- `backup.sh rotate-key` re-encrypts every stored secret with a new key in one transaction and changes nothing if any secret fails to decrypt ([ADR-0053](adr/0053-single-server-production-compose.md)). Earlier backups still require the old key, and encrypted cursors and download links issued with it stop working.
 
 ## Snapshot cache
 
@@ -181,6 +182,7 @@ Query Safety planner thresholds and source, interactive, export, and background-
 - Debug mode and interactive API documentation require deliberate production configuration.
 - Containers run as non-root where supported and receive only required filesystem access.
 - The evaluation Compose topology binds every published port to loopback by default and exposes browser traffic through one same-origin Nginx gateway. Deliberately changing the gateway bind address does not make the topology production-ready.
+- The single-server production overlay publishes only Caddy on ports 80 and 443 with automatic certificates and HSTS, removes every other host port, forces production mode, and refuses to start without explicit secrets. Plain HTTP to object storage is allowed in production only for the embedded MinIO on the private Compose network.
 - Initial administrator values may originate in the ignored `.env`; Compose mounts that file read-only only for the one-shot bootstrap container, whose CLI extracts the password without logging it. The password is never a process argument or ordinary container environment value. Bootstrap is create-only and skips an existing installation without comparing or resetting credentials.
 - `.env` must be permission-restricted and excluded from backups or support bundles unless encrypted. Production deployments must replace its secret-delivery role with an appropriate secret manager.
 
@@ -193,6 +195,5 @@ Security-sensitive changes require tests for unauthorized access, cross-resource
 - Corporate OIDC/SAML
 - External immutable audit sink
 - PostgreSQL client certificates and cloud IAM
-- Per-installation key rotation workflow
 - Fine-grained rate policy by endpoint and integration tier
 - Automated security scanning policy beyond baseline dependency and static checks
