@@ -77,3 +77,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0047](0047-compose-backup-and-restore.md): Operator backup and restore for the Compose installation
 - [ADR-0048](0048-columnar-csv-refresh-stream.md): Columnar CSV refresh stream
 - [ADR-0049](0049-verified-snapshot-object-cache.md): Verified local cache for snapshot objects
+- [ADR-0050](0050-table-and-link-dataset-board.md): Table-and-link dataset board

@@ -1,6 +1,6 @@
 # ADR-0046: Persisted node-canvas dataset authoring
 
-- Status: Accepted
+- Status: Accepted; node model superseded by [ADR-0050](0050-table-and-link-dataset-board.md)
 - Date: 2026-10-18
 
 ## Context

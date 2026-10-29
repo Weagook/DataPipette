@@ -95,6 +95,11 @@ const FORMATS: { value: "" | DisplayFormat; label: string }[] = [
   { value: "percent", label: "Percent" },
 ];
 
+const prefersBoard = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(min-width: 1050px)").matches;
+
 export function DatasetStudioPage() {
   const user = useOutletContext<CurrentUser>();
   const { datasetId } = useParams();
@@ -112,7 +117,9 @@ function NewStudio() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [connectionId, setConnectionId] = useState("");
-  const [mode, setMode] = useState<"visual" | "canvas" | "sql">("visual");
+  const [mode, setMode] = useState<"visual" | "canvas" | "sql">(() =>
+    prefersBoard() ? "canvas" : "visual",
+  );
   const [definition, setDefinition] = useState<DatasetDefinition | null>(null);
   const connections = useQuery({
     queryKey: queryKeys.connections,
@@ -140,7 +147,9 @@ function NewStudio() {
     ? "Give the dataset a clear name"
     : !connectionId
       ? "Choose a PostgreSQL connection"
-      : mode !== "sql" && !definition
+      : mode === "canvas" && !definition
+        ? "Drag the first table onto the board"
+        : mode !== "sql" && !definition
         ? "Choose the first table to open the builder"
         : definition?.kind === "visual" && definition.fields.length === 0
           ? "Select at least one output column"
@@ -218,20 +227,6 @@ function NewStudio() {
         </div>
         <div className="mode-cards" role="radiogroup" aria-label={t("Dataset mode")}>
           <button
-            className={mode === "visual" ? "selected" : ""}
-            onClick={() => changeMode("visual")}
-            type="button"
-            role="radio"
-            aria-checked={mode === "visual"}
-          >
-            <Table2 />
-            <span>
-              <strong>{t("Visual builder")}</strong>
-              <small>{t("Choose tables and follow safe foreign-key joins.")}</small>
-            </span>
-            <Check />
-          </button>
-          <button
             className={`${mode === "canvas" ? "selected" : ""} canvas-mode-option`}
             onClick={() => changeMode("canvas")}
             type="button"
@@ -240,8 +235,22 @@ function NewStudio() {
           >
             <Workflow />
             <span>
-              <strong>{t("Canvas Builder")}</strong>
-              <small>{t("Compose tables and joins on a desktop node canvas.")}</small>
+              <strong>{t("On a board")}</strong>
+              <small>{t("Drag tables onto a board and link them with the mouse.")}</small>
+            </span>
+            <Check />
+          </button>
+          <button
+            className={mode === "visual" ? "selected" : ""}
+            onClick={() => changeMode("visual")}
+            type="button"
+            role="radio"
+            aria-checked={mode === "visual"}
+          >
+            <Table2 />
+            <span>
+              <strong>{t("Step by step")}</strong>
+              <small>{t("Pick a table, then add related tables from a list.")}</small>
             </span>
             <Check />
           </button>
@@ -254,16 +263,14 @@ function NewStudio() {
           >
             <Code2 />
             <span>
-              <strong>{t("Advanced SQL")}</strong>
-              <small>
-                {t("Write one read-only PostgreSQL SELECT or WITH query.")}
-              </small>
+              <strong>{t("SQL (for specialists)")}</strong>
+              <small>{t("Write one read-only SELECT query.")}</small>
             </span>
             <Check />
           </button>
         </div>
       </section>
-      <div className="new-dataset-workspace">
+      <div className={`new-dataset-workspace${mode === "canvas" ? " board-mode" : ""}`}>
         <div className="new-dataset-builder">
           {!connectionId && (
             <section className="studio-panel builder-empty-state">
@@ -272,7 +279,7 @@ function NewStudio() {
               <p>{t("The source catalog and SQL editor stay scoped to that PostgreSQL connection.")}</p>
             </section>
           )}
-          {connectionId && mode !== "sql" && !definition && (
+          {connectionId && mode === "visual" && !definition && (
             <CatalogStarter
               key={connectionId}
               connectionId={connectionId}
@@ -302,19 +309,16 @@ function NewStudio() {
               />
             </section>
           )}
-          {connectionId && definition?.kind === "visual" && mode === "canvas" && (
+          {connectionId && definition?.kind !== "sql" && mode === "canvas" && (
             <section className="studio-panel new-builder-panel canvas-builder-panel">
               <header>
                 <div>
                   <span className="panel-icon"><Workflow /></span>
                   <span>
-                    <strong>{t("2. Build on the canvas")}</strong>
-                    <small>{t("Connect source tables, joins, columns, presentation, and output.")}</small>
+                    <strong>{t("2. Choose the data")}</strong>
+                    <small>{t("Put tables on the board, link them, and tick the columns you need.")}</small>
                   </span>
                 </div>
-                <button className="button secondary small" onClick={() => setDefinition(null)} type="button">
-                  {t("Change first table")}
-                </button>
               </header>
               <div className="canvas-mobile-blocker">
                 <Workflow />
@@ -323,7 +327,13 @@ function NewStudio() {
                 <button className="button secondary" type="button" onClick={() => setMode("visual")}>{t("Open Guided Visual")}</button>
               </div>
               <Suspense fallback={<div className="canvas-loading skeleton" />}>
-                <DatasetCanvasBuilder connectionId={connectionId} definition={definition} onChange={setDefinition} />
+                <DatasetCanvasBuilder
+                  key={connectionId}
+                  connectionId={connectionId}
+                  definition={definition?.kind === "visual" ? definition : null}
+                  onChange={setDefinition}
+                  allowEmpty
+                />
               </Suspense>
             </section>
           )}
@@ -473,6 +483,52 @@ function ExistingStudio({
       setTab("publish");
     },
   });
+  const [loadStage, setLoadStage] = useState<
+    "saving" | "checking" | "starting" | null
+  >(null);
+  // One action for the common path: save, check, guard dependent charts, load.
+  const loadData = useMutation({
+    mutationFn: async () => {
+      if (!definition || !dataset.data)
+        throw new Error(t("The draft is not ready."));
+      let currentEtag = etag;
+      setLoadStage("saving");
+      if (name.trim() !== dataset.data.name)
+        await renameDataset(datasetId, name.trim());
+      if (JSON.stringify(definition) !== JSON.stringify(savedDefinition)) {
+        const saved = await replaceDatasetDraft(datasetId, definition, etag);
+        currentEtag = saved.etag;
+        setEtag(saved.etag);
+        queryClient.setQueryData(queryKeys.datasetDraft(datasetId), saved);
+      }
+      setLoadStage("checking");
+      const checked = await validateDatasetDraft(datasetId, currentEtag);
+      setValidation(checked);
+      setPreview(null);
+      if (!["valid", "valid_with_warnings"].includes(checked.state)) {
+        setTab("check");
+        return "needs-fixes" as const;
+      }
+      if (dataset.data.active_version_id) {
+        const affected = await analyzeDatasetImpact(datasetId, currentEtag);
+        setImpact(affected);
+        if (!affected.ready_for_publication) {
+          setTab("publish");
+          return "affects-charts" as const;
+        }
+      }
+      setLoadStage("starting");
+      setRun(await requestDatasetRefresh(datasetId, currentEtag));
+      return "started" as const;
+    },
+    onSettled: async () => {
+      setLoadStage(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.dataset(datasetId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.datasets }),
+      ]);
+    },
+  });
   const runQuery = useQuery({
     queryKey: queryKeys.refreshRun(datasetId, run?.id ?? "none"),
     queryFn: () => getRefreshRun(datasetId, run!.id),
@@ -542,6 +598,7 @@ function ExistingStudio({
       />
     );
   const actionError =
+    loadData.error ??
     save.error ??
     validate.error ??
     previewMutation.error ??
@@ -555,9 +612,8 @@ function ExistingStudio({
     <div className="page-stack studio-page">
       <StudioHeading
         title={name || dataset.data.name}
-        subtitle={t("Draft revision {revision} · {mode}", {
+        subtitle={t("Draft · version {revision}", {
           revision: draft.data.draft.revision,
-          mode: t(definition.kind === "visual" ? "Visual model" : "Advanced SQL"),
         })}
       />
       <div className="studio-commandbar">
@@ -574,9 +630,9 @@ function ExistingStudio({
                 {t(
                   {
                     build: "Build",
-                    check: "Validate",
+                    check: "Check",
                     preview: "Preview",
-                    publish: "Publish",
+                    publish: "Load data",
                   }[item],
                 )}
               </button>
@@ -584,21 +640,42 @@ function ExistingStudio({
           )}
         </nav>
         <div>
-          <span className={dirty ? "unsaved" : "saved"}>
-            {t(dirty ? "Unsaved changes" : "Saved")}
-          </span>
+          <LoadStatus
+            datasetId={datasetId}
+            dirty={dirty}
+            stage={loadStage}
+            outcome={loadData.data}
+            run={run}
+          />
           <button
-            className="button primary small"
+            className="button secondary small"
             disabled={
               !dirty ||
               save.isPending ||
+              loadData.isPending ||
               !name.trim() ||
               !definitionIsReady(definition)
             }
             onClick={() => save.mutate()}
             type="button"
           >
-            {save.isPending ? <LoaderCircle className="spin" /> : <Save />} {t("Save draft")}
+            {save.isPending ? <LoaderCircle className="spin" /> : <Save />} {t("Save")}
+          </button>
+          <button
+            className="button primary small"
+            disabled={
+              loadData.isPending ||
+              save.isPending ||
+              !name.trim() ||
+              !definitionIsReady(definition) ||
+              run?.state === "queued" ||
+              run?.state === "running"
+            }
+            onClick={() => loadData.mutate()}
+            type="button"
+          >
+            {loadData.isPending ? <LoaderCircle className="spin" /> : <RefreshCw />}{" "}
+            {t("Save and load data")}
           </button>
         </div>
       </div>
@@ -653,6 +730,49 @@ function ExistingStudio({
   );
 }
 
+function LoadStatus({
+  datasetId,
+  dirty,
+  stage,
+  outcome,
+  run,
+}: {
+  datasetId: string;
+  dirty: boolean;
+  stage: "saving" | "checking" | "starting" | null;
+  outcome: "needs-fixes" | "affects-charts" | "started" | undefined;
+  run: RefreshRun | null;
+}) {
+  const { t } = useI18n();
+  let tone = dirty ? "unsaved" : "saved";
+  let text = t(dirty ? "Unsaved changes" : "Saved");
+  if (stage)
+    [tone, text] = [
+      "working",
+      t({ saving: "Saving…", checking: "Checking the data…", starting: "Starting the load…" }[stage]),
+    ];
+  else if (run?.state === "queued" || run?.state === "running")
+    [tone, text] = ["working", t("Loading data…")];
+  else if (run?.state === "succeeded" && !dirty)
+    return (
+      <span className="saved">
+        {t("Data loaded")} ·{" "}
+        <Link to={`/datasets/${datasetId}/table`}>{t("open the table")}</Link>
+      </span>
+    );
+  else if (run?.state === "failed")
+    [tone, text] = ["unsaved", t("The load failed. Details are on the “Load data” tab.")];
+  else if (outcome === "needs-fixes")
+    [tone, text] = ["unsaved", t("Some things need fixing first. See the “Check” tab.")];
+  else if (outcome === "affects-charts")
+    [tone, text] = ["unsaved", t("This change breaks existing charts. See the “Load data” tab.")];
+  return (
+    <span className={tone} role="status">
+      {tone === "working" && <LoaderCircle className="spin" />} {text}
+    </span>
+  );
+}
+
 function StudioHeading({
   title,
   subtitle,
@@ -671,9 +791,6 @@ function StudioHeading({
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
-      <span className="trust-pill">
-        <ShieldCheck size={16} /> {t("Governed workflow")}
-      </span>
     </header>
   );
 }
@@ -754,9 +871,13 @@ function BuildWorkspace({
   onDefinitionChange: (value: DatasetDefinition) => void;
 }) {
   const { t } = useI18n();
-  const [visualMode, setVisualMode] = useState<"guided" | "canvas">("guided");
+  const [visualMode, setVisualMode] = useState<"guided" | "canvas">(() =>
+    prefersBoard() ? "canvas" : "guided",
+  );
   return (
-    <div className="studio-layout">
+    <div
+      className={`studio-layout${definition.kind === "visual" && visualMode === "canvas" ? " board-mode" : ""}`}
+    >
       <main className="studio-main">
         <section className="studio-panel">
           <header>
@@ -767,16 +888,16 @@ function BuildWorkspace({
               <span>
                 <strong>
                   {definition.kind === "visual"
-                    ? t("Visual model")
-                    : t("Advanced SQL")}
+                    ? t("What goes into the dataset")
+                    : t("SQL query")}
                 </strong>
-                <small>{t("Saved as a versioned, editable definition")}</small>
+                <small>{t("Changes stay in a draft until you load the data.")}</small>
               </span>
             </div>
             {definition.kind === "visual" && (
               <div className="builder-view-switch" role="group" aria-label={t("Visual editor mode")}>
-                <button className={visualMode === "guided" ? "active" : ""} type="button" onClick={() => setVisualMode("guided")}><Table2 /> {t("Guided Visual")}</button>
-                <button className={`${visualMode === "canvas" ? "active" : ""} canvas-mode-option`} type="button" onClick={() => setVisualMode("canvas")}><Workflow /> {t("Canvas")}</button>
+                <button className={visualMode === "guided" ? "active" : ""} type="button" onClick={() => setVisualMode("guided")}><Table2 /> {t("Step by step")}</button>
+                <button className={`${visualMode === "canvas" ? "active" : ""} canvas-mode-option`} type="button" onClick={() => setVisualMode("canvas")}><Workflow /> {t("Board")}</button>
               </div>
             )}
           </header>
@@ -805,7 +926,7 @@ function BuildWorkspace({
                 <DatasetCanvasBuilder
                   connectionId={connectionId}
                   definition={definition}
-                  onChange={onDefinitionChange}
+                  onChange={(value) => value && onDefinitionChange(value)}
                 />
               </Suspense>
             </>
@@ -816,20 +937,11 @@ function BuildWorkspace({
       </main>
       <aside className="studio-side">
         <JsonInspector definition={definition} />
-        <div className="studio-note">
-          <Braces />
-          <div>
-            <strong>{t("Stable draft contract")}</strong>
-            <p>
-              {t("Relation, field, and join IDs stay stable while you edit. This is the JSON the API stores and reopens.")}
-            </p>
-          </div>
-        </div>
         <Link
           className="button secondary wide"
           to={`/datasets/${datasetId}/table`}
         >
-          <Eye size={16} /> {t("Open published table")}
+          <Eye size={16} /> {t("Open the loaded table")}
         </Link>
       </aside>
     </div>
@@ -1593,7 +1705,7 @@ function JsonInspector({ definition }: { definition: DatasetDefinition }) {
     <details className="json-inspector">
       <summary>
         <span>
-          <Braces /> {t("Saved JSON definition")}
+          <Braces /> {t("For specialists: saved definition (JSON)")}
         </span>
         <ChevronRight />
       </summary>

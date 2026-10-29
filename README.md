@@ -23,11 +23,11 @@ These are live product screens from the evaluation deployment—not design mocku
 
 Dashboards combine independently loaded charts from multiple datasets in a versioned, drag-and-resize layout. Viewers see freshness and failure states without receiving automatic access to detailed source rows.
 
-### Model datasets on a visual canvas
+### Build datasets on a board
 
 [![The DataPipette Canvas Builder showing a saved dataset model](docs/assets/screenshots/dataset-canvas-builder.png)](docs/assets/screenshots/dataset-canvas-builder.png)
 
-The desktop Canvas Builder composes PostgreSQL tables, joins, projections, formatting, and dataset output as editable nodes. Its layout and viewport are stored alongside the authoritative JSON definition, so analysts can reopen and evolve the same model.
+On a desktop screen, datasets are built on a board: drag tables from the list, draw a line between matching columns to link them (known foreign keys are linked automatically), tick the columns to keep, and press **Save and load data**. The board's layout is stored alongside the authoritative JSON definition, so the same model can be reopened and changed later.
 
 <table>
   <tr>
@@ -51,7 +51,7 @@ The desktop Canvas Builder composes PostgreSQL tables, joins, projections, forma
 ## Why DataPipette?
 
 - **Built for operational PostgreSQL data.** Connect one or more PostgreSQL databases to a single-company DataPipette installation.
-- **No-code, low-code, or SQL.** Build datasets with a guided form, a desktop node canvas, or one advanced read-only SQL statement.
+- **No-code, low-code, or SQL.** Build datasets on a drag-and-drop board, with a step-by-step form, or with one read-only SQL statement.
 - **Source-friendly analytics.** Interactive tables, charts, dashboards, and exports read immutable Parquet snapshots instead of repeatedly querying the operational database.
 - **Governed by default.** Resources start private, access is granted deliberately, source credentials stay server-side, and expensive work is bounded by configurable safety policies.
 - **API-first by design.** The web application, generated TypeScript client, and external integrations all use the reviewed OpenAPI contract.
@@ -61,8 +61,8 @@ The desktop Canvas Builder composes PostgreSQL tables, joins, projections, forma
 
 | Area | Implemented capabilities |
 | --- | --- |
-| Dataset authoring | Guided Visual Builder, desktop Canvas Builder, Advanced SQL, live catalog discovery, foreign-key suggestions, manual `INNER`/`LEFT` joins, saved drafts, version history, schema impact, validation, and bounded preview |
-| Canvas Builder | PostgreSQL Table, Join, Select Columns, Rename & Format, and Dataset Output nodes; persisted layout and viewport; minimap, zoom, auto-layout, undo/redo, edge deletion, and a selected-node inspector |
+| Dataset authoring | Drag-and-drop board, step-by-step builder, SQL for specialists, live catalog discovery, foreign-key suggestions, manual `INNER`/`LEFT` joins, saved drafts, version history, schema impact, validation, and bounded preview |
+| Dataset board | Table list with search, drag-and-drop tables, column checkboxes, column-to-column links with automatic foreign-key links, plain-language link settings, result column naming and formats, persisted layout, undo/redo, and one-click save, check, and load |
 | Snapshots and refresh | Manual and scheduled Celery refresh, bounded retries and cancellation, atomic publication, Parquet snapshots, local or S3-compatible storage, stale-snapshot fallback, and lifecycle cleanup |
 | Data exploration | Typed Excel-like filters, sorting, deterministic cursor pagination, display formats, freshness states, and detailed row browsing through DuckDB |
 | Exports | Background CSV/XLSX generation, durable history, expiry, and renewable short-lived downloads from local, private MinIO, or external S3 storage |
@@ -75,7 +75,7 @@ The desktop Canvas Builder composes PostgreSQL tables, joins, projections, forma
 ## Product workflow
 
 1. An administrator connects PostgreSQL with a dedicated read-only account and controls which schemas or tables are visible.
-2. An analyst creates a private dataset using the Guided Visual Builder, Canvas Builder, or Advanced SQL.
+2. An analyst creates a private dataset on the board, step by step, or with SQL.
 3. DataPipette validates the definition, inspects the PostgreSQL plan without executing it, and explains safety findings.
 4. A bounded preview confirms the result before publication.
 5. A worker materializes the accepted result as an immutable Parquet snapshot and publishes it atomically.
