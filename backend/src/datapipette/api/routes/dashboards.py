@@ -1,12 +1,12 @@
 """Private dashboard layout resources."""
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
 from datapipette.api.chart_query_responses import (
     ChartQueryDataResponse,
@@ -33,6 +33,7 @@ from datapipette.application.charts import (
 from datapipette.application.dashboards import (
     DashboardAlreadyExistsError,
     DashboardCreate,
+    DashboardFilterNotFoundError,
     DashboardGrantNotFoundError,
     DashboardGrantPrincipalNotFoundError,
     DashboardItemNotFoundError,
@@ -41,15 +42,23 @@ from datapipette.application.dashboards import (
     DashboardService,
     InvalidDashboardCursorError,
     InvalidDashboardDefinitionError,
+    InvalidDashboardFilterSelectionError,
 )
 from datapipette.domain.access_control import GrantPrincipalType
 from datapipette.domain.dashboards import (
     DASHBOARD_GRID_COLUMNS,
+    MAX_DASHBOARD_FILTER_LABEL,
+    MAX_DASHBOARD_FILTER_VALUES,
+    MAX_DASHBOARD_FILTERS,
     MAX_DASHBOARD_ITEM_HEIGHT,
     MAX_DASHBOARD_ITEMS,
     MAX_DASHBOARD_ROW,
     Dashboard,
     DashboardDefinition,
+    DashboardFilter,
+    DashboardFilterKind,
+    DashboardFilterSelection,
+    DashboardFilterTarget,
     DashboardGrant,
     DashboardItem,
 )
@@ -71,12 +80,67 @@ class DashboardItemPayload(StrictModel):
     height: Annotated[StrictInt, Field(ge=1, le=MAX_DASHBOARD_ITEM_HEIGHT)]
 
 
+class DashboardFilterTargetPayload(StrictModel):
+    item_id: UUID
+    field_id: UUID
+
+
+class DashboardFilterPayload(StrictModel):
+    id: UUID
+    label: str = Field(min_length=1, max_length=MAX_DASHBOARD_FILTER_LABEL)
+    kind: DashboardFilterKind
+    targets: list[DashboardFilterTargetPayload] = Field(
+        min_length=1,
+        max_length=MAX_DASHBOARD_ITEMS,
+    )
+
+
 class DashboardDefinitionPayload(StrictModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     items: list[DashboardItemPayload] = Field(
         default_factory=list,
         max_length=MAX_DASHBOARD_ITEMS,
     )
+    filters: list[DashboardFilterPayload] = Field(
+        default_factory=list,
+        max_length=MAX_DASHBOARD_FILTERS,
+        description="Viewer-controlled filters; requires schema version 2.",
+    )
+
+
+class DashboardFilterSelectionPayload(StrictModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    filter_id: UUID
+    values: list[StrictStr | StrictInt | StrictBool] = Field(
+        default_factory=list,
+        max_length=MAX_DASHBOARD_FILTER_VALUES,
+        description="Chosen values for a `values` filter.",
+    )
+    date_from: date | None = Field(
+        default=None,
+        alias="from",
+        description="First included day for a `date_range` filter.",
+    )
+    date_to: date | None = Field(
+        default=None,
+        alias="to",
+        description="Last included day for a `date_range` filter.",
+    )
+
+
+class DashboardItemQueryRequest(StrictModel):
+    filters: list[DashboardFilterSelectionPayload] = Field(
+        default_factory=list,
+        max_length=MAX_DASHBOARD_FILTERS,
+    )
+
+
+class DashboardFilterValuesResponse(BaseModel):
+    dashboard_id: UUID
+    filter_id: UUID
+    values: list[StrictStr | StrictInt | StrictBool]
+    truncated: bool
 
 
 class CreateDashboardRequest(StrictModel):
@@ -156,9 +220,49 @@ def _definition(payload: DashboardDefinitionPayload) -> DashboardDefinition:
                 )
                 for item in payload.items
             ),
+            filters=tuple(
+                DashboardFilter(
+                    id=item.id,
+                    label=item.label,
+                    kind=item.kind,
+                    targets=tuple(
+                        DashboardFilterTarget(item_id=target.item_id, field_id=target.field_id)
+                        for target in item.targets
+                    ),
+                )
+                for item in payload.filters
+            ),
         )
     except ValueError as exc:
         raise InvalidDashboardDefinitionError(str(exc)) from exc
+
+
+def _selections(
+    payload: DashboardItemQueryRequest | None,
+) -> tuple[DashboardFilterSelection, ...]:
+    if payload is None:
+        return ()
+    try:
+        return tuple(
+            DashboardFilterSelection(
+                filter_id=item.filter_id,
+                values=tuple(item.values),
+                date_from=item.date_from,
+                date_to=item.date_to,
+            )
+            for item in payload.filters
+        )
+    except ValueError as exc:
+        raise _invalid_selection(exc) from exc
+
+
+def _invalid_selection(exc: Exception) -> ApiProblem:
+    return ApiProblem(
+        status_code=422,
+        code="dashboard_filter_selection_invalid",
+        title="Dashboard filter selection invalid",
+        detail=str(exc) or "The dashboard filter selection is invalid.",
+    )
 
 
 def _response(value: Dashboard) -> DashboardResponse:
@@ -452,6 +556,7 @@ async def query_dashboard_item_data(
     item_id: UUID,
     request: Request,
     session: DashboardReader,
+    payload: DashboardItemQueryRequest | None = None,
 ) -> DashboardItemQueryResponse:
     try:
         result = await _service(request).query_item(
@@ -459,9 +564,12 @@ async def query_dashboard_item_data(
             dashboard_id=dashboard_id,
             item_id=item_id,
             request_id=request_id(),
+            selections=_selections(payload),
         )
     except DashboardNotFoundError as exc:
         raise _not_found() from exc
+    except InvalidDashboardFilterSelectionError as exc:
+        raise _invalid_selection(exc) from exc
     except DashboardItemNotFoundError as exc:
         raise ApiProblem(
             status_code=404,
@@ -521,4 +629,69 @@ async def query_dashboard_item_data(
             item_id=result.item_id,
             **chart_meta.model_dump(),
         ),
+    )
+
+
+@router.get(
+    "/{dashboard_id}/filters/{filter_id}/values",
+    response_model=DashboardFilterValuesResponse,
+    responses=_QUERY_RESPONSES,
+)
+async def list_dashboard_filter_values(
+    dashboard_id: UUID,
+    filter_id: UUID,
+    request: Request,
+    session: DashboardReader,
+) -> DashboardFilterValuesResponse:
+    """List the choices for a `values` filter from the active snapshots of its charts."""
+
+    try:
+        result = await _service(request).list_filter_values(
+            actor=session.user,
+            dashboard_id=dashboard_id,
+            filter_id=filter_id,
+        )
+    except DashboardNotFoundError as exc:
+        raise _not_found() from exc
+    except DashboardFilterNotFoundError as exc:
+        raise ApiProblem(
+            status_code=404,
+            code="dashboard_filter_not_found",
+            title="Dashboard filter not found",
+            detail="The dashboard has no value filter with this identifier.",
+        ) from exc
+    except InvalidChartDefinitionError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="dashboard_filter_invalid",
+            title="Dashboard filter invalid",
+            detail="A filter field no longer matches the active published dataset.",
+        ) from exc
+    except ChartQueryCapacityExceededError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="interactive_query_capacity_exceeded",
+            title="Interactive query capacity exceeded",
+            detail="All interactive query slots are busy. Retry shortly.",
+            headers={"Retry-After": "1"},
+        ) from exc
+    except ChartQueryTimeoutError as exc:
+        raise ApiProblem(
+            status_code=504,
+            code="dashboard_filter_values_timeout",
+            title="Dashboard filter values timed out",
+            detail="Listing filter values exceeded the configured execution time.",
+        ) from exc
+    except (ChartQueryUnavailableError, ChartQueryResultTooLargeError) as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="dashboard_filter_values_unavailable",
+            title="Dashboard filter values unavailable",
+            detail="The active snapshots could not be queried safely.",
+        ) from exc
+    return DashboardFilterValuesResponse(
+        dashboard_id=result.dashboard_id,
+        filter_id=result.filter_id,
+        values=list(result.values),
+        truncated=result.truncated,
     )

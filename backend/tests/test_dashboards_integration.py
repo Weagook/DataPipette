@@ -17,7 +17,9 @@ from sqlalchemy import select, text
 from datapipette.api.dependencies.authentication import CSRF_COOKIE_NAME
 from datapipette.application.auth_service import bootstrap_first_admin
 from datapipette.application.charts import (
+    ChartContextFilter,
     ChartDatasetNotAvailableError,
+    ChartFieldValues,
     ChartQueryCapacityExceededError,
     ChartQueryResultTooLargeError,
     ChartQueryTimeoutError,
@@ -63,6 +65,15 @@ class StubChartQueryService:
         self.available_dataset_id = available_dataset_id
         self.calls: list[UUID] = []
         self.unavailable_error: Exception = ChartDatasetNotAvailableError()
+        self.context_filters: list[tuple[ChartContextFilter, ...]] = []
+        self.region_field = uuid4()
+        self.ordered_field = uuid4()
+
+    async def field_families(self, chart_id: UUID) -> dict[UUID, str]:
+        return {self.region_field: "text", self.ordered_field: "date"}
+
+    async def field_values(self, **values: Any) -> ChartFieldValues:
+        return ChartFieldValues(("West", "East"), truncated=False)
 
     async def query(self, **values: Any) -> ChartQueryResult:
         return await self._result(values)
@@ -73,6 +84,7 @@ class StubChartQueryService:
     async def _result(self, values: dict[str, Any]) -> ChartQueryResult:
         chart_id = cast(UUID, values["chart_id"])
         self.calls.append(chart_id)
+        self.context_filters.append(values.get("context_filters", ()))
         if chart_id == self.unavailable_chart_id:
             raise self.unavailable_error
         assert chart_id == self.available_chart_id
@@ -418,7 +430,7 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
 
         read = client.get(f"/api/v1/dashboards/{dashboard_id}")
         assert read.status_code == 200
-        assert read.json()["definition"] == definition
+        assert read.json()["definition"] == {**definition, "filters": []}
 
         successful_item = client.post(
             f"/api/v1/dashboards/{dashboard_id}/items/{item_one_id}/data:query"
@@ -621,3 +633,171 @@ def test_dashboard_api_persists_multi_dataset_layout_and_dependencies(
             await engine.dispose()
 
     asyncio.run(verify_metadata())
+
+
+def test_dashboard_filters_reach_items_and_list_values_for_viewers(
+    dashboard_settings: Settings,
+) -> None:
+    chart_one_id, chart_two_id, dataset_one_id, _ = asyncio.run(_seed_charts(dashboard_settings))
+    chart_queries = StubChartQueryService(chart_one_id, chart_two_id, dataset_one_id)
+    item_one_id, item_two_id = uuid4(), uuid4()
+    region_id, ordered_id = uuid4(), uuid4()
+    items = [
+        {
+            "id": str(item_one_id),
+            "chart_id": str(chart_one_id),
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 4,
+        },
+        {
+            "id": str(item_two_id),
+            "chart_id": str(chart_two_id),
+            "x": 6,
+            "y": 0,
+            "width": 6,
+            "height": 4,
+        },
+    ]
+    filters = [
+        {
+            "id": str(region_id),
+            "label": "Region",
+            "kind": "values",
+            "targets": [
+                {"item_id": str(item_one_id), "field_id": str(chart_queries.region_field)},
+                {"item_id": str(item_two_id), "field_id": str(chart_queries.region_field)},
+            ],
+        },
+        {
+            "id": str(ordered_id),
+            "label": "Ordered",
+            "kind": "date_range",
+            "targets": [
+                {"item_id": str(item_one_id), "field_id": str(chart_queries.ordered_field)}
+            ],
+        },
+    ]
+    definition = {"schema_version": 2, "items": items, "filters": filters}
+
+    with TestClient(
+        create_app(dashboard_settings, chart_service=cast(ChartService, chart_queries))
+    ) as client:
+        _login(client)
+        version_one = client.post(
+            "/api/v1/dashboards",
+            json={"name": "Old schema", "definition": {**definition, "schema_version": 1}},
+            headers=_csrf(client),
+        )
+        assert version_one.status_code == 422
+        wrong_kind = client.post(
+            "/api/v1/dashboards",
+            json={
+                "name": "Wrong kind",
+                "definition": {
+                    **definition,
+                    "filters": [{**filters[0], "kind": "date_range"}],
+                },
+            },
+            headers=_csrf(client),
+        )
+        assert wrong_kind.status_code == 422
+        assert "cannot filter" in wrong_kind.json()["detail"]
+
+        created = client.post(
+            "/api/v1/dashboards",
+            json={"name": "Filtered", "definition": definition},
+            headers=_csrf(client),
+        )
+        assert created.status_code == 201, created.text
+        dashboard_id = created.json()["id"]
+        assert created.json()["definition"]["filters"] == filters
+
+        query_url = f"/api/v1/dashboards/{dashboard_id}/items/{item_one_id}/data:query"
+        assert client.post(query_url).status_code == 200
+        assert not chart_queries.context_filters[-1]
+        filtered = client.post(
+            query_url,
+            json={
+                "filters": [
+                    {"filter_id": str(region_id), "values": ["East"]},
+                    {"filter_id": str(ordered_id), "from": "2026-01-01", "to": "2026-01-31"},
+                ]
+            },
+        )
+        assert filtered.status_code == 200, filtered.text
+        assert chart_queries.context_filters[-1] == (
+            ChartContextFilter(chart_queries.region_field, values=("East",)),
+            ChartContextFilter(
+                chart_queries.ordered_field,
+                date_from=datetime(2026, 1, 1).date(),
+                date_to=datetime(2026, 1, 31).date(),
+            ),
+        )
+        for body in (
+            {"filters": [{"filter_id": str(ordered_id), "values": ["East"]}]},
+            {"filters": [{"filter_id": str(uuid4()), "values": ["East"]}]},
+            {"filters": [{"filter_id": str(ordered_id), "from": "2026-02-01", "to": "2026-01-01"}]},
+        ):
+            rejected = client.post(query_url, json=body)
+            assert rejected.status_code == 422, rejected.text
+            assert rejected.json()["code"] == "dashboard_filter_selection_invalid"
+
+        values = client.get(f"/api/v1/dashboards/{dashboard_id}/filters/{region_id}/values")
+        assert values.status_code == 200, values.text
+        assert values.json() == {
+            "dashboard_id": dashboard_id,
+            "filter_id": str(region_id),
+            "values": ["East", "West"],
+            "truncated": False,
+        }
+        date_values = client.get(f"/api/v1/dashboards/{dashboard_id}/filters/{ordered_id}/values")
+        assert date_values.status_code == 404
+        assert date_values.json()["code"] == "dashboard_filter_not_found"
+
+        viewer = client.post(
+            "/api/v1/users",
+            json={
+                "email": VIEWER_EMAIL,
+                "display_name": "Dashboard Viewer",
+                "password": VIEWER_PASSWORD,
+                "role": "viewer",
+            },
+            headers=_csrf(client),
+        )
+        assert viewer.status_code == 201, viewer.text
+
+        with TestClient(
+            create_app(dashboard_settings, chart_service=cast(ChartService, chart_queries))
+        ) as viewer_client:
+            assert (
+                viewer_client.post(
+                    "/api/v1/auth/sessions",
+                    json={"email": VIEWER_EMAIL, "password": VIEWER_PASSWORD},
+                ).status_code
+                == 201
+            )
+            hidden = viewer_client.get(
+                f"/api/v1/dashboards/{dashboard_id}/filters/{region_id}/values"
+            )
+            assert hidden.status_code == 404
+            assert hidden.json()["code"] == "dashboard_not_found"
+            grant = client.post(
+                f"/api/v1/dashboards/{dashboard_id}/grants",
+                json={"principal_type": "user", "principal_id": viewer.json()["id"]},
+                headers=_csrf(client),
+            )
+            assert grant.status_code == 201
+            shared = viewer_client.get(
+                f"/api/v1/dashboards/{dashboard_id}/filters/{region_id}/values"
+            )
+            assert shared.status_code == 200
+            assert shared.json()["values"] == ["East", "West"]
+            shared_query = viewer_client.post(
+                query_url, json={"filters": [{"filter_id": str(region_id), "values": ["West"]}]}
+            )
+            assert shared_query.status_code == 200
+            assert list(chart_queries.context_filters[-1]) == [
+                ChartContextFilter(chart_queries.region_field, values=("West",)),
+            ]

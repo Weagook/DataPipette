@@ -41,8 +41,10 @@ export const queryKeys = {
   groupMembers: (id: string) => ["access", "groups", id, "members"] as const,
   serviceAccounts: ["access", "service-accounts"] as const,
   apiTokens: (id: string) => ["access", "service-accounts", id, "tokens"] as const,
-  dashboardItem: (dashboardId: string, itemId: string) =>
-    ["dashboard", dashboardId, "item", itemId] as const,
+  dashboardItem: (dashboardId: string, itemId: string, filters: unknown[] = []) =>
+    ["dashboard", dashboardId, "item", itemId, filters] as const,
+  dashboardFilterValues: (dashboardId: string, filterId: string) =>
+    ["dashboard", dashboardId, "filter", filterId] as const,
   datasets: ["datasets", "infinite"] as const,
   connections: ["connections"] as const,
   connection: (id: string) => ["connection", id] as const,

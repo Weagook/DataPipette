@@ -398,14 +398,27 @@ export async function revokeApiToken(accountId: string, tokenId: string): Promis
 export async function queryDashboardItem(
   dashboardId: string,
   itemId: string,
+  filters: ApiSchemas["DashboardFilterSelectionPayload"][] = [],
 ): Promise<DashboardItemResult> {
   return unwrap(
     await api.POST(
       "/api/v1/dashboards/{dashboard_id}/items/{item_id}/data:query",
       {
         params: { path: { dashboard_id: dashboardId, item_id: itemId } },
+        ...(filters.length ? { body: { filters } } : {}),
       },
     ),
+  );
+}
+
+export async function listDashboardFilterValues(
+  dashboardId: string,
+  filterId: string,
+): Promise<ApiSchemas["DashboardFilterValuesResponse"]> {
+  return unwrap(
+    await api.GET("/api/v1/dashboards/{dashboard_id}/filters/{filter_id}/values", {
+      params: { path: { dashboard_id: dashboardId, filter_id: filterId } },
+    }),
   );
 }
 

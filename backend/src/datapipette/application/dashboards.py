@@ -6,9 +6,24 @@ from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from datapipette.application.charts import (
+    DATE_RANGE_FILTER_FAMILIES,
+    VALUE_FILTER_FAMILIES,
+    ChartContextFilter,
+    ChartDatasetNotAvailableError,
+    ChartFieldValues,
+    ChartNotFoundError,
+)
 from datapipette.domain.access_control import GrantPrincipalType
 from datapipette.domain.charts import ChartQueryResult
-from datapipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardGrant
+from datapipette.domain.dashboards import (
+    MAX_DASHBOARD_FILTERS,
+    Dashboard,
+    DashboardDefinition,
+    DashboardFilterKind,
+    DashboardFilterSelection,
+    DashboardGrant,
+)
 from datapipette.domain.identity import AccountStatus, SystemRole, User
 
 
@@ -44,6 +59,22 @@ class InvalidDashboardDefinitionError(ValueError):
     pass
 
 
+class DashboardFilterNotFoundError(Exception):
+    pass
+
+
+class InvalidDashboardFilterSelectionError(ValueError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardFilterValues:
+    dashboard_id: UUID
+    filter_id: UUID
+    values: tuple[object, ...]
+    truncated: bool
+
+
 @dataclass(frozen=True, slots=True)
 class DashboardCreate:
     name: str
@@ -71,6 +102,7 @@ class SavedChartQueryService(Protocol):
         actor: User,
         chart_id: UUID,
         request_id: str,
+        context_filters: tuple[ChartContextFilter, ...] = (),
     ) -> ChartQueryResult: ...
 
     async def query_dashboard_item(
@@ -80,7 +112,20 @@ class SavedChartQueryService(Protocol):
         chart_id: UUID,
         dashboard_owner_id: UUID,
         request_id: str,
+        context_filters: tuple[ChartContextFilter, ...] = (),
     ) -> ChartQueryResult: ...
+
+    async def field_families(self, chart_id: UUID) -> dict[UUID, str]: ...
+
+    async def field_values(
+        self,
+        *,
+        actor: User,
+        chart_id: UUID,
+        field_id: UUID,
+        dashboard_owner_id: UUID,
+        direct_access: bool,
+    ) -> ChartFieldValues: ...
 
 
 class DashboardStore(Protocol):
@@ -175,6 +220,43 @@ def _decode_cursor(value: str | None) -> tuple[datetime | None, UUID | None]:
         return created_at, UUID(identifier)
     except (UnicodeDecodeError, ValueError) as exc:
         raise InvalidDashboardCursorError from exc
+
+
+def _context_filters(
+    definition: DashboardDefinition,
+    item_id: UUID,
+    selections: tuple[DashboardFilterSelection, ...],
+) -> tuple[ChartContextFilter, ...]:
+    if len(selections) > MAX_DASHBOARD_FILTERS:
+        raise InvalidDashboardFilterSelectionError("Too many dashboard filter selections")
+    if len({item.filter_id for item in selections}) != len(selections):
+        raise InvalidDashboardFilterSelectionError("Each dashboard filter may be selected once")
+    constraints: list[ChartContextFilter] = []
+    for selection in selections:
+        dashboard_filter = definition.filter(selection.filter_id)
+        if dashboard_filter is None:
+            raise InvalidDashboardFilterSelectionError("The dashboard has no such filter")
+        if selection.is_empty:
+            continue
+        is_values = dashboard_filter.kind is DashboardFilterKind.VALUES
+        if is_values != bool(selection.values):
+            raise InvalidDashboardFilterSelectionError(
+                f"Filter {dashboard_filter.label!r} expects "
+                + ("values" if is_values else "a date range")
+            )
+        target = next(
+            (value for value in dashboard_filter.targets if value.item_id == item_id), None
+        )
+        if target is not None:
+            constraints.append(
+                ChartContextFilter(
+                    field_id=target.field_id,
+                    values=selection.values,
+                    date_from=selection.date_from,
+                    date_to=selection.date_to,
+                )
+            )
+    return tuple(constraints)
 
 
 def _can_manage(actor: User, dashboard: Dashboard) -> bool:
@@ -290,16 +372,19 @@ class DashboardService:
         dashboard_id: UUID,
         item_id: UUID,
         request_id: str,
+        selections: tuple[DashboardFilterSelection, ...] = (),
     ) -> DashboardItemQueryResult:
         dashboard = await self.get(actor=actor, dashboard_id=dashboard_id)
         item = next((value for value in dashboard.definition.items if value.id == item_id), None)
         if item is None:
             raise DashboardItemNotFoundError
+        context_filters = _context_filters(dashboard.definition, item.id, selections)
         if _can_manage(actor, dashboard):
             chart_result = await self._chart_queries.query(
                 actor=actor,
                 chart_id=item.chart_id,
                 request_id=request_id,
+                context_filters=context_filters,
             )
         else:
             chart_result = await self._chart_queries.query_dashboard_item(
@@ -307,12 +392,49 @@ class DashboardService:
                 chart_id=item.chart_id,
                 dashboard_owner_id=dashboard.owner_id,
                 request_id=request_id,
+                context_filters=context_filters,
             )
         return DashboardItemQueryResult(
             dashboard_id=dashboard.id,
             dashboard_revision=dashboard.revision,
             item_id=item.id,
             chart_result=chart_result,
+        )
+
+    async def list_filter_values(
+        self,
+        *,
+        actor: User,
+        dashboard_id: UUID,
+        filter_id: UUID,
+    ) -> DashboardFilterValues:
+        dashboard = await self.get(actor=actor, dashboard_id=dashboard_id)
+        dashboard_filter = dashboard.definition.filter(filter_id)
+        if dashboard_filter is None or dashboard_filter.kind is not DashboardFilterKind.VALUES:
+            raise DashboardFilterNotFoundError
+        charts = {item.id: item.chart_id for item in dashboard.definition.items}
+        collected: set[object] = set()
+        truncated = False
+        for target in dashboard_filter.targets:
+            try:
+                result = await self._chart_queries.field_values(
+                    actor=actor,
+                    chart_id=charts[target.item_id],
+                    field_id=target.field_id,
+                    dashboard_owner_id=dashboard.owner_id,
+                    direct_access=_can_manage(actor, dashboard),
+                )
+            except (ChartNotFoundError, ChartDatasetNotAvailableError):
+                continue
+            collected.update(result.values)
+            truncated = truncated or result.truncated
+        values = tuple(sorted(collected, key=lambda value: (type(value).__name__, value)))
+        limit = 200
+        return DashboardFilterValues(
+            dashboard_id=dashboard.id,
+            filter_id=filter_id,
+            values=values[:limit],
+            truncated=truncated or len(values) > limit,
         )
 
     async def list_grants(self, *, actor: User, dashboard_id: UUID) -> tuple[DashboardGrant, ...]:
@@ -379,3 +501,24 @@ class DashboardService:
             raise InvalidDashboardDefinitionError(
                 "One or more dashboard chart references are unavailable"
             )
+        charts = {item.id: item.chart_id for item in definition.items}
+        families: dict[UUID, dict[UUID, str]] = {}
+        for dashboard_filter in definition.filters:
+            allowed = (
+                VALUE_FILTER_FAMILIES
+                if dashboard_filter.kind is DashboardFilterKind.VALUES
+                else DATE_RANGE_FILTER_FAMILIES
+            )
+            for target in dashboard_filter.targets:
+                chart_id = charts[target.item_id]
+                if chart_id not in families:
+                    try:
+                        families[chart_id] = await self._chart_queries.field_families(chart_id)
+                    except (ChartNotFoundError, ChartDatasetNotAvailableError) as exc:
+                        raise InvalidDashboardDefinitionError(
+                            f"Filter {dashboard_filter.label!r} targets a chart without loaded data"
+                        ) from exc
+                if families[chart_id].get(target.field_id) not in allowed:
+                    raise InvalidDashboardDefinitionError(
+                        f"Filter {dashboard_filter.label!r} targets a field it cannot filter"
+                    )

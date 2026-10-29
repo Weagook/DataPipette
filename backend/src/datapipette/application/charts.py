@@ -2,9 +2,10 @@
 
 import base64
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
-from typing import Protocol
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Any, Protocol
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from datapipette.application.access_control import (
     DatasetAccessAuthorizer,
@@ -26,14 +27,29 @@ from datapipette.domain.charts import (
     Chart,
     ChartAggregation,
     ChartDefinition,
+    ChartDimension,
+    ChartMeasure,
     ChartPreviewResult,
     ChartQueryExecution,
     ChartQueryResult,
+    ChartResultColumnRole,
+    ChartSort,
     ChartSortTargetType,
     ChartTimeBucket,
+    ChartType,
 )
 from datapipette.domain.identity import AccountStatus, AccountType, SystemRole, User
-from datapipette.domain.snapshot_queries import ActiveSnapshotQueryContext, SnapshotQueryField
+from datapipette.domain.snapshot_queries import (
+    ActiveSnapshotQueryContext,
+    SnapshotFilterOperator,
+    SnapshotQueryField,
+    SnapshotQueryFilter,
+    SnapshotSortDirection,
+)
+
+VALUE_FILTER_FAMILIES = frozenset({"text", "integer", "boolean"})
+DATE_RANGE_FILTER_FAMILIES = frozenset({"date", "datetime"})
+MAX_FILTER_VALUE_OPTIONS = 200
 
 
 class ChartNotFoundError(Exception):
@@ -94,6 +110,23 @@ class PreparedChartQuery:
     definition: ChartDefinition
     dimension_fields: tuple[SnapshotQueryField, ...]
     measure_fields: tuple[SnapshotQueryField, ...]
+    context_filters: tuple[SnapshotQueryFilter, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ChartContextFilter:
+    """A restriction applied on top of a saved chart, such as a dashboard filter choice."""
+
+    field_id: UUID
+    values: tuple[Any, ...] = ()
+    date_from: date | None = None
+    date_to: date | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ChartFieldValues:
+    values: tuple[Any, ...]
+    truncated: bool
 
 
 class ChartStore(Protocol):
@@ -279,6 +312,13 @@ def prepare_chart_query(
     )
 
 
+def _family(field: SnapshotQueryField) -> str | None:
+    try:
+        return snapshot_type_family(field.data_type)
+    except InvalidSnapshotQueryError:
+        return None
+
+
 class ChartService:
     def __init__(
         self,
@@ -287,12 +327,14 @@ class ChartService:
         executor: ChartQueryExecutor,
         authorizer: DatasetAccessAuthorizer,
         policy_store: QuerySafetyPolicyReader,
+        installation_timezone: str = "UTC",
     ) -> None:
         self._store = store
         self._snapshot_store = snapshot_store
         self._executor = executor
         self._authorizer = authorizer
         self._policy_store = policy_store
+        self._timezone = ZoneInfo(installation_timezone)
 
     async def create(self, *, actor: User, value: ChartCreate, request_id: str) -> Chart:
         if actor.status is not AccountStatus.ACTIVE or actor.role not in {
@@ -445,10 +487,17 @@ class ChartService:
         actor: User,
         chart_id: UUID,
         request_id: str,
+        context_filters: tuple[ChartContextFilter, ...] = (),
     ) -> ChartQueryResult:
         chart = await self.get(actor=actor, chart_id=chart_id)
         context = await self._authorized_context(actor=actor, dataset_id=chart.dataset_id)
-        return await self._execute(actor=actor, chart=chart, context=context, request_id=request_id)
+        return await self._execute(
+            actor=actor,
+            chart=chart,
+            context=context,
+            request_id=request_id,
+            context_filters=context_filters,
+        )
 
     async def query_dashboard_item(
         self,
@@ -457,19 +506,157 @@ class ChartService:
         chart_id: UUID,
         dashboard_owner_id: UUID,
         request_id: str,
+        context_filters: tuple[ChartContextFilter, ...] = (),
     ) -> ChartQueryResult:
+        chart, context = await self._dashboard_context(
+            actor=actor, chart_id=chart_id, dashboard_owner_id=dashboard_owner_id
+        )
+        return await self._execute(
+            actor=actor,
+            chart=chart,
+            context=context,
+            request_id=request_id,
+            context_filters=context_filters,
+        )
+
+    async def field_families(self, chart_id: UUID) -> dict[UUID, str]:
+        """Return the type family of every field in a chart's active published contract."""
+
+        chart = await self._store.get(chart_id)
+        if chart is None:
+            raise ChartNotFoundError
+        context = await self._active_context(chart.dataset_id)
+        families: dict[UUID, str] = {}
+        for field in context.fields:
+            try:
+                families[field.field_id] = snapshot_type_family(field.data_type)
+            except InvalidSnapshotQueryError:
+                continue
+        return families
+
+    async def field_values(
+        self,
+        *,
+        actor: User,
+        chart_id: UUID,
+        field_id: UUID,
+        dashboard_owner_id: UUID,
+        direct_access: bool,
+    ) -> ChartFieldValues:
+        """List the distinct values of one chart dataset field for a dashboard filter."""
+
+        if direct_access:
+            chart = await self.get(actor=actor, chart_id=chart_id)
+            if chart.owner_id != dashboard_owner_id:
+                raise ChartNotFoundError
+            context = await self._authorized_context(actor=actor, dataset_id=chart.dataset_id)
+        else:
+            chart, context = await self._dashboard_context(
+                actor=actor, chart_id=chart_id, dashboard_owner_id=dashboard_owner_id
+            )
+        field = next((item for item in context.fields if item.field_id == field_id), None)
+        if field is None or _family(field) not in VALUE_FILTER_FAMILIES:
+            raise InvalidChartDefinitionError("The filter field is not available for value lists")
+        definition = ChartDefinition(
+            chart_type=ChartType.BAR,
+            dimensions=(ChartDimension(field_id),),
+            measures=(ChartMeasure(uuid4(), field_id, ChartAggregation.COUNT, "Rows"),),
+            sorts=(
+                ChartSort(ChartSortTargetType.DIMENSION, field_id, SnapshotSortDirection.ASCENDING),
+            ),
+            limit=MAX_FILTER_VALUE_OPTIONS + 1,
+        )
+        managed_policy = await self._policy_store.get()
+        execution = await self._executor.query(
+            context=context,
+            prepared=prepare_chart_query(context, definition),
+            runtime=InteractiveQueryRuntime.from_policy(managed_policy.policy),
+        )
+        key = next(
+            column.key
+            for column in execution.columns
+            if column.role is ChartResultColumnRole.DIMENSION
+        )
+        values = tuple(row[key] for row in execution.rows if row[key] is not None)
+        return ChartFieldValues(
+            values=values[:MAX_FILTER_VALUE_OPTIONS],
+            truncated=len(values) > MAX_FILTER_VALUE_OPTIONS,
+        )
+
+    async def _dashboard_context(
+        self,
+        *,
+        actor: User,
+        chart_id: UUID,
+        dashboard_owner_id: UUID,
+    ) -> tuple[Chart, ActiveSnapshotQueryContext]:
         if actor.status is not AccountStatus.ACTIVE:
             raise ChartNotFoundError
         chart = await self._store.get(chart_id)
         if chart is None or chart.owner_id != dashboard_owner_id:
             raise ChartNotFoundError
+        return chart, await self._active_context(chart.dataset_id)
+
+    async def _active_context(self, dataset_id: UUID) -> ActiveSnapshotQueryContext:
         try:
-            context = await self._snapshot_store.get_active_context(chart.dataset_id)
+            context = await self._snapshot_store.get_active_context(dataset_id)
         except (DatasetSnapshotNotPublishedError, DatasetSnapshotUnavailableError) as exc:
             raise ChartDatasetNotAvailableError from exc
         if context is None:
             raise ChartDatasetNotAvailableError
-        return await self._execute(actor=actor, chart=chart, context=context, request_id=request_id)
+        return context
+
+    def _context_filters(
+        self,
+        context: ActiveSnapshotQueryContext,
+        filters: tuple[ChartContextFilter, ...],
+    ) -> tuple[SnapshotQueryFilter, ...]:
+        fields = {field.field_id: field for field in context.fields}
+        compiled: list[SnapshotQueryFilter] = []
+        for item in filters:
+            field = fields.get(item.field_id)
+            family = _family(field) if field is not None else None
+            if item.values:
+                if family not in VALUE_FILTER_FAMILIES:
+                    raise InvalidChartDefinitionError("A dashboard filter field is unavailable")
+                compiled.append(
+                    SnapshotQueryFilter(
+                        item.field_id, SnapshotFilterOperator.IN, values=item.values
+                    )
+                )
+                continue
+            if family not in DATE_RANGE_FILTER_FAMILIES:
+                raise InvalidChartDefinitionError("A dashboard filter field is unavailable")
+            if item.date_from is not None:
+                compiled.append(
+                    SnapshotQueryFilter(
+                        item.field_id,
+                        SnapshotFilterOperator.GREATER_THAN_OR_EQUAL,
+                        value=self._date_bound(item.date_from, family),
+                    )
+                )
+            if item.date_to is not None:
+                compiled.append(
+                    SnapshotQueryFilter(
+                        item.field_id,
+                        SnapshotFilterOperator.LESS_THAN_OR_EQUAL
+                        if family == "date"
+                        else SnapshotFilterOperator.LESS_THAN,
+                        value=self._date_bound(
+                            item.date_to if family == "date" else item.date_to + timedelta(days=1),
+                            family,
+                        ),
+                    )
+                )
+        try:
+            return prepare_snapshot_filters(context, tuple(compiled))
+        except InvalidSnapshotQueryError as exc:
+            raise InvalidChartDefinitionError(str(exc)) from exc
+
+    def _date_bound(self, value: date, family: str | None) -> str:
+        if family == "date":
+            return value.isoformat()
+        return datetime.combine(value, time.min, tzinfo=self._timezone).isoformat()
 
     async def _execute(
         self,
@@ -478,8 +665,13 @@ class ChartService:
         chart: Chart,
         context: ActiveSnapshotQueryContext,
         request_id: str,
+        context_filters: tuple[ChartContextFilter, ...] = (),
     ) -> ChartQueryResult:
         prepared = prepare_chart_query(context, chart.definition)
+        if context_filters:
+            prepared = replace(
+                prepared, context_filters=self._context_filters(context, context_filters)
+            )
         managed_policy = await self._policy_store.get()
         runtime = InteractiveQueryRuntime.from_policy(managed_policy.policy)
         try:
@@ -551,13 +743,7 @@ class ChartService:
             )
         except DatasetAccessDeniedError as exc:
             raise ChartDatasetNotAvailableError from exc
-        try:
-            context = await self._snapshot_store.get_active_context(dataset_id)
-        except (DatasetSnapshotNotPublishedError, DatasetSnapshotUnavailableError) as exc:
-            raise ChartDatasetNotAvailableError from exc
-        if context is None:
-            raise ChartDatasetNotAvailableError
-        return context
+        return await self._active_context(dataset_id)
 
     async def _record_query(
         self,

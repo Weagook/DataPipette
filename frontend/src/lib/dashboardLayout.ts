@@ -8,7 +8,12 @@ export const DEFAULT_ITEM_WIDTH = 6;
 export const DEFAULT_ITEM_HEIGHT = 4;
 
 export function emptyDashboardDefinition(): DashboardDefinition {
-  return { schema_version: 1, items: [] };
+  return { schema_version: 2, items: [], filters: [] };
+}
+
+// Layout edits keep the dashboard filters; version 2 is the document that carries them.
+function withItems(definition: DashboardDefinition, items: DashboardItem[]): DashboardDefinition {
+  return { schema_version: 2, items, filters: definition.filters ?? [] };
 }
 
 export function itemsOf(definition: DashboardDefinition): DashboardItem[] {
@@ -77,13 +82,10 @@ export function addChart(
 ): DashboardDefinition {
   const items = itemsOf(definition);
   if (items.some((item) => item.chart_id === chartId)) return definition;
-  return {
-    schema_version: 1,
-    items: [
-      ...items,
-      { id: itemId, chart_id: chartId, ...firstAvailablePosition(items) },
-    ],
-  };
+  return withItems(definition, [
+    ...items,
+    { id: itemId, chart_id: chartId, ...firstAvailablePosition(items) },
+  ]);
 }
 
 export function updateItem(
@@ -94,16 +96,19 @@ export function updateItem(
   const next = itemsOf(definition).map((item) =>
     item.id === itemId ? { ...item, ...change } : item,
   );
-  return isValidLayout(next) ? { schema_version: 1, items: next } : null;
+  return isValidLayout(next) ? withItems(definition, next) : null;
 }
 
 export function removeItem(
   definition: DashboardDefinition,
   itemId: string,
 ): DashboardDefinition {
+  const filters = (definition.filters ?? [])
+    .map((filter) => ({ ...filter, targets: filter.targets.filter((target) => target.item_id !== itemId) }))
+    .filter((filter) => filter.targets.length > 0);
   return {
-    schema_version: 1,
-    items: itemsOf(definition).filter((item) => item.id !== itemId),
+    ...withItems(definition, itemsOf(definition).filter((item) => item.id !== itemId)),
+    filters,
   };
 }
 
@@ -116,5 +121,5 @@ export function compactLayout(definition: DashboardDefinition): DashboardDefinit
     }
     compacted.push(candidate);
   }
-  return { schema_version: 1, items: compacted };
+  return withItems(definition, compacted);
 }

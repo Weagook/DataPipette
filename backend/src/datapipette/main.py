@@ -320,6 +320,7 @@ def create_app(
             ),
             access_authorizer,
             query_safety_policy_store,
+            resolved_settings.installation_timezone,
         )
         app.state.chart_service = resolved_chart_service
         app.state.dashboard_service = dashboard_service or DashboardService(

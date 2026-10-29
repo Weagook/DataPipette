@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -14,6 +14,7 @@ import pytest
 
 from datapipette.application.access_control import DatasetAccessAuthorizer
 from datapipette.application.charts import (
+    ChartContextFilter,
     ChartCreate,
     ChartDatasetNotAvailableError,
     ChartNotFoundError,
@@ -715,5 +716,118 @@ def test_chart_preview_records_failed_executions() -> None:
             )
         assert store.audits[-1]["error_code"] == "interactive_query_capacity_exceeded"
         assert store.audits[-1]["returned_rows"] == 0
+
+    asyncio.run(exercise())
+
+
+def test_chart_context_filters_restrict_saved_charts_and_list_values(tmp_path: Path) -> None:
+    pq.write_table(
+        pa.table(
+            {
+                "region": ["North", "South", "North", "West"],
+                "amount": [Decimal("12.50"), Decimal("20.00"), Decimal("17.50"), Decimal("30.00")],
+                "order_id": [1, 2, 3, 4],
+                "occurred_at": [
+                    # 23:30 on 31 December in Almaty is still 2025 locally.
+                    datetime(2025, 12, 31, 18, 30, tzinfo=UTC),
+                    datetime(2026, 1, 1, 0, 30, tzinfo=UTC),
+                    datetime(2026, 1, 31, 19, 30, tzinfo=UTC),
+                    datetime(2026, 2, 3, 12, 0, tzinfo=UTC),
+                ],
+            },
+            schema=pa.schema(
+                [
+                    pa.field("region", pa.string(), nullable=False),
+                    pa.field("amount", pa.decimal128(12, 2)),
+                    pa.field("order_id", pa.int64(), nullable=False),
+                    pa.field("occurred_at", pa.timestamp("us", tz="UTC"), nullable=False),
+                ]
+            ),
+        ),
+        tmp_path / "snapshot.parquet",
+    )
+    actor = _user()
+    store = FakeChartStore()
+    service = ChartService(
+        store,
+        FakeSnapshotStore(_context()),
+        DuckDbLocalChartQueryExecutor(tmp_path, installation_timezone="Asia/Almaty"),
+        DatasetAccessAuthorizer(FakeAccessStore(actor.id)),
+        FakePolicyStore(),
+        "Asia/Almaty",
+    )
+
+    async def exercise() -> None:
+        chart = await service.create(
+            actor=actor,
+            value=ChartCreate("Revenue", DATASET_ID, replace(_definition(), filters=())),
+            request_id="req-create",
+        )
+
+        async def revenue(*filters: ChartContextFilter) -> dict[str, str]:
+            result = await service.query(
+                actor=actor,
+                chart_id=chart.id,
+                request_id="req-query",
+                context_filters=filters,
+            )
+            key, value = (column.key for column in result.columns)
+            return {row[key]: row[value] for row in result.rows}
+
+        assert await revenue() == {"West": "30.00", "North": "30.00", "South": "20.00"}
+        assert await revenue(ChartContextFilter(REGION_ID, values=("North",))) == {"North": "30.00"}
+        # January in Almaty: the first order is local 2025 and the last is in February.
+        january = ChartContextFilter(
+            OCCURRED_AT_ID, date_from=date(2026, 1, 1), date_to=date(2026, 1, 31)
+        )
+        assert await revenue(january) == {"South": "20.00"}
+        assert await revenue(ChartContextFilter(OCCURRED_AT_ID, date_from=date(2026, 2, 1))) == {
+            "North": "17.50",
+            "West": "30.00",
+        }
+        with pytest.raises(InvalidChartDefinitionError, match="filter field is unavailable"):
+            await revenue(ChartContextFilter(AMOUNT_ID, values=("1",)))
+        with pytest.raises(InvalidChartDefinitionError, match="filter field is unavailable"):
+            await revenue(ChartContextFilter(REGION_ID, date_from=date(2026, 1, 1)))
+
+        families = await service.field_families(chart.id)
+        assert families[REGION_ID] == "text"
+        assert families[OCCURRED_AT_ID] == "datetime"
+
+        values = await service.field_values(
+            actor=_user(SystemRole.VIEWER),
+            chart_id=chart.id,
+            field_id=REGION_ID,
+            dashboard_owner_id=actor.id,
+            direct_access=False,
+        )
+        assert values.values == ("North", "South", "West")
+        assert values.truncated is False
+        direct = await service.field_values(
+            actor=actor,
+            chart_id=chart.id,
+            field_id=REGION_ID,
+            dashboard_owner_id=actor.id,
+            direct_access=True,
+        )
+        assert direct == values
+        with pytest.raises(ChartNotFoundError):
+            await service.field_values(
+                actor=actor,
+                chart_id=chart.id,
+                field_id=REGION_ID,
+                dashboard_owner_id=uuid4(),
+                direct_access=True,
+            )
+        with pytest.raises(InvalidChartDefinitionError, match="not available for value lists"):
+            await service.field_values(
+                actor=actor,
+                chart_id=chart.id,
+                field_id=AMOUNT_ID,
+                dashboard_owner_id=actor.id,
+                direct_access=True,
+            )
+        with pytest.raises(ChartNotFoundError):
+            await service.field_families(uuid4())
 
     asyncio.run(exercise())

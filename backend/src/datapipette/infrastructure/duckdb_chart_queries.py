@@ -184,7 +184,9 @@ def _compile_query(
         )
         result_aliases[(ChartSortTargetType.MEASURE, measure.id)] = key
 
-    clauses, parameters = compile_snapshot_filters(definition.filters, fields)
+    clauses, parameters = compile_snapshot_filters(
+        (*definition.filters, *prepared.context_filters), fields
+    )
     groups = [quote_identifier(_dimension_key(field)) for field in prepared.dimension_fields]
     order = [
         f"{quote_identifier(result_aliases[(item.target_type, item.target_id)])} "

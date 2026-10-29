@@ -151,6 +151,8 @@ The JSONB definition is the authoritative editable document. Normalized chart de
 
 An implemented dashboard-item query resolves one chart solely by the stable item UUID in the current saved definition. Each item is requested independently, so unrelated charts can load, fail, retry, and be cancelled separately. The response carries the dashboard revision alongside the chart and snapshot metadata, allowing clients to reject a late result after a layout replacement. Owner, administrator, and shared-recipient requests use the same saved definition and bounded aggregate executor. Dashboard-context execution does not grant dataset rows or export and cannot be used with an arbitrary chart; direct chart routes retain their independent authorization.
 
+Definition schema version 2 adds up to five dashboard filters ([ADR-0052](adr/0052-dashboard-filters.md)). A filter has a stable UUID, a label, a kind (`values` for text, integer, and boolean fields; `date_range` for date and timestamp fields), and explicit `(item_id, field_id)` targets validated against each chart's active published contract when the dashboard is saved. Viewer selections are not part of the definition: an item query may carry them, and the server turns the selections of filters that target that item into typed restrictions added to the chart's saved filters. A value list for a `values` filter returns at most 200 distinct values across its targets.
+
 ### Export job
 
 An asynchronous request to write a filtered dataset table view to CSV or XLSX. The resulting private file expires after 24 hours. Download URLs expire after five minutes and may be reissued while the file exists.
