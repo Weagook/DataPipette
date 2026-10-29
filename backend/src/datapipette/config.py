@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
     object_storage_backend: Literal["local", "s3"] = "local"
     snapshot_storage_path: Path = Path(".local/snapshots")
+    snapshot_cache_path: Path | None = None
+    snapshot_cache_max_mb: int = Field(default=4096, ge=0, le=1_048_576)
     s3_endpoint_url: str | None = None
     s3_region: str = "us-east-1"
     s3_bucket: str | None = None

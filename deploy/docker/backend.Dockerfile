@@ -19,7 +19,7 @@ WORKDIR /app
 
 RUN groupadd --gid 10001 datapipette \
     && useradd --uid 10001 --gid datapipette --no-create-home --shell /usr/sbin/nologin datapipette \
-    && install -d -o datapipette -g datapipette /var/lib/datapipette/snapshots
+    && install -d -m 0700 -o datapipette -g datapipette /var/lib/datapipette/snapshots /var/lib/datapipette/cache
 
 COPY --from=builder /opt/datapipette/.venv /opt/datapipette/.venv
 COPY backend/alembic.ini backend/alembic.ini
