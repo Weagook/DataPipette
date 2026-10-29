@@ -153,7 +153,7 @@ def _context(*, where: str = "", not_null: set[str] | None = None) -> _Execution
     return _ExecutionContext(connection, str(URL.password), None, definition, validation)
 
 
-def _executor(root: Path, *, maximum_rows: int = 1000) -> ParquetSnapshotExecutor:
+def _executor(root: Path, *, maximum_rows: int, batch_rows: int) -> ParquetSnapshotExecutor:
     unused: Any = None
     return ParquetSnapshotExecutor(
         unused,
@@ -162,17 +162,25 @@ def _executor(root: Path, *, maximum_rows: int = 1000) -> ParquetSnapshotExecuto
         root,
         connect_timeout_seconds=5,
         statement_timeout_seconds=30,
-        batch_rows=2,
+        batch_rows=batch_rows,
         authorizer=unused,
         maximum_rows=maximum_rows,
     )
 
 
-def _publish(root: Path, context: _ExecutionContext, *, maximum_rows: int = 1000) -> Any:
+def _publish(
+    root: Path,
+    context: _ExecutionContext,
+    *,
+    maximum_rows: int = 1000,
+    batch_rows: int = 2,
+) -> Any:
     run: Any = SimpleNamespace(id=uuid4(), dataset_id=UUID(int=1))
-    artifact = asyncio.run(
-        _executor(root, maximum_rows=maximum_rows)._write(run, context, asyncio.Event())
+    write = _executor(root, maximum_rows=maximum_rows, batch_rows=batch_rows)._write(
+        run, context, asyncio.Event()
     )
+    # A protocol deadlock between the COPY producer and the parser must fail, not hang.
+    artifact = asyncio.run(asyncio.wait_for(write, timeout=120))
     return artifact, pq.read_table(root / artifact.object_key)
 
 
@@ -246,3 +254,22 @@ def test_csv_stream_enforces_row_limit_and_non_null_contract(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="Non-nullable source field returned null"):
         _publish(tmp_path / "null", _context(not_null={"label"}))
     assert not list((tmp_path / "limit").rglob("*.parquet"))
+
+
+def test_rejected_csv_stream_falls_back_after_filling_the_chunk_queue(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    filler = "x" * 180
+    asyncio.run(
+        _execute(
+            f"INSERT INTO {SCHEMA}.samples (id, label) "
+            f"SELECT 100 + value, '{filler}' FROM generate_series(1, 400000) AS series(value)"
+        )
+    )
+    calls = _force_row_stream(monkeypatch)
+
+    artifact, table = _publish(tmp_path, _context(), maximum_rows=1_000_000, batch_rows=50_000)
+
+    assert calls == ["csv"]
+    assert artifact.row_count == table.num_rows == 400_004

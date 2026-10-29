@@ -362,54 +362,50 @@ def _write_csv_stream(
     schema: pa.Schema,
     adapters: tuple[_ColumnAdapter, ...],
     maximum_rows: int,
-    consumer_stopped: threading.Event,
     producer_failed: threading.Event,
 ) -> int:
     """Parse PostgreSQL CSV into typed Arrow batches and append them to the snapshot."""
 
-    row_count = 0
     try:
+        reader = pacsv.open_csv(
+            io.BufferedReader(
+                _CsvChunkReader(chunks, producer_failed),
+                buffer_size=_CSV_CHUNK_BYTES,
+            ),
+            read_options=pacsv.ReadOptions(
+                column_names=[adapter.storage_name for adapter in adapters],
+                block_size=_CSV_BLOCK_BYTES,
+            ),
+            parse_options=pacsv.ParseOptions(newlines_in_values=True),
+            convert_options=pacsv.ConvertOptions(
+                column_types=schema,
+                true_values=["t"],
+                false_values=["f"],
+                null_values=[""],
+                strings_can_be_null=True,
+                quoted_strings_can_be_null=False,
+            ),
+        )
+    except pa.ArrowInvalid as exc:
+        # An empty result has no first block from which to infer anything.
+        if "Empty CSV file" in str(exc):
+            return 0
+        raise _CsvStreamRejectedError from exc
+    row_count = 0
+    while True:
         try:
-            reader = pacsv.open_csv(
-                io.BufferedReader(
-                    _CsvChunkReader(chunks, producer_failed),
-                    buffer_size=_CSV_CHUNK_BYTES,
-                ),
-                read_options=pacsv.ReadOptions(
-                    column_names=[adapter.storage_name for adapter in adapters],
-                    block_size=_CSV_BLOCK_BYTES,
-                ),
-                parse_options=pacsv.ParseOptions(newlines_in_values=True),
-                convert_options=pacsv.ConvertOptions(
-                    column_types=schema,
-                    true_values=["t"],
-                    false_values=["f"],
-                    null_values=[""],
-                    strings_can_be_null=True,
-                    quoted_strings_can_be_null=False,
-                ),
-            )
-        except pa.ArrowInvalid as exc:
-            # An empty result has no first block from which to infer anything.
-            if "Empty CSV file" in str(exc):
-                return 0
+            parsed = reader.read_next_batch()
+        except StopIteration:
+            return row_count
+        except (pa.ArrowInvalid, pa.ArrowNotImplementedError) as exc:
             raise _CsvStreamRejectedError from exc
-        while True:
-            try:
-                parsed = reader.read_next_batch()
-            except StopIteration:
-                return row_count
-            except (pa.ArrowInvalid, pa.ArrowNotImplementedError) as exc:
-                raise _CsvStreamRejectedError from exc
-            if row_count + parsed.num_rows > maximum_rows:
-                raise RefreshRowLimitExceededError
-            for adapter, column in zip(adapters, parsed.columns, strict=True):
-                if not adapter.nullable and column.null_count:
-                    raise ValueError("Non-nullable source field returned null")
-            writer.write_batch(pa.RecordBatch.from_arrays(parsed.columns, schema=schema))
-            row_count += parsed.num_rows
-    finally:
-        consumer_stopped.set()
+        if row_count + parsed.num_rows > maximum_rows:
+            raise RefreshRowLimitExceededError
+        for adapter, column in zip(adapters, parsed.columns, strict=True):
+            if not adapter.nullable and column.null_count:
+                raise ValueError("Non-nullable source field returned null")
+        writer.write_batch(pa.RecordBatch.from_arrays(parsed.columns, schema=schema))
+        row_count += parsed.num_rows
 
 
 def _put_csv_chunk(
@@ -715,18 +711,23 @@ class ParquetSnapshotExecutor:
                 for name, value in _CSV_SESSION_SETTINGS:
                     await cursor.execute("SELECT set_config(%s, %s, true)", (name, value))
                 _raise_if_cancelled(cancellation)
-                consumer = asyncio.create_task(
-                    asyncio.to_thread(
-                        _write_csv_stream,
-                        writer,
-                        chunks,
-                        schema=schema,
-                        adapters=adapters,
-                        maximum_rows=self._maximum_rows,
-                        consumer_stopped=consumer_stopped,
-                        producer_failed=producer_failed,
-                    )
-                )
+
+                def consume() -> int:
+                    # Whatever ends the consumer must release a producer
+                    # blocked on a full queue.
+                    try:
+                        return _write_csv_stream(
+                            writer,
+                            chunks,
+                            schema=schema,
+                            adapters=adapters,
+                            maximum_rows=self._maximum_rows,
+                            producer_failed=producer_failed,
+                        )
+                    finally:
+                        consumer_stopped.set()
+
+                consumer = asyncio.create_task(asyncio.to_thread(consume))
                 try:
                     statement = sql.SQL("COPY ({}) TO STDOUT (FORMAT csv)").format(
                         compile_dataset_select(context.definition)
