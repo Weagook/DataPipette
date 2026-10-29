@@ -1,0 +1,74 @@
+{
+  "browser_retries": 2,
+  "concurrency": 5,
+  "dashboard_id": "87080fc8-c39a-4f72-a562-34769c4683d7",
+  "dashboard_views": {
+    "attempted": 76,
+    "requests_per_second": 1.267,
+    "scenarios": {
+      "view": {
+        "attempted": 76,
+        "p50_ms": 748.362,
+        "p95_ms": 1487.887,
+        "p99_ms": 1707.047,
+        "succeeded": 76
+      }
+    },
+    "status_counts": {
+      "200": 76
+    },
+    "succeeded": 76,
+    "success_rate": 1.0,
+    "successful_latency_ms": {
+      "max": 1707.047,
+      "mean": 829.804,
+      "min": 397.877,
+      "p50": 748.362,
+      "p95": 1487.887,
+      "p99": 1707.047
+    }
+  },
+  "duration_seconds": 60.0,
+  "errors": [],
+  "filter_count": 0,
+  "filter_share": 0.5,
+  "item_count": 6,
+  "recorded_at": "2026-10-29T19:12:37.690958+00:00",
+  "requests": {
+    "attempted": 532,
+    "requests_per_second": 8.867,
+    "scenarios": {
+      "item": {
+        "attempted": 456,
+        "p50_ms": 613.173,
+        "p95_ms": 1148.425,
+        "p99_ms": 1422.588,
+        "succeeded": 456
+      },
+      "layout": {
+        "attempted": 76,
+        "p50_ms": 28.674,
+        "p95_ms": 202.51,
+        "p99_ms": 296.266,
+        "succeeded": 76
+      }
+    },
+    "status_counts": {
+      "200": 532
+    },
+    "succeeded": 532,
+    "success_rate": 1.0,
+    "successful_latency_ms": {
+      "max": 1529.715,
+      "mean": 577.003,
+      "min": 10.43,
+      "p50": 521.081,
+      "p95": 1122.389,
+      "p99": 1402.761
+    }
+  },
+  "retried_attempts": 0,
+  "schema_version": 1,
+  "think_time_seconds": 3.0,
+  "warmup_seconds": 15.0
+}

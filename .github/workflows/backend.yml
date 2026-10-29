@@ -87,7 +87,7 @@ jobs:
         run: uv run python -m unittest discover -s benchmarks/tests
 
       - name: Check deployment scripts
-        run: shellcheck deploy/compose/backup.sh deploy/compose/new-env.sh
+        run: shellcheck deploy/compose/backup.sh deploy/compose/new-env.sh deploy/compose/healthcheck.sh
 
       - name: Check production Compose overlay
         run: |

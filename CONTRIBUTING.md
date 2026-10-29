@@ -161,7 +161,7 @@ uv run --package datapipette ruff format --check backend
 uv run --package datapipette ruff check backend
 uv run --package datapipette mypy
 uv run python -m unittest discover -s benchmarks/tests
-shellcheck deploy/compose/backup.sh deploy/compose/new-env.sh
+shellcheck deploy/compose/backup.sh deploy/compose/new-env.sh deploy/compose/healthcheck.sh
 uv run --package datapipette alembic -c backend/alembic.ini upgrade head
 uv run --package datapipette alembic -c backend/alembic.ini check
 uv run --package datapipette pytest

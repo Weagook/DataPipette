@@ -10,7 +10,7 @@ This directory contains the reproducible workload for the DataPipette MVP perfor
 
 The accepted reference target is a 5-million-row, 50-column snapshot on a 4 CPU / 8 GB DataPipette node, 20 active interactive clients, and two admitted heavy background jobs. One environment cannot prove universal production capacity, so every published result must include hardware, storage topology, configuration, dataset shape, run duration, success/capacity responses, and known limitations.
 
-The first measured baseline is published in [`REPORT_2026-10-19.md`](REPORT_2026-10-19.md). It records a failed 50-column acceptance run and a successful 20-column diagnostic run; keep that distinction explicit when comparing future results. The first refresh-path optimization and its unchanged-policy timeout are recorded separately in [`OPTIMIZATION_2026-10-20.md`](OPTIMIZATION_2026-10-20.md). The columnar CSV refresh stream and its colocated 5M × 50 measurement are recorded in [`OPTIMIZATION_2026-10-29.md`](OPTIMIZATION_2026-10-29.md).
+The first measured baseline is published in [`REPORT_2026-10-19.md`](REPORT_2026-10-19.md). It records a failed 50-column acceptance run and a successful 20-column diagnostic run; keep that distinction explicit when comparing future results. The first refresh-path optimization and its unchanged-policy timeout are recorded separately in [`OPTIMIZATION_2026-10-20.md`](OPTIMIZATION_2026-10-20.md). The columnar CSV refresh stream and its colocated 5M × 50 measurement are recorded in [`OPTIMIZATION_2026-10-29.md`](OPTIMIZATION_2026-10-29.md). Dashboard-viewer capacity of a 4 CPU single-server installation is recorded in [`CAPACITY_2026-10-30.md`](CAPACITY_2026-10-30.md).
 
 ## Safety boundary
 
@@ -89,7 +89,26 @@ Each virtual client owns one persistent HTTP connection and continuously rotates
 
 The report separates successful latency from `503` admission responses. Capacity rejection is an expected governed outcome and must never be hidden in aggregate latency.
 
-## 4. Run two bounded background jobs
+## 4. Simulate dashboard viewers
+
+The `dashboard` workload measures what people experience on a dashboard rather than single queries. Each virtual viewer repeats a browser's work:
+
+1. loads the dashboard layout, then queries every chart at once over at most six connections, the browser limit per host;
+2. in about half of the views, picks random values for the dashboard's list filters and a whole month for date filters, sending each chart only the filters that target it;
+3. retries a chart twice, one second apart, after a `503` or other server error, as the official frontend does;
+4. pauses between views for a random time around `--think-time` seconds.
+
+It works with any dashboard and needs no benchmark fixture:
+
+```bash
+python3 benchmarks/datapipette_benchmark.py dashboard \
+  --dashboard-id DASHBOARD_ID --concurrency 20 --think-time 3 \
+  --warmup 15 --duration 120 --output benchmarks/results/dashboard-c20.json
+```
+
+`dashboard_views` summarizes whole views. A view counts as successful only when the layout and every chart loaded, and its latency is the time until the last chart arrived. `requests` summarizes individual layout and chart requests after browser retries, and `retried_attempts` counts the `503` responses that a retry absorbed. Run it from a machine other than the server, so the load generator does not compete with DataPipette for CPU.
+
+## 5. Run two bounded background jobs
 
 The reference Compose environment must run a worker with concurrency two before this scenario can demonstrate simultaneous execution. The jobs each export a non-overlapping 250,000-row, 12-column CSV slice:
 

@@ -87,7 +87,8 @@ Outcome: another application can securely embed DataPipette backend capabilities
 - [x] Self-contained one-command evaluation Compose topology
 - Rate limiting, idempotency, optimistic concurrency, and deprecation policy
 - [x] Backup and restore procedures for the Compose installation (off-host replication and point-in-time recovery remain production work)
-- Operational dashboards, alerts, and capacity guidance
+- [x] Host health checks with Telegram/webhook alerts and a dashboard-viewer capacity benchmark
+- Operational metrics dashboards (Prometheus/Grafana or similar)
 - [x] Threat-model review and release-candidate security hardening ([review](SECURITY_REVIEW_2026-10-29.md))
 - [x] Single-server production Compose overlay with automatic HTTPS, closed internal ports, generated secrets, encryption-key rotation, and scheduled backups
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import unittest
 
 from benchmarks.datapipette_benchmark import (
@@ -7,6 +8,8 @@ from benchmarks.datapipette_benchmark import (
     Sample,
     benchmark_definition,
     build_scenarios,
+    dashboard_selection,
+    items_for_selection,
     percentile,
     summarize_samples,
 )
@@ -78,6 +81,45 @@ class BenchmarkStatisticsTests(unittest.TestCase):
         self.assertEqual(summary["successful_latency_ms"]["p50"], 10.0)
         self.assertEqual(summary["successful_latency_ms"]["p95"], 30.0)
         self.assertEqual(summary["scenarios"]["wide_page"]["succeeded"], 0)
+
+
+FILTERS = [
+    {
+        "id": "region",
+        "kind": "values",
+        "targets": [{"item_id": "a", "field_id": "f1"}, {"item_id": "b", "field_id": "f2"}],
+    },
+    {"id": "ordered", "kind": "date_range", "targets": [{"item_id": "a", "field_id": "f3"}]},
+]
+
+
+class DashboardWorkloadTests(unittest.TestCase):
+    filters = FILTERS
+
+    def test_selections_use_listed_values_and_whole_months(self) -> None:
+        rng = random.Random(7)
+        seen: set[str] = set()
+        for _ in range(200):
+            for selection in dashboard_selection(
+                self.filters, {"region": ["North", "South", "West"]}, rng
+            ):
+                seen.add(selection["filter_id"])
+                if selection["filter_id"] == "region":
+                    self.assertTrue(1 <= len(selection["values"]) <= 2)
+                    self.assertTrue(set(selection["values"]) <= {"North", "South", "West"})
+                else:
+                    self.assertTrue(selection["from"].endswith("-01"))
+                    self.assertLessEqual(selection["from"], selection["to"])
+        self.assertEqual(seen, {"region", "ordered"})
+
+    def test_each_item_receives_only_filters_that_target_it(self) -> None:
+        selections = [
+            {"filter_id": "region", "values": ["North"]},
+            {"filter_id": "ordered", "from": "2026-01-01", "to": "2026-01-31"},
+        ]
+        self.assertEqual(items_for_selection("a", self.filters, selections), selections)
+        self.assertEqual(items_for_selection("b", self.filters, selections), selections[:1])
+        self.assertEqual(items_for_selection("c", self.filters, selections), [])
 
 
 if __name__ == "__main__":
