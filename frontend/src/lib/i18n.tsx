@@ -11,6 +11,18 @@ export type InterfaceLocale = "en" | "ru";
 type Replacements = Record<string, string | number>;
 
 const russian: Record<string, string> = {
+  "Ask an administrator to connect a database for you.": "Попросите администратора подключить базу данных.",
+  "Build a chart": "Постройте диаграмму",
+  "Collect charts on one page and share it.": "Соберите диаграммы на одной странице и поделитесь ею.",
+  "Connect a database": "Подключите базу данных",
+  "Getting started": "С чего начать",
+  "No datasets yet": "Датасетов пока нет",
+  "Pick tables, link them, and load the data.": "Выберите таблицы, свяжите их и загрузите данные.",
+  "Prepare a dataset": "Подготовьте датасет",
+  "Put charts on a dashboard": "Соберите дашборд",
+  "Show the data as bars, a line, a pie, or one number.": "Покажите данные столбцами, линией, кругом или одним числом.",
+  "Start": "Начать",
+  "Tell DataPipette where your PostgreSQL data lives.": "Укажите, где лежат ваши данные PostgreSQL.",
   "+{count} more": "+ ещё {count}",
   "1 hour": "1 час",
   "1. Set up the dataset": "1. Настройте датасет",
