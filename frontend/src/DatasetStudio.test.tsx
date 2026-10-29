@@ -119,10 +119,8 @@ describe("dataset studio", () => {
     fireEvent.change(screen.getByLabelText("Dataset name"), {
       target: { value: "Revenue SQL" },
     });
-    await screen.findByRole("option", { name: "Warehouse · analytics" });
-    fireEvent.change(await screen.findByLabelText("PostgreSQL connection"), {
-      target: { value: CONNECTION_ID },
-    });
+    await screen.findByRole("radio", { name: /Warehouse/ });
+    fireEvent.click(screen.getByRole("radio", { name: /Warehouse/ }));
     fireEvent.click(screen.getByRole("radio", { name: /SQL \(for specialists\)/ }));
     fireEvent.change(
       await screen.findByLabelText("Read-only PostgreSQL query"),
@@ -285,14 +283,12 @@ describe("dataset studio", () => {
     fireEvent.change(screen.getByLabelText("Dataset name"), {
       target: { value: "Orders model" },
     });
-    await screen.findByRole("option", { name: "Warehouse · analytics" });
+    await screen.findByRole("radio", { name: /Warehouse/ });
     expect(
       screen.getByText("Choose a connection to start building"),
     ).toBeVisible();
     expect(catalogRequests).toBe(0);
-    fireEvent.change(screen.getByLabelText("PostgreSQL connection"), {
-      target: { value: CONNECTION_ID },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: /Warehouse/ }));
     fireEvent.change(screen.getByLabelText("Schema"), {
       target: { value: "public" },
     });
@@ -397,10 +393,8 @@ describe("dataset studio", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByRole("option", { name: "Warehouse · analytics" });
-    fireEvent.change(screen.getByLabelText("PostgreSQL connection"), {
-      target: { value: CONNECTION_ID },
-    });
+    await screen.findByRole("radio", { name: /Warehouse/ });
+    fireEvent.click(screen.getByRole("radio", { name: /Warehouse/ }));
     expect(
       await screen.findByText(
         "The PostgreSQL source catalog could not be read.",
