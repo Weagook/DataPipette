@@ -134,7 +134,7 @@ describe("dashboard studio", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "New dashboard" }),
+      await screen.findByLabelText("Dashboard name"),
     ).toBeVisible();
     fireEvent.change(screen.getByLabelText("Dashboard name"), {
       target: { value: "Executive revenue" },
@@ -144,7 +144,7 @@ describe("dashboard studio", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Create dashboard" }));
 
-    await screen.findByRole("heading", { name: "Edit dashboard" });
+    await screen.findByRole("link", { name: "Open dashboard" });
     expect(createBody).toMatchObject({
       name: "Executive revenue",
       definition: {

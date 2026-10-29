@@ -6,6 +6,8 @@ import {
   ArrowUp,
   BarChart3,
   Check,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Eye,
   GripVertical,
   LayoutDashboard,
@@ -21,13 +23,14 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type DragEvent } from "react";
 import {
   Link,
   Navigate,
   useNavigate,
   useOutletContext,
   useParams,
+  useSearchParams,
 } from "react-router-dom";
 
 import { InlineError } from "../components/Status";
@@ -40,6 +43,7 @@ import {
   listGroups,
   listUsers,
   problemMessage,
+  queryChart,
   replaceDashboard,
   revokeDashboardGrant,
   type Chart,
@@ -62,6 +66,10 @@ import { formatDateTime } from "../lib/format";
 import { randomUuid } from "../lib/id";
 import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
+
+const ChartView = lazy(() =>
+  import("../components/ChartView").then((module) => ({ default: module.ChartView })),
+);
 
 const typeLabels = {
   bar: "Bar",
@@ -133,6 +141,19 @@ function ExistingDashboardStudio({
     emptyDashboardDefinition(),
   );
   const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendingChartId = searchParams.get("add");
+
+  useEffect(() => {
+    // A chart created from this dashboard comes back here to be placed on it.
+    if (!pendingChartId || loadedRevision === null) return;
+    setDefinition((current) =>
+      itemsOf(current).some((item) => item.chart_id === pendingChartId)
+        ? current
+        : addChart(current, pendingChartId, randomUuid()),
+    );
+    setSearchParams({}, { replace: true });
+  }, [loadedRevision, pendingChartId, setSearchParams]);
 
   useEffect(() => {
     if (
@@ -280,52 +301,33 @@ function DashboardEditor(props: DashboardEditorProps) {
 
   return (
     <div className="dashboard-studio page-stack">
-      <header className="page-heading dashboard-studio-heading">
-        <div>
-          <Link className="back-link" to="/dashboards">
-            <ArrowLeft size={16} /> {t("All dashboards")}
-          </Link>
-          <h1>{t(props.dashboardId ? "Edit dashboard" : "New dashboard")}</h1>
-          <p>
-            {t("Place charts on the grid and drag their corners to resize them.")}
-          </p>
-        </div>
-        <div className="heading-actions">
-          {props.dashboardId && (
-            <Link className="button secondary" to={`/dashboards/${props.dashboardId}`}>
-              <Eye size={16} /> {t("Viewer preview")}
-            </Link>
-          )}
-          <button className="button primary" onClick={props.onSave} disabled={!canSave} type="button">
-            {props.savePending ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}
-            {t(props.dashboardId ? "Save layout" : "Create dashboard")}
-          </button>
-        </div>
-      </header>
-
-      <div className="dashboard-studio-statusbar">
-        <span className={props.dirty ? "unsaved" : "saved"}>
+      <header className="dashboard-studio-bar">
+        <Link className="back-link" to="/dashboards">
+          <ArrowLeft size={15} /> {t("Dashboards")}
+        </Link>
+        <input
+          className="dashboard-name"
+          value={props.name}
+          onChange={(event) => props.onNameChange(event.target.value)}
+          placeholder={t("Dashboard name")}
+          aria-label={t("Dashboard name")}
+          maxLength={100}
+        />
+        <span className={`dashboard-status ${props.dirty ? "unsaved" : "saved"}`}>
           {props.dirty ? <span className="status-dot" /> : <Check size={14} />}
-          {t(props.dirty ? "Unsaved changes" : "Saved")}
+          {t(!props.dashboardId ? "Not created yet" : props.dirty ? "Unsaved changes" : "Saved")}
+          {props.updatedAt && !props.dirty && ` · ${formatDateTime(props.updatedAt, locale)}`}
         </span>
-        <span><Lock size={14} /> {t("Private until explicitly shared")}</span>
-        {props.revision && <span>{t("Revision {revision}", { revision: props.revision })}</span>}
-        {props.updatedAt && <span>{t("Updated {date}", { date: formatDateTime(props.updatedAt, locale) })}</span>}
-      </div>
-
-      <section className="dashboard-studio-name">
-        <label>
-          <span>{t("Dashboard name")}</span>
-          <input
-            value={props.name}
-            onChange={(event) => props.onNameChange(event.target.value)}
-            placeholder={t("Executive revenue overview")}
-            maxLength={100}
-          />
-        </label>
-        <div><strong>{itemsOf(props.definition).length}</strong><span>{t("visualizations")}</span></div>
-        <div><strong>{new Set(itemsOf(props.definition).map((item) => chartById.get(item.chart_id)?.dataset_id)).size}</strong><span>{t("datasets")}</span></div>
-      </section>
+        {props.dashboardId && (
+          <Link className="button secondary small" to={`/dashboards/${props.dashboardId}`}>
+            <Eye size={15} /> {t("Open dashboard")}
+          </Link>
+        )}
+        <button className="button primary small" onClick={props.onSave} disabled={!canSave} type="button">
+          {props.savePending ? <LoaderCircle className="spin" size={15} /> : <Save size={15} />}
+          {t(props.dashboardId ? "Save" : "Create dashboard")}
+        </button>
+      </header>
 
       {props.saveError != null && <InlineError message={problemMessage(props.saveError)} />}
       {layoutNotice && <div className="layout-notice" role="status">{layoutNotice}</div>}
@@ -333,9 +335,9 @@ function DashboardEditor(props: DashboardEditorProps) {
       <div className="dashboard-studio-workspace">
         <section className="layout-workbench">
           <header>
-            <div><span className="step-number">01</span><span><strong>{t("Layout canvas")}</strong><small>{t("Drag a tile or use its exact movement and sizing controls.")}</small></span></div>
+            <div><span><strong>{t("Dashboard")}</strong><small>{t("Drag a chart by its title. Hover a chart to move or resize it with buttons.")}</small></span></div>
             <button className="button secondary small" type="button" onClick={() => props.onDefinitionChange(compactLayout(props.definition))} disabled={itemsOf(props.definition).length === 0}>
-              <Minimize2 size={15} /> {t("Compact")}
+              <Minimize2 size={15} /> {t("Close gaps")}
             </button>
           </header>
           <div
@@ -355,13 +357,13 @@ function DashboardEditor(props: DashboardEditorProps) {
               />
             ))}
             {itemsOf(props.definition).length === 0 && (
-              <div className="layout-empty"><LayoutDashboard size={30} /><strong>{t("Start with a saved chart")}</strong><p>{t("Add one from the palette. New dashboards remain private.")}</p></div>
+              <div className="layout-empty"><LayoutDashboard size={30} /><strong>{t("Add your first chart")}</strong><p>{t("Press + next to a chart on the right, or create a new one.")}</p></div>
             )}
           </div>
         </section>
 
         <aside className="chart-palette">
-          <header><span className="step-number">02</span><span><strong>{t("Chart palette")}</strong><small>{t("Only charts owned by this dashboard owner are eligible.")}</small></span></header>
+          <header><span><strong>{t("Your charts")}</strong><small>{t("Press + to place a chart on the dashboard.")}</small></span></header>
           <label className="search-field"><Search size={16} /><span className="sr-only">{t("Search chart palette")}</span><input value={chartSearch} onChange={(event) => setChartSearch(event.target.value)} placeholder={t("Search saved charts")} /></label>
           {charts.isError && <InlineError message={problemMessage(charts.error)} />}
           <div className="palette-list">
@@ -369,15 +371,26 @@ function DashboardEditor(props: DashboardEditorProps) {
             {availableCharts.map((chart) => (
               <article className="palette-card" key={chart.id}>
                 <span className="palette-chart-icon"><BarChart3 size={17} /></span>
-                <span><strong>{chart.name}</strong><small>{t(typeLabels[chart.definition.chart_type])} · {t("dataset")} {shortId(chart.dataset_id)}</small></span>
+                <span><strong>{chart.name}</strong><small>{t(typeLabels[chart.definition.chart_type])}</small></span>
                 <button className="icon-button bordered" type="button" onClick={() => add(chart.id)} disabled={itemChartIds.has(chart.id)} aria-label={t("{action} {name}", { action: t(itemChartIds.has(chart.id) ? "Added" : "Add"), name: chart.name })}>
                   {itemChartIds.has(chart.id) ? <Check size={16} /> : <Plus size={16} />}
                 </button>
               </article>
             ))}
-            {!charts.isPending && availableCharts.length === 0 && <div className="compact-empty"><BarChart3 /> {t("No matching owned charts")}</div>}
+            {!charts.isPending && availableCharts.length === 0 && <div className="compact-empty"><BarChart3 /> {t(chartSearch ? "No matching charts" : "You have no charts yet")}</div>}
           </div>
-          <Link className="button secondary wide" to="/charts/new"><Plus size={15} /> {t("Create another chart")}</Link>
+          {props.dashboardId ? (
+            <Link
+              className="button secondary wide"
+              to={`/charts/new?returnTo=${encodeURIComponent(`/dashboards/${props.dashboardId}/edit`)}`}
+            >
+              <Plus size={15} /> {t("New chart")}
+            </Link>
+          ) : (
+            <a className="button secondary wide" href="/charts/new" target="_blank" rel="noreferrer">
+              <Plus size={15} /> {t("New chart")}
+            </a>
+          )}
         </aside>
       </div>
 
@@ -413,7 +426,7 @@ function LayoutTile({
       style={{ gridColumn: `${item.x + 1} / span ${item.width}`, gridRow: `${item.y + 1} / span ${item.height}` }}
     >
       <header><GripVertical size={16} /><span><strong>{chart?.name ?? t("Unavailable chart")}</strong><small>{chart ? t(typeLabels[chart.definition.chart_type]) : shortId(item.chart_id)}</small></span><button className="icon-button" type="button" onClick={onRemove} aria-label={t("Remove {name}", { name: chart?.name ?? t("chart") })}><Trash2 size={15} /></button></header>
-      <div className="tile-placeholder"><BarChart3 /><span>{t("{count} saved measures", { count: chart?.definition.measures.length ?? 0 })}</span></div>
+      <TilePreview chart={chart} />
       <footer>
         <div className="tile-control-group" aria-label={t("Move {name}", { name: chart?.name ?? t("chart") })}>
           <button type="button" onClick={() => onChange({ x: item.x - 1 })} aria-label={t("Move left")}><ArrowLeft /></button>
@@ -425,11 +438,32 @@ function LayoutTile({
           <button type="button" onClick={() => onChange({ width: Math.max(1, item.width - 1) })} aria-label={t("Decrease width")}><Minimize2 /></button>
           <span>{item.width}×{item.height}</span>
           <button type="button" onClick={() => onChange({ width: Math.min(12, item.width + 1) })} aria-label={t("Increase width")}><Maximize2 /></button>
-          <button type="button" onClick={() => onChange({ height: Math.max(1, item.height - 1) })} aria-label={t("Decrease height")}>H−</button>
-          <button type="button" onClick={() => onChange({ height: Math.min(100, item.height + 1) })} aria-label={t("Increase height")}>H+</button>
+          <button type="button" onClick={() => onChange({ height: Math.max(1, item.height - 1) })} aria-label={t("Decrease height")}><ChevronsDownUp /></button>
+          <button type="button" onClick={() => onChange({ height: Math.min(100, item.height + 1) })} aria-label={t("Increase height")}><ChevronsUpDown /></button>
         </div>
       </footer>
     </article>
+  );
+}
+
+function TilePreview({ chart }: { chart?: Chart }) {
+  const { t } = useI18n();
+  const preview = useQuery({
+    queryKey: queryKeys.chartPreview(chart?.id ?? "none", chart?.revision ?? 0),
+    queryFn: () => queryChart(chart!.id),
+    enabled: Boolean(chart),
+  });
+  if (!chart || preview.isError)
+    return <div className="tile-placeholder"><BarChart3 /><span>{t("Chart unavailable")}</span></div>;
+  if (!preview.data) return <div className="tile-placeholder skeleton" />;
+  if (preview.data.data.rows.length === 0)
+    return <div className="tile-placeholder"><BarChart3 /><span>{t("No data")}</span></div>;
+  return (
+    <div className="tile-chart">
+      <Suspense fallback={<div className="tile-placeholder skeleton" />}>
+        <ChartView result={preview.data} />
+      </Suspense>
+    </div>
   );
 }
 
@@ -460,7 +494,7 @@ function SharingPanel({ dashboardId, user }: { dashboardId: string; user: Curren
 
   return (
     <section className="sharing-panel">
-      <header><div><span className="step-number">03</span><span><strong>{t("Share view access")}</strong><small>{t("Recipients can read only saved dashboard items; row data and chart authoring remain concealed.")}</small></span></div><span className="private-pill"><Lock size={13} /> {t("Private by default")}</span></header>
+      <header><div><span><strong>{t("Who can view")}</strong><small>{t("People you add here see the saved dashboard, but not the underlying rows.")}</small></span></div><span className="private-pill"><Lock size={13} /> {t("Private by default")}</span></header>
       <div className="sharing-grid">
         <form onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
           <label><span>{t("Recipient type")}</span><select value={principalType} onChange={(event) => { setPrincipalType(event.target.value as GrantPrincipalType); setPrincipalId(""); }}><option value="user">{t("Person")}</option><option value="group">{t("Group")}</option></select></label>

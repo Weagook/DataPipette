@@ -138,7 +138,11 @@ function NewChartStudio() {
     onSuccess: async ({ chart, etag }) => {
       queryClient.setQueryData(queryKeys.chart(chart.id), { chart, etag });
       await queryClient.invalidateQueries({ queryKey: queryKeys.charts });
-      await navigate(`/charts/${chart.id}`, { replace: true });
+      const returnTo = searchParams.get("returnTo");
+      // Only a dashboard editor may receive the new chart back.
+      if (returnTo && /^\/dashboards\/[0-9a-f-]+\/edit$/.test(returnTo))
+        await navigate(`${returnTo}?add=${chart.id}`);
+      else await navigate(`/charts/${chart.id}`, { replace: true });
     },
   });
   const loaded = datasets.data?.data.filter((dataset) => dataset.active_snapshot_id !== null) ?? [];
