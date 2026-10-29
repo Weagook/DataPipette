@@ -148,7 +148,7 @@ describe("dashboard studio", () => {
     expect(createBody).toMatchObject({
       name: "Executive revenue",
       definition: {
-        schema_version: 1,
+        schema_version: 2,
         items: [
           { chart_id: CHART_ID, x: 0, y: 0, width: 6, height: 4 },
         ],

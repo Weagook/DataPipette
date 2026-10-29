@@ -1701,6 +1701,15 @@
       "DashboardDefinitionPayload": {
         "additionalProperties": false,
         "properties": {
+          "filters": {
+            "description": "Viewer-controlled filters; requires schema version 2.",
+            "items": {
+              "$ref": "#/components/schemas/DashboardFilterPayload"
+            },
+            "maxItems": 5,
+            "title": "Filters",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/DashboardItemPayload"
@@ -1710,13 +1719,184 @@
             "type": "array"
           },
           "schema_version": {
-            "const": 1,
             "default": 1,
+            "enum": [
+              1,
+              2
+            ],
             "title": "Schema Version",
             "type": "integer"
           }
         },
         "title": "DashboardDefinitionPayload",
+        "type": "object"
+      },
+      "DashboardFilterKind": {
+        "enum": [
+          "values",
+          "date_range"
+        ],
+        "title": "DashboardFilterKind",
+        "type": "string"
+      },
+      "DashboardFilterPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/DashboardFilterKind"
+          },
+          "label": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardFilterTargetPayload"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "targets"
+        ],
+        "title": "DashboardFilterPayload",
+        "type": "object"
+      },
+      "DashboardFilterSelectionPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "filter_id": {
+            "format": "uuid",
+            "title": "Filter Id",
+            "type": "string"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First included day for a `date_range` filter.",
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last included day for a `date_range` filter.",
+            "title": "To"
+          },
+          "values": {
+            "description": "Chosen values for a `values` filter.",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "filter_id"
+        ],
+        "title": "DashboardFilterSelectionPayload",
+        "type": "object"
+      },
+      "DashboardFilterTargetPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "field_id": {
+            "format": "uuid",
+            "title": "Field Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "field_id"
+        ],
+        "title": "DashboardFilterTargetPayload",
+        "type": "object"
+      },
+      "DashboardFilterValuesResponse": {
+        "properties": {
+          "dashboard_id": {
+            "format": "uuid",
+            "title": "Dashboard Id",
+            "type": "string"
+          },
+          "filter_id": {
+            "format": "uuid",
+            "title": "Filter Id",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "values": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dashboard_id",
+          "filter_id",
+          "values",
+          "truncated"
+        ],
+        "title": "DashboardFilterValuesResponse",
         "type": "object"
       },
       "DashboardGrantCollectionResponse": {
@@ -1950,6 +2130,21 @@
           "item_id"
         ],
         "title": "DashboardItemQueryMetaResponse",
+        "type": "object"
+      },
+      "DashboardItemQueryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardFilterSelectionPayload"
+            },
+            "maxItems": 5,
+            "title": "Filters",
+            "type": "array"
+          }
+        },
+        "title": "DashboardItemQueryRequest",
         "type": "object"
       },
       "DashboardItemQueryResponse": {
@@ -9610,6 +9805,177 @@
         ]
       }
     },
+    "/api/v1/dashboards/{dashboard_id}/filters/{filter_id}/values": {
+      "get": {
+        "description": "List the choices for a `values` filter from the active snapshots of its charts.",
+        "operationId": "list_dashboard_filter_values_api_v1_dashboards__dashboard_id__filters__filter_id__values_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "filter_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Filter Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardFilterValuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Failed"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait after interactive capacity exhaustion.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "summary": "List Dashboard Filter Values",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
     "/api/v1/dashboards/{dashboard_id}/grants": {
       "get": {
         "operationId": "list_dashboard_grants_api_v1_dashboards__dashboard_id__grants_get",
@@ -10122,6 +10488,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DashboardItemQueryRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

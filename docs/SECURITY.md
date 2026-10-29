@@ -86,6 +86,8 @@ Dashboard resources are private by default. Owners and administrators may add or
 
 Dashboard-item queries accept only a dashboard ID and stable item ID; the backend resolves the chart from the current saved layout, verifies its owner, and executes its immutable saved aggregate definition. Owners and administrators retain ordinary direct-chart/dataset authorization, while a shared recipient uses the narrow dashboard context. Separate item requests isolate safe failures and prevent one unavailable dataset from suppressing successful sibling charts. The shared context intentionally does not confer dataset `view_rows`, export, source-catalog, or direct-chart access.
 
+Dashboard filters ([ADR-0052](adr/0052-dashboard-filters.md)) let anyone who can read a dashboard restrict its items, but only through filters and fields the owner mapped in the saved definition. A selection names a saved filter, never a field or chart; values are typed and bound as parameters, and restrictions are added on top of the saved chart filters. Mapping a field deliberately exposes its distinct values (at most 200 per request) and the aggregates restricted to any chosen value to every dashboard reader, so authors should map only fields that are appropriate to share. Value lists use the same dashboard authorization, bounded executor, and admission as item queries and are not audited separately.
+
 ## PostgreSQL source safety
 
 - Administrators should configure a dedicated read-only PostgreSQL role.

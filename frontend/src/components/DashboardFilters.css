@@ -1,0 +1,44 @@
+.dashboard-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filter-chip { position: relative; }
+.filter-chip > summary, .filter-chip.date { min-height: 38px; padding: 0 12px; border: 1px solid #d9dbde; border-radius: 999px; background: #fff; display: inline-flex; align-items: center; gap: 7px; color: #4c5260; font-size: 13px; cursor: pointer; list-style: none; }
+.filter-chip > summary::-webkit-details-marker { display: none; }
+.filter-chip > summary:hover { border-color: #bfc3cc; }
+.filter-chip > summary strong { max-width: 220px; overflow: hidden; color: #1f2430; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.filter-chip > summary > svg:first-child, .filter-chip.date > svg { color: var(--brand); }
+.filter-chip.active > summary, .filter-chip.date.active { border-color: #9ba3f2; background: #f5f6ff; }
+.filter-chip.date { cursor: default; }
+.filter-chip.date input { min-height: 28px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #1f2430; font-size: 13px; }
+.filter-chip.date input:hover, .filter-chip.date input:focus { border-color: #d9dbde; background: #fff; outline: 0; }
+.filter-popover { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(280px, calc(100vw - 32px)); padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 16px 40px rgba(20, 25, 38, .14); display: grid; gap: 8px; }
+.filter-search { min-height: 36px; padding: 0 10px; border: 1px solid #d9dbde; border-radius: 8px; display: flex; align-items: center; gap: 7px; color: #8b909a; }
+.filter-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; }
+.filter-options { max-height: 260px; overflow-y: auto; display: grid; }
+.filter-options label { min-height: 34px; padding: 0 6px; border-radius: 7px; display: flex; align-items: center; gap: 9px; color: #262b36; font-size: 13px; cursor: pointer; }
+.filter-options label:hover { background: #f5f5f3; }
+.filter-options input { width: 16px; height: 16px; accent-color: var(--brand); }
+.filter-options-skeleton { height: 120px; border-radius: 8px; }
+.filter-note { margin: 0; padding: 4px 6px; color: var(--muted); font-size: 12px; }
+.filter-note.error { color: var(--danger); }
+.filter-popover .text-link { justify-self: start; padding: 4px 6px; border: 0; background: none; font-size: 13px; font-weight: 650; cursor: pointer; }
+
+@media (max-width: 760px) {
+  .dashboard-filters > * { max-width: 100%; }
+  .filter-chip.date { padding: 6px 12px; border-radius: 14px; flex-wrap: wrap; }
+  .filter-chip.date input { min-width: 0; flex: 1 1 120px; }
+}
+
+.filter-editor { padding: 16px 18px; border: 1px solid var(--line); border-radius: 15px; background: #fff; display: grid; gap: 12px; }
+.filter-editor > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.filter-editor > header strong { display: block; font-size: 15px; }
+.filter-editor > header small { color: var(--muted); font-size: 12px; }
+.filter-editor > header select { min-width: 240px; min-height: 38px; padding: 0 34px 0 11px; border: 1px solid #d9dbde; border-radius: 9px; background-color: #fff; }
+.filter-editor-row { padding: 12px; border: 1px solid #e6e7e4; border-radius: 12px; background: #fafaf8; display: grid; gap: 10px; }
+.filter-editor-row > div:first-child { display: flex; align-items: center; gap: 10px; }
+.filter-editor-row input[type="text"] { min-width: 0; max-width: 320px; flex: 1; min-height: 36px; padding: 0 10px; border: 1px solid #d9dbde; border-radius: 8px; background: #fff; }
+.filter-editor-row .kind { padding: 3px 8px; border-radius: 999px; background: #eef0fd; color: #3d49ba; font-size: 12px; font-weight: 650; }
+.filter-editor-row .icon-button { margin-left: auto; }
+.filter-targets { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-targets label { min-height: 32px; padding: 0 10px; border: 1px solid #d9dbde; border-radius: 999px; background: #fff; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.filter-targets label:has(input:checked) { border-color: #9ba3f2; background: #f5f6ff; }
+.filter-targets input { accent-color: var(--brand); }
+.filter-editor-empty { margin: 0; color: var(--muted); font-size: 13px; }

@@ -91,7 +91,6 @@ The MVP is complete when a new single-company installation can connect a Postgre
 - Dataset dependency graphs
 - `RIGHT`, `FULL`, and `CROSS JOIN` in the visual builder
 - Calculated fields in the visual builder unless added by a later approved decision
-- Dashboard-wide filters
 - Snapshot history and rollback
 - Email, webhook, or chat notifications
 - SSH tunnels, PostgreSQL client certificates, and cloud IAM database authentication

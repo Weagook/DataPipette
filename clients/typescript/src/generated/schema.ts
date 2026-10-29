@@ -354,6 +354,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboards/{dashboard_id}/filters/{filter_id}/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dashboard Filter Values
+         * @description List the choices for a `values` filter from the active snapshots of its charts.
+         */
+        get: operations["list_dashboard_filter_values_api_v1_dashboards__dashboard_id__filters__filter_id__values_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboards/{dashboard_id}/grants": {
         parameters: {
             query?: never;
@@ -1691,14 +1711,90 @@ export interface components {
         };
         /** DashboardDefinitionPayload */
         DashboardDefinitionPayload: {
+            /**
+             * Filters
+             * @description Viewer-controlled filters; requires schema version 2.
+             */
+            filters?: components["schemas"]["DashboardFilterPayload"][];
             /** Items */
             items?: components["schemas"]["DashboardItemPayload"][];
             /**
              * Schema Version
              * @default 1
-             * @constant
+             * @enum {integer}
              */
-            schema_version: 1;
+            schema_version: 1 | 2;
+        };
+        /**
+         * DashboardFilterKind
+         * @enum {string}
+         */
+        DashboardFilterKind: "values" | "date_range";
+        /** DashboardFilterPayload */
+        DashboardFilterPayload: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["DashboardFilterKind"];
+            /** Label */
+            label: string;
+            /** Targets */
+            targets: components["schemas"]["DashboardFilterTargetPayload"][];
+        };
+        /** DashboardFilterSelectionPayload */
+        DashboardFilterSelectionPayload: {
+            /**
+             * Filter Id
+             * Format: uuid
+             */
+            filter_id: string;
+            /**
+             * From
+             * @description First included day for a `date_range` filter.
+             */
+            from?: string | null;
+            /**
+             * To
+             * @description Last included day for a `date_range` filter.
+             */
+            to?: string | null;
+            /**
+             * Values
+             * @description Chosen values for a `values` filter.
+             */
+            values?: (string | number | boolean)[];
+        };
+        /** DashboardFilterTargetPayload */
+        DashboardFilterTargetPayload: {
+            /**
+             * Field Id
+             * Format: uuid
+             */
+            field_id: string;
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+        };
+        /** DashboardFilterValuesResponse */
+        DashboardFilterValuesResponse: {
+            /**
+             * Dashboard Id
+             * Format: uuid
+             */
+            dashboard_id: string;
+            /**
+             * Filter Id
+             * Format: uuid
+             */
+            filter_id: string;
+            /** Truncated */
+            truncated: boolean;
+            /** Values */
+            values: (string | number | boolean)[];
         };
         /** DashboardGrantCollectionResponse */
         DashboardGrantCollectionResponse: {
@@ -1814,6 +1910,11 @@ export interface components {
             snapshot_id: string;
             /** Truncated By Bytes */
             truncated_by_bytes: boolean;
+        };
+        /** DashboardItemQueryRequest */
+        DashboardItemQueryRequest: {
+            /** Filters */
+            filters?: components["schemas"]["DashboardFilterSelectionPayload"][];
         };
         /** DashboardItemQueryResponse */
         DashboardItemQueryResponse: {
@@ -5686,6 +5787,130 @@ export interface operations {
             };
         };
     };
+    list_dashboard_filter_values_api_v1_dashboards__dashboard_id__filters__filter_id__values_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dashboard_id: string;
+                filter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardFilterValuesResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Seconds to wait after interactive capacity exhaustion. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Gateway Timeout */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_dashboard_grants_api_v1_dashboards__dashboard_id__grants_get: {
         parameters: {
             query?: never;
@@ -6066,7 +6291,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DashboardItemQueryRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

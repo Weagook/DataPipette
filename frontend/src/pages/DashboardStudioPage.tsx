@@ -33,6 +33,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 
+import { DashboardFilterEditor } from "../components/DashboardFilterEditor";
 import { InlineError } from "../components/Status";
 import {
   createDashboard,
@@ -393,6 +394,8 @@ function DashboardEditor(props: DashboardEditorProps) {
           )}
         </aside>
       </div>
+
+      <DashboardFilterEditor definition={props.definition} chartById={chartById} onChange={props.onDefinitionChange} />
 
       {props.dashboardId ? (
         <SharingPanel dashboardId={props.dashboardId} user={props.user} />

@@ -79,7 +79,6 @@ DataPipette will prefer a complete vertical slice over a broad collection of inc
 - Dataset-on-dataset dependencies
 - A distributed query engine
 - Editing or writing data back to source systems
-- Dashboard-wide filters in the first release
 - Historical snapshot browsing or rollback
 - Kubernetes and Helm packaging in the first release
 - Enterprise SSO in the first release

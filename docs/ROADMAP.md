@@ -75,6 +75,7 @@ Outcome: analysts create and share the first useful dashboard.
 - [x] Aggregates and timezone-aware time buckets
 - [x] Private versioned drag-and-resize dashboard layout contract
 - [x] Multi-dataset dashboards with independent per-item loading and failure contracts
+- [x] Dashboard filters: author-mapped list and date-range filters that narrow charts across datasets
 - [x] Dashboard viewer access without detailed dataset access
 
 ## Phase 5 — Headless integrations and production readiness
@@ -115,7 +116,7 @@ Outcome: every MVP capability is understandable and usable through a polished re
 - OIDC/SSO
 - Additional PostgreSQL authentication methods
 - Additional data sources
-- Dashboard-level filter mapping
+- Dashboard filter extensions: cross-filtering from chart clicks, relative date presets, and saved per-viewer filter state
 - Snapshot history
 - Kubernetes and Helm
 - External immutable audit sinks

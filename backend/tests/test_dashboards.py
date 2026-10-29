@@ -2,24 +2,39 @@
 
 import asyncio
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 
+from datapipette.application.charts import (
+    ChartContextFilter,
+    ChartDatasetNotAvailableError,
+    ChartFieldValues,
+)
 from datapipette.application.dashboards import (
     DashboardCreate,
+    DashboardFilterNotFoundError,
     DashboardItemNotFoundError,
     DashboardNotFoundError,
     DashboardRevisionConflictError,
     DashboardService,
     InvalidDashboardCursorError,
     InvalidDashboardDefinitionError,
+    InvalidDashboardFilterSelectionError,
 )
 from datapipette.domain.access_control import GrantPrincipalType
 from datapipette.domain.charts import ChartQueryResult, ChartType
-from datapipette.domain.dashboards import Dashboard, DashboardDefinition, DashboardItem
+from datapipette.domain.dashboards import (
+    Dashboard,
+    DashboardDefinition,
+    DashboardFilter,
+    DashboardFilterKind,
+    DashboardFilterSelection,
+    DashboardFilterTarget,
+    DashboardItem,
+)
 from datapipette.domain.identity import AccountStatus, SystemRole, User
 from datapipette.domain.snapshot_queries import SnapshotRefreshState
 
@@ -28,6 +43,9 @@ CHART_ONE = uuid4()
 CHART_TWO = uuid4()
 DATASET_ID = uuid4()
 SNAPSHOT_ID = uuid4()
+REGION_FIELD = uuid4()
+ORDERED_AT_FIELD = uuid4()
+AMOUNT_FIELD = uuid4()
 
 
 def _user(role: SystemRole = SystemRole.ANALYST) -> User:
@@ -145,6 +163,24 @@ class FakeDashboardStore:
 class FakeChartQueries:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
+        self.families: dict[UUID, dict[UUID, str]] = {
+            CHART_ONE: {REGION_FIELD: "text", ORDERED_AT_FIELD: "datetime", AMOUNT_FIELD: "number"},
+            CHART_TWO: {REGION_FIELD: "text"},
+        }
+        self.values: dict[UUID, ChartFieldValues] = {
+            CHART_ONE: ChartFieldValues(("West", "East"), truncated=False),
+            CHART_TWO: ChartFieldValues(("North", "East"), truncated=True),
+        }
+        self.value_calls: list[dict[str, Any]] = []
+
+    async def field_families(self, chart_id: UUID) -> dict[UUID, str]:
+        if chart_id not in self.families:
+            raise ChartDatasetNotAvailableError
+        return self.families[chart_id]
+
+    async def field_values(self, **values: Any) -> ChartFieldValues:
+        self.value_calls.append(values)
+        return self.values[values["chart_id"]]
 
     async def query(self, **values: Any) -> ChartQueryResult:
         return await self._result(values)
@@ -329,5 +365,180 @@ def test_dashboard_service_conceals_resources_and_rejects_bad_cursor() -> None:
                 value=DashboardCreate("Viewer", DashboardDefinition()),
                 request_id="req-viewer",
             )
+
+    asyncio.run(exercise())
+
+
+def _filtered_definition(
+    definition: DashboardDefinition,
+    *filters: DashboardFilter,
+) -> DashboardDefinition:
+    return replace(definition, schema_version=2, filters=filters)
+
+
+def _region_filter(definition: DashboardDefinition) -> DashboardFilter:
+    return DashboardFilter(
+        uuid4(),
+        "  Region ",
+        DashboardFilterKind.VALUES,
+        tuple(DashboardFilterTarget(item.id, REGION_FIELD) for item in definition.items),
+    )
+
+
+def test_dashboard_filters_round_trip_and_validate_targets() -> None:
+    layout = _definition()
+    region = _region_filter(layout)
+    value = _filtered_definition(layout, region)
+    assert value.filters[0].label == "Region"
+    assert DashboardDefinition.from_document(value.to_document()) == value
+    assert "filters" not in layout.to_document()
+    assert DashboardDefinition.from_document(layout.to_document()).filters == ()
+    assert value.filter(region.id) == region
+
+    with pytest.raises(ValueError, match="require definition schema version 2"):
+        replace(layout, filters=(region,))
+    with pytest.raises(ValueError, match="target items in the layout"):
+        _filtered_definition(
+            layout,
+            replace(region, targets=(DashboardFilterTarget(uuid4(), REGION_FIELD),)),
+        )
+    with pytest.raises(ValueError, match="each item only once"):
+        DashboardFilter(
+            uuid4(),
+            "Region",
+            DashboardFilterKind.VALUES,
+            (
+                DashboardFilterTarget(layout.items[0].id, REGION_FIELD),
+                DashboardFilterTarget(layout.items[0].id, AMOUNT_FIELD),
+            ),
+        )
+    with pytest.raises(ValueError, match="at least one item"):
+        DashboardFilter(uuid4(), "Region", DashboardFilterKind.VALUES, ())
+    with pytest.raises(ValueError, match="labels need"):
+        replace(region, label="   ")
+    with pytest.raises(ValueError, match="at most 5 filters"):
+        _filtered_definition(layout, *(replace(region, id=uuid4()) for _ in range(6)))
+    with pytest.raises(ValueError, match="identifiers must be unique"):
+        _filtered_definition(layout, region, region)
+    with pytest.raises(ValueError, match="start date must not be after"):
+        DashboardFilterSelection(uuid4(), date_from=date(2026, 2, 1), date_to=date(2026, 1, 1))
+
+
+def test_dashboard_service_validates_filter_fields_and_scopes_selections() -> None:
+    actor = _user()
+    store = FakeDashboardStore({CHART_ONE: actor.id, CHART_TWO: actor.id})
+    chart_queries = FakeChartQueries()
+    service = DashboardService(store, chart_queries)
+    layout = _definition()
+    region = _region_filter(layout)
+    ordered = DashboardFilter(
+        uuid4(),
+        "Ordered",
+        DashboardFilterKind.DATE_RANGE,
+        (DashboardFilterTarget(layout.items[0].id, ORDERED_AT_FIELD),),
+    )
+
+    async def exercise() -> None:
+        with pytest.raises(InvalidDashboardDefinitionError, match="cannot filter"):
+            await service.create(
+                actor=actor,
+                value=DashboardCreate(
+                    "Wrong field",
+                    _filtered_definition(
+                        layout,
+                        replace(
+                            region,
+                            targets=(DashboardFilterTarget(layout.items[0].id, AMOUNT_FIELD),),
+                        ),
+                    ),
+                ),
+                request_id="req-wrong-family",
+            )
+        chart_queries.families.pop(CHART_TWO)
+        with pytest.raises(InvalidDashboardDefinitionError, match="without loaded data"):
+            await service.create(
+                actor=actor,
+                value=DashboardCreate("Unloaded", _filtered_definition(layout, region)),
+                request_id="req-unloaded",
+            )
+        chart_queries.families[CHART_TWO] = {REGION_FIELD: "text"}
+        dashboard = await service.create(
+            actor=actor,
+            value=DashboardCreate("Filtered", _filtered_definition(layout, region, ordered)),
+            request_id="req-create",
+        )
+
+        selections = (
+            DashboardFilterSelection(region.id, values=("East",)),
+            DashboardFilterSelection(ordered.id, date_from=date(2026, 1, 1)),
+        )
+        await service.query_item(
+            actor=actor,
+            dashboard_id=dashboard.id,
+            item_id=layout.items[0].id,
+            request_id="req-first",
+            selections=selections,
+        )
+        assert chart_queries.calls[-1]["context_filters"] == (
+            ChartContextFilter(REGION_FIELD, values=("East",)),
+            ChartContextFilter(ORDERED_AT_FIELD, date_from=date(2026, 1, 1)),
+        )
+        await service.query_item(
+            actor=actor,
+            dashboard_id=dashboard.id,
+            item_id=layout.items[1].id,
+            request_id="req-second",
+            selections=selections,
+        )
+        assert chart_queries.calls[-1]["context_filters"] == (
+            ChartContextFilter(REGION_FIELD, values=("East",)),
+        )
+        for bad, message in (
+            ((DashboardFilterSelection(uuid4(), values=("East",)),), "no such filter"),
+            ((DashboardFilterSelection(region.id, date_from=date(2026, 1, 1)),), "expects values"),
+            ((DashboardFilterSelection(ordered.id, values=("East",)),), "expects a date range"),
+            ((selections[0], selections[0]), "selected once"),
+        ):
+            with pytest.raises(InvalidDashboardFilterSelectionError, match=message):
+                await service.query_item(
+                    actor=actor,
+                    dashboard_id=dashboard.id,
+                    item_id=layout.items[0].id,
+                    request_id="req-bad",
+                    selections=bad,
+                )
+        await service.query_item(
+            actor=actor,
+            dashboard_id=dashboard.id,
+            item_id=layout.items[0].id,
+            request_id="req-empty",
+            selections=(DashboardFilterSelection(region.id),),
+        )
+        assert chart_queries.calls[-1]["context_filters"] == ()
+
+        values = await service.list_filter_values(
+            actor=actor, dashboard_id=dashboard.id, filter_id=region.id
+        )
+        assert values.values == ("East", "North", "West")
+        assert values.truncated is True
+        assert chart_queries.value_calls[-1]["direct_access"] is True
+        with pytest.raises(DashboardFilterNotFoundError):
+            await service.list_filter_values(
+                actor=actor, dashboard_id=dashboard.id, filter_id=ordered.id
+            )
+
+        viewer = replace(_user(SystemRole.VIEWER), id=uuid4())
+        await service.create_grant(
+            actor=actor,
+            dashboard_id=dashboard.id,
+            principal_type=GrantPrincipalType.USER,
+            principal_id=viewer.id,
+            request_id="req-grant",
+        )
+        await service.list_filter_values(
+            actor=viewer, dashboard_id=dashboard.id, filter_id=region.id
+        )
+        assert chart_queries.value_calls[-1]["direct_access"] is False
+        assert chart_queries.value_calls[-1]["dashboard_owner_id"] == actor.id
 
     asyncio.run(exercise())

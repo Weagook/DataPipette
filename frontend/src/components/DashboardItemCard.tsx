@@ -3,6 +3,7 @@ import { AlertTriangle, Clock3, DatabaseZap, MoreHorizontal, RotateCcw } from "l
 import { lazy, Suspense } from "react";
 
 import { problemMessage, queryDashboardItem, type Dashboard } from "../lib/api";
+import type { FilterSelection } from "../lib/dashboardFilters";
 import { formatDateTime, relativeTime } from "../lib/format";
 import { useI18n } from "../lib/i18n";
 import { queryKeys } from "../lib/query";
@@ -12,11 +13,12 @@ const ChartView = lazy(() =>
 
 type DashboardItem = NonNullable<Dashboard["definition"]["items"]>[number];
 
-export function DashboardItemCard({ dashboardId, item }: { dashboardId: string; item: DashboardItem }) {
+export function DashboardItemCard({ dashboardId, item, filters = [] }: { dashboardId: string; item: DashboardItem; filters?: FilterSelection[] }) {
   const { locale, t } = useI18n();
   const query = useQuery({
-    queryKey: queryKeys.dashboardItem(dashboardId, item.id),
-    queryFn: () => queryDashboardItem(dashboardId, item.id),
+    queryKey: queryKeys.dashboardItem(dashboardId, item.id, filters),
+    queryFn: () => queryDashboardItem(dashboardId, item.id, filters),
+    placeholderData: (previous) => previous,
   });
 
   return (
