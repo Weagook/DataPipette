@@ -285,10 +285,9 @@ function DashboardEditor(props: DashboardEditorProps) {
           <Link className="back-link" to="/dashboards">
             <ArrowLeft size={16} /> {t("All dashboards")}
           </Link>
-          <span className="eyebrow">{t("Private workspace")}</span>
-          <h1>{t(props.dashboardId ? "Compose the dashboard" : "Create a dashboard")}</h1>
+          <h1>{t(props.dashboardId ? "Edit dashboard" : "New dashboard")}</h1>
           <p>
-            {t("Arrange governed charts from multiple datasets. The saved 12-column layout is the same document every client reads.")}
+            {t("Place charts on the grid and drag their corners to resize them.")}
           </p>
         </div>
         <div className="heading-actions">

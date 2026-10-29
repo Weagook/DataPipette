@@ -126,11 +126,9 @@ function GovernanceAdmin() {
     <div className="page-stack governance-page">
       <header className="page-heading">
         <div>
-          <span className="eyebrow">{t("Operational guardrails")}</span>
           <h1>{t("Governance")}</h1>
-          <p>{t("Control execution limits and trace sensitive activity without leaving the analytics workspace.")}</p>
+          <p>{t("Limits that keep queries safe, and a log of important actions.")}</p>
         </div>
-        <span className="trust-pill"><ShieldCheck size={16} /> {t("Admin-only control plane")}</span>
       </header>
       <nav className="access-tabs" aria-label={t("Governance areas")}>
         <button className={tab === "policy" ? "active" : ""} onClick={() => setTab("policy")} type="button"><SlidersHorizontal size={16} /> {t("Query safety")}</button>

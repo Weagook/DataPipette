@@ -787,7 +787,6 @@ function StudioHeading({
         <Link className="back-link" to="/datasets">
           <ArrowLeft size={15} /> {t("Datasets")}
         </Link>
-        <span className="eyebrow">{t("Dataset Studio")}</span>
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
