@@ -11,6 +11,7 @@ export type InterfaceLocale = "en" | "ru";
 type Replacements = Record<string, string | number>;
 
 const russian: Record<string, string> = {
+  "Last check failed": "Проверка не прошла",
   "Ask an administrator to connect a database for you.": "Попросите администратора подключить базу данных.",
   "Build a chart": "Постройте диаграмму",
   "Collect charts on one page and share it.": "Соберите диаграммы на одной странице и поделитесь ею.",

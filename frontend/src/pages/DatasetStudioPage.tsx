@@ -196,7 +196,7 @@ function NewStudio() {
             </p>
           </div>
         </div>
-        <div className="studio-form-grid">
+        <div className="studio-form-grid single">
           <label>
             <span>{t("Dataset name")}</span>
             <input
@@ -206,25 +206,36 @@ function NewStudio() {
               autoFocus
             />
           </label>
-          <label>
-            <span>{t("PostgreSQL connection")}</span>
-            <select
-              value={connectionId}
-              onChange={(event) => {
-                setConnectionId(event.target.value);
-                setDefinition(mode === "sql" ? emptySqlDefinition() : null);
-              }}
-              disabled={connections.isPending}
-            >
-              <option value="">{t("Select a connection")}</option>
-              {connections.data?.data.map((connection) => (
-                <option key={connection.id} value={connection.id}>
-                  {connection.name} · {connection.database_name}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
+        <fieldset className="connection-picker">
+          <legend>{t("PostgreSQL connection")}</legend>
+          {connections.data?.data.length === 0 && (
+            <p className="connection-picker-empty">{t("Ask an administrator to connect a database for you.")}</p>
+          )}
+          <div className="connection-choices">
+            {connections.data?.data.map((connection) => (
+              <label key={connection.id} className={connectionId === connection.id ? "selected" : ""}>
+                <input
+                  type="radio"
+                  name="dataset-connection"
+                  checked={connectionId === connection.id}
+                  onChange={() => {
+                    setConnectionId(connection.id);
+                    setDefinition(mode === "sql" ? emptySqlDefinition() : null);
+                  }}
+                />
+                <span><Database size={17} /></span>
+                <span>
+                  <strong>{connection.name}</strong>
+                  <small>{connection.database_name} · {connection.host}</small>
+                </span>
+                {connection.last_test_succeeded === false && (
+                  <span className="connection-choice-status">{t("Last check failed")}</span>
+                )}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <div className="mode-cards" role="radiogroup" aria-label={t("Dataset mode")}>
           <button
             className={`${mode === "canvas" ? "selected" : ""} canvas-mode-option`}
