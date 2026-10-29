@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, MoreHorizontal, RefreshCw, Share2 } from "lucide-react";
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CalendarClock, RefreshCw, Share2 } from "lucide-react";
+import { useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 
 import { DashboardItemCard } from "../components/DashboardItemCard";
@@ -13,11 +14,19 @@ export function DashboardDetailPage() {
   const { locale, t } = useI18n();
   const user = useOutletContext<CurrentUser>();
   const { dashboardId = "" } = useParams();
+  const queryClient = useQueryClient();
+  const [checkedAt, setCheckedAt] = useState(() => new Date());
   const dashboard = useQuery({
     queryKey: queryKeys.dashboard(dashboardId),
     queryFn: () => getDashboard(dashboardId),
     enabled: Boolean(dashboardId),
   });
+  // The layout and every chart item share the ["dashboard", id] key prefix.
+  const refreshing = useIsFetching({ queryKey: queryKeys.dashboard(dashboardId) }) > 0;
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(dashboardId) });
+    setCheckedAt(new Date());
+  };
 
   if (dashboard.isPending) return <FullPageStatus label={t("Opening dashboard")} />;
   if (dashboard.isError) return <InlineError message={problemMessage(dashboard.error)} onRetry={() => void dashboard.refetch()} />;
@@ -27,11 +36,18 @@ export function DashboardDetailPage() {
     <div className="page-stack dashboard-detail">
       <Link className="back-link" to="/dashboards"><ArrowLeft size={16} /> {t("All dashboards")}</Link>
       <header className="page-heading dashboard-titlebar">
-        <div><h1>{dashboard.data.name}</h1><p><CalendarClock size={15} /> {t("Updated {date} · revision {revision}", { date: formatDateTime(dashboard.data.updated_at, locale), revision: dashboard.data.revision })}</p></div>
+        <div><h1>{dashboard.data.name}</h1><p><CalendarClock size={15} /> {t("Charts checked at {time}", { time: checkedAt.toLocaleTimeString(locale === "ru" ? "ru-RU" : "en-GB", { hour: "2-digit", minute: "2-digit" }) })} · {t("Dashboard changed {date}", { date: formatDateTime(dashboard.data.updated_at, locale) })}</p></div>
         <div className="heading-actions">
-          <button className="button secondary" type="button" onClick={() => void dashboard.refetch()}><RefreshCw size={16} /> {t("Refresh view")}</button>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={refreshing}
+            onClick={() => void refresh()}
+            title={t("Shows the latest loaded data. Data is loaded from the database on the dataset page or by its schedule.")}
+          >
+            <RefreshCw size={16} className={refreshing ? "spin" : undefined} /> {t("Refresh charts")}
+          </button>
           {(user.role === "admin" || dashboard.data.owner_id === user.id) && <Link className="button secondary" to={`/dashboards/${dashboard.data.id}/edit`}><Share2 size={16} /> {t("Edit & share")}</Link>}
-          <button className="icon-button bordered" type="button" disabled aria-label={t("More dashboard actions")}><MoreHorizontal size={18} /></button>
         </div>
       </header>
       {items.length > 0 ? (

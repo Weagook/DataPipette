@@ -1250,6 +1250,10 @@ const russian: Record<string, string> = {
   "Edit": "Изменить",
   "All rows are shown.": "Показаны все строки.",
   "Changes take effect when you press Apply.": "Изменения вступят в силу после нажатия «Применить фильтры».",
+  "Charts checked at {time}": "Диаграммы проверены в {time}",
+  "Dashboard changed {date}": "дашборд изменён {date}",
+  "Refresh charts": "Обновить диаграммы",
+  "Shows the latest loaded data. Data is loaded from the database on the dataset page or by its schedule.": "Показывает последние загруженные данные. Сами данные загружаются из базы на странице датасета или по расписанию.",
 };
 
 interface I18nValue {
