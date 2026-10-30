@@ -148,6 +148,8 @@ cd /opt/DataPipette
 deploy/compose/new-env.sh --domain bi.example.com --admin-email you@example.com --admin-name "Your Name" --timezone Europe/Moscow
 ```
 
+To run a published release instead of building from source, add `--release` with its version, for example `--release 0.1.0` (see [Releases and upgrades](#releases-and-upgrades)).
+
 The script writes `.env` with mode `600` and unique random values for the database password, object-storage credentials, connection-encryption key, and first administrator password. It prints no secret and never overwrites an existing file. Copy `.env` to a password manager now: the encryption key cannot be recovered, and backups deliberately do not contain it.
 
 Start the installation:
@@ -175,6 +177,32 @@ EOF
 Run the same command once by hand to confirm it works, then check `/var/log/datapipette-backup.log` the next morning.
 
 Copy the backups to another machine as well; a backup on the same disk does not survive the loss of that disk.
+
+### Releases and upgrades
+
+Each [release](https://github.com/Weagook/DataPipette/releases) publishes ready images for `linux/amd64` and `linux/arm64`: `ghcr.io/weagook/datapipette-backend` and `ghcr.io/weagook/datapipette-frontend`. They are tagged with the exact version (`0.1.0`), the minor line (`0.1`), and `latest`. An installation uses them when `.env` contains:
+
+```bash
+DATAPIPETTE_BACKEND_IMAGE=ghcr.io/weagook/datapipette-backend
+DATAPIPETTE_FRONTEND_IMAGE=ghcr.io/weagook/datapipette-frontend
+DATAPIPETTE_IMAGE_TAG=0.1.0
+```
+
+Without these lines the images are built from the checked-out source, as before. Pin an exact version in production, so that an upgrade happens only when you decide.
+
+To upgrade:
+
+1. Read the [changelog](../CHANGELOG.md) for every version between yours and the new one, including any manual steps.
+2. Create a backup: `DATAPIPETTE_COMPOSE_FILES=deploy/compose/compose.yaml:deploy/compose/compose.production.yaml deploy/compose/backup.sh create /var/backups/datapipette`.
+3. Check out the new tag, so that Compose files and scripts match the images (`git fetch --tags && git checkout vX.Y.Z`), and set `DATAPIPETTE_IMAGE_TAG=X.Y.Z` in `.env`.
+4. Pull and start. Migrations run automatically before the application starts:
+
+   ```bash
+   docker compose --env-file .env -f deploy/compose/compose.yaml -f deploy/compose/compose.production.yaml pull
+   docker compose --env-file .env -f deploy/compose/compose.yaml -f deploy/compose/compose.production.yaml up -d --no-build --wait
+   ```
+
+Database migrations only move forward. To go back to an older version, restore the backup from step 2 with the older tag checked out and `DATAPIPETTE_IMAGE_TAG` set back.
 
 ### Capacity
 

@@ -4,14 +4,15 @@
 
 DataPipette is an API-first, snapshot-based BI platform for PostgreSQL. The backend is a headless product core; the official frontend is a client of the same public API used by integrations.
 
-The repository is a functional pre-alpha: the backend API, worker, scheduler, official frontend, generated TypeScript client, and one-command evaluation deployment are implemented, but there is no production release. `docs/ROADMAP.md` is the implementation-status reference. Do not describe planned behavior as implemented.
+The repository publishes early 0.x releases (`CHANGELOG.md`): the backend API, worker, scheduler, official frontend, generated TypeScript client, one-command evaluation deployment, and a single-server production overlay are implemented. `docs/ROADMAP.md` is the implementation-status reference. Do not describe planned behavior as implemented.
 
 ## Repository layout
 
 - `backend/` — the `datapipette` Python package (`src/datapipette/{domain,application,infrastructure,api}`), Alembic migrations, and pytest suite.
 - `frontend/` — the official React application.
 - `clients/typescript/` — the TypeScript API client generated from `docs/openapi.json`.
-- `deploy/` — Docker images and the Compose evaluation topology.
+- `deploy/` — Docker images, the Compose topology, and its production overlay.
+- `tools/` — the OpenAPI export and release version check.
 - `benchmarks/` — the reproducible reference benchmark and its reports.
 - `docs/` — product and technical documentation, ADRs, and the committed OpenAPI contract.
 

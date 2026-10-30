@@ -11,7 +11,7 @@
 
 DataPipette turns governed PostgreSQL data into reusable datasets, explorable tables, charts, dashboards, and exports. Analysts can work visually without writing SQL, advanced users can author read-only SQL datasets, and developers can use the backend as a standalone BI core through the same public API that powers the official React application.
 
-> **Status: functional pre-alpha.** The end-to-end evaluation stack is implemented and runnable, but DataPipette is not yet a production release. A reproducible performance baseline is published; optimization against it, backup and restore procedures, general API rate limiting, operational telemetry, and release-candidate security hardening remain on the roadmap.
+> **Status: early 0.x release.** DataPipette runs a single company's BI on one server, with automatic HTTPS, backups, health alerts, published images, and a security review ([changelog](CHANGELOG.md)). It is ready for pilots with a small team. Before 1.0, expect breaking changes between minor versions, and plan off-host backup copies, metrics, and SSO yourself.
 
 ## Product tour
 
@@ -115,7 +115,7 @@ Open [http://127.0.0.1:8080](http://127.0.0.1:8080) and sign in with the bootstr
 
 The Compose dependency graph applies migrations, initializes private object storage, creates the first administrator only when necessary, and starts the frontend gateway, API, worker, scheduler, metadata PostgreSQL, Redis, and MinIO. Repeating the command converges the installation without resetting the existing administrator.
 
-See the [deployment guide](docs/DEPLOYMENT.md) for secret generation, remote access, health checks, updates, source-database networking, and a single-server production installation with automatic HTTPS.
+See the [deployment guide](docs/DEPLOYMENT.md) for secret generation, remote access, health checks, source-database networking, a single-server production installation with automatic HTTPS, and installing or upgrading [published releases](https://github.com/Weagook/DataPipette/releases).
 
 ## Architecture
 
@@ -190,12 +190,11 @@ DataPipette currently targets a **single-company installation** whose business d
 - data sources other than PostgreSQL;
 - cross-connection joins or dataset-on-dataset dependencies;
 - write-back to source systems;
-- dashboard-wide filter mapping;
 - historical snapshot browsing or rollback;
 - enterprise SSO/OIDC;
 - Kubernetes or Helm packaging.
 
-The bundled Compose topology is designed for evaluation, not an internet-facing production rollout. Production use additionally requires TLS, managed or independently backed-up infrastructure, a secret manager, observability, capacity validation, and tested backup/restore procedures.
+`compose.yaml` alone is an evaluation installation. The [single-server production overlay](docs/DEPLOYMENT.md#production-on-one-server) adds automatic HTTPS, closed internal ports, required secrets, scheduled backups, and health alerts. Larger or regulated installations still need off-host backup replication, metrics, a secret manager, and high availability.
 
 ## Security
 
