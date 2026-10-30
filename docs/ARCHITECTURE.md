@@ -65,7 +65,7 @@ DataPipette/
 
 The React frontend and TypeScript API client remain independently buildable. The frontend consumes the packaged client so the official application and external integrations share one generated contract.
 
-The self-contained evaluation topology builds one backend image reused by the API, migrations, administrator bootstrap, worker, scheduler, and storage initialization, plus one Nginx image containing the static React build. Nginx is the sole browser entry point and proxies the public `/api` contract to FastAPI, preserving same-origin session and CSRF behavior. One-shot migration, storage, and bootstrap containers gate long-running services. Alone it is a single-host evaluation boundary. The production overlay ([ADR-0053](adr/0053-single-server-production-compose.md)) adds a Caddy TLS gateway in front of Nginx, removes every other host port, and runs the services in production mode; [the deployment guide](DEPLOYMENT.md) records the remaining single-host limits.
+The self-contained evaluation topology builds one backend image reused by the API, migrations, administrator bootstrap, worker, scheduler, and storage initialization, plus one Nginx image containing the static React build. Nginx is the sole browser entry point and proxies the public `/api` contract to FastAPI, preserving same-origin session and CSRF behavior. One-shot migration, storage, and bootstrap containers gate long-running services. Releases publish both images to GitHub Container Registry for `linux/amd64` and `linux/arm64` ([ADR-0055](adr/0055-versioned-releases-and-published-images.md)); without a release tag, Compose builds them from source. Alone it is a single-host evaluation boundary. The production overlay ([ADR-0053](adr/0053-single-server-production-compose.md)) adds a Caddy TLS gateway in front of Nginx, removes every other host port, and runs the services in production mode; [the deployment guide](DEPLOYMENT.md) records the remaining single-host limits.
 
 Dependencies point inward: infrastructure and API adapters may depend on application and domain interfaces; the domain must not depend on FastAPI, Celery, SQLAlchemy, Redis, S3, or DuckDB.
 
@@ -183,9 +183,9 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 
 ## Scaling model
 
-- API instances are stateless and horizontally scalable behind a load balancer.
+- API instances are stateless and horizontally scalable behind a load balancer; one container may run several Uvicorn worker processes (`DATAPIPETTE_API_WORKERS`).
 - Workers scale separately and may use queues for refresh, export, and maintenance workloads.
-- Separate crash-safe PostgreSQL advisory-lock namespaces enforce installation-wide concurrency budgets for interactive API queries and background refresh/export work across every process and host.
+- Separate crash-safe PostgreSQL advisory-lock namespaces enforce installation-wide concurrency budgets for interactive API queries and background refresh/export work across every process and host. Each API process refuses interactive admission attempts beyond the limit plus four before opening a database session, so bursts cannot exhaust PostgreSQL connections.
 - PostgreSQL, Redis, and S3 are shared production dependencies.
 - Local filesystem storage is a development/test adapter only.
 - Kubernetes is deferred, but no production behavior may rely on container-local durability.
@@ -194,7 +194,7 @@ User-provided values must be bound as parameters. Identifiers must resolve from 
 
 The reference workload targets a 5-million-row, 50-column snapshot on a 4 CPU / 8 GB RAM node, 20 active interactive users, and two concurrent heavy worker jobs. Benchmarks must publish dataset shape, hardware, configuration, and measured operations; row count alone is not a sufficient performance claim.
 
-The [2026-10-19 reference report](../benchmarks/REPORT_2026-10-19.md) is the first measured baseline. It did not meet the target: 5M × 50 exceeded the unchanged 30-minute refresh limit, while a 5M × 20 diagnostic snapshot completed and exposed full-object S3 materialization as the main interactive bottleneck. The benchmark is therefore evidence for the next optimization cycle, not a production-capacity claim.
+The [2026-10-19 reference report](../benchmarks/REPORT_2026-10-19.md) is the first measured baseline. It did not meet the target: 5M × 50 exceeded the unchanged 30-minute refresh limit, while a 5M × 20 diagnostic snapshot completed and exposed full-object S3 materialization as the main interactive bottleneck. The [2026-10-29 optimization report](../benchmarks/OPTIMIZATION_2026-10-29.md) then produced the 5M × 50 snapshot in 42.8 s through the columnar CSV stream, with the source colocated, and removed per-request S3 materialization with the verified cache. The [2026-10-30 capacity report](../benchmarks/CAPACITY_2026-10-30.md) measured about 80 concurrent dashboard users on a 4 CPU single-server installation with three API processes for small and medium datasets. The 20-client interactive workload on the 5M × 50 snapshot has not been re-measured, so the original reference target remains open.
 
 ## Technology direction
 

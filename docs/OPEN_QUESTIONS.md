@@ -32,13 +32,11 @@ These questions are intentionally unresolved. They are not permission to invent 
 
 ## Security and operations
 
-- Define production installation-key storage and rotation; evaluation key handling for backups is defined in [ADR-0047](adr/0047-compose-backup-and-restore.md).
+- Decide whether production installations need a secret manager or KMS for the installation key; rotation and `.env`-based storage are implemented ([ADR-0053](adr/0053-single-server-production-compose.md)).
 - Define account recovery beyond the implemented first-administrator bootstrap.
-- Define production disaster-recovery objectives, off-host retention, and point-in-time recovery beyond the daily evaluation backup in [ADR-0047](adr/0047-compose-backup-and-restore.md).
+- Define production disaster-recovery objectives, off-host retention, and point-in-time recovery beyond the daily on-host backup in [ADR-0047](adr/0047-compose-backup-and-restore.md).
 - Decide whether production adds customer-managed KMS keys and workload-identity/STS credential providers beyond the implemented optional `AES256` request and static secret settings.
-- Publish the private vulnerability-reporting contact before the first release.
 
 ## Project
 
 - Decide whether the official frontend's in-house styles should become a documented design system before accepting external UI contributions.
-- Establish release versioning and changelog automation before the first tagged release.

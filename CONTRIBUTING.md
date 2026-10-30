@@ -1,6 +1,6 @@
 # Contributing to DataPipette
 
-Thank you for your interest in DataPipette. The project is a functional pre-alpha: the evaluation stack runs end to end, but there is no production release yet. Focused changes aligned with the approved MVP are preferred over broad feature additions.
+Thank you for your interest in DataPipette. The project publishes early 0.x releases ([CHANGELOG.md](CHANGELOG.md)) that run a single-company installation on one server. Focused changes aligned with the approved MVP are preferred over broad feature additions.
 
 ## Before proposing a change
 

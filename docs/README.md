@@ -17,8 +17,11 @@ This directory is the source of truth for DataPipette's product and technical de
 11. [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) — decisions intentionally left unresolved.
 12. [GIT_WORKFLOW.md](GIT_WORKFLOW.md) — branch, commit, review, and local planning conventions.
 13. [adr/](adr/README.md) — durable architecture decisions and their consequences.
-14. [openapi.json](openapi.json) — generated, reviewable API contract verified in CI.
-15. [TypeScript API client](../clients/typescript/README.md) — generated client, verification commands, and integration example.
+14. [SECURITY_REVIEW_2026-10-29.md](SECURITY_REVIEW_2026-10-29.md) — the release-candidate security review and accepted risks.
+15. [openapi.json](openapi.json) — generated, reviewable API contract verified in CI.
+16. [TypeScript API client](../clients/typescript/README.md) — generated client, verification commands, and integration example.
+
+Released versions and their upgrade notes are in [CHANGELOG.md](../CHANGELOG.md). Measured performance and capacity are in [benchmarks/](../benchmarks/README.md), most recently the [dashboard capacity report](../benchmarks/CAPACITY_2026-10-30.md).
 
 ## Documentation rules
 

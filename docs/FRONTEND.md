@@ -106,7 +106,7 @@ This baseline is not a WCAG conformance claim or a substitute for assistive-tech
 
 ## Visual direction
 
-The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal data accents, restrained borders, and compact typography. Cards are used only to group meaningful state. Charts share one accessible categorical palette and reserve amber/red for freshness or failure, never decoration. The DataPipette pipette/flow mark is reused from the repository artwork rather than introducing a second identity.
+The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal data accents, restrained borders, and readable type: body text and form controls use at least 13px, and every select shares one style with a centred value and its own chevron. Cards are used only to group meaningful state. Charts share one accessible categorical palette and reserve amber/red for freshness or failure, never decoration. The DataPipette pipette/flow mark is reused from the repository artwork rather than introducing a second identity.
 
 ## Server-state behavior
 
@@ -114,6 +114,7 @@ The interface uses a warm neutral canvas, dark ink navigation, precise blue/teal
 - Session restoration gates protected routes. A `401` clears cached protected data and returns to login without exposing raw server text.
 - The authenticated user projection is the source of truth for interface locale. A profile change updates the UI optimistically, persists through a CSRF-protected mutation, and rolls back if the API rejects it; browser storage is not used.
 - Each dashboard item has its own query, retry control, and failure boundary. One chart never blocks the rest of the dashboard.
+- A page keeps at most four chart queries in flight (the default installation-wide admission limit) and starts the next as one finishes, so a large dashboard does not provoke its own `503` retries.
 - Capacity exhaustion respects `Retry-After`; automatic retry remains bounded and visible.
 - Stale snapshot data remains renderable with a persistent warning and safe refresh-error metadata.
 - Mutations requiring CSRF read the non-HttpOnly CSRF cookie immediately before the request. Tokens and passwords are never persisted by the frontend.

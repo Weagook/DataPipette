@@ -291,7 +291,7 @@ Do not expose stack traces, SQL credentials, API token material, internal storag
 - `409` for state conflicts, including blocked breaking publication.
 - `422` for structured validation errors.
 - `429` for caller-specific rate or quota limits.
-- `503` for temporary installation capacity exhaustion or a required unavailable dependency; retryable interactive capacity responses include `Retry-After`.
+- `503` for temporary installation capacity exhaustion or a required unavailable dependency; retryable interactive capacity responses include `Retry-After`. A metadata PostgreSQL connection failure, such as exhausted connections, returns `503 service_temporarily_unavailable` with `Retry-After` instead of `500`.
 
 ## Pagination and limits
 
@@ -326,6 +326,7 @@ The rationale and bounds are recorded in [ADR-0028](adr/0028-private-chart-query
 - A dashboard may reference owned charts from different datasets, but it does not query, join, or calculate across those datasets. Every reference is validated and persisted as a normalized dependency in the same transaction as the JSONB definition.
 - `POST /api/v1/dashboards/{dashboard_id}/items/{item_id}/data:query` resolves the chart only from the current saved item and executes it through the existing bounded chart-query path. Its metadata includes the dashboard ID/revision, item ID, saved chart name/type, and chart, dataset, snapshot, and freshness fields. Presentation metadata lets constrained Viewers and headless clients render the saved visualization without direct chart-resource access.
 - Clients issue one request per item so loading, cancellation, retry, and safe errors remain independent. There is no bulk fan-out response and no request field that accepts a chart ID or arbitrary definition.
+- Definition version 2 adds up to five `filters`, each with an ID, label, kind (`values` or `date_range`), and explicit `(item_id, field_id)` targets validated against the active published contract when saved. The item query accepts an optional body `{"filters": [{"filter_id", "values"} | {"filter_id", "from", "to"}]}`; selections of filters that do not target the item are ignored, and invalid selections return `422 dashboard_filter_selection_invalid`. `GET /api/v1/dashboards/{dashboard_id}/filters/{filter_id}/values` lists up to 200 distinct values for a `values` filter with the same authorization as reading the dashboard ([ADR-0052](adr/0052-dashboard-filters.md)).
 - `GET|POST /api/v1/dashboards/{dashboard_id}/grants` and `DELETE /api/v1/dashboards/{dashboard_id}/grants/{grant_id}` manage additive account/group view grants. The existing `user` principal type represents a direct account identifier and accepts an active human or service account; group grants also apply through current service-account membership. Grant writes require CSRF and remain owner/administrator-only.
 - Shared active users, including `Viewer`, may read the saved layout and query only its saved aggregate items. They cannot replace the layout, manage grants, access dataset rows or exports, discover source metadata, or call direct chart resources through this permission. Unauthorized reads remain concealed as `404`.
 - Deletion and archival are intentionally absent until lifecycle behavior for referenced charts is accepted.
@@ -351,6 +352,7 @@ Mutable resources use optimistic concurrency, such as an opaque revision or ETag
 - Removed or renamed fields require a documented deprecation window.
 - Breaking changes require a new major API version or an approved migration strategy.
 - Generated client and contract tests must detect OpenAPI drift in CI.
+- Product releases ([CHANGELOG.md](../CHANGELOG.md)) are versioned separately from the `/api/v1` path. Before product version 1.0, a minor release may still change `/api/v1`, and its changelog section lists every such change.
 
 ## Generated TypeScript client
 
