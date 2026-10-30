@@ -10,7 +10,10 @@ usage() {
 Usage:
   deploy/compose/new-env.sh --domain <host name> --admin-email <email>
                             [--admin-name <name>] [--timezone <IANA zone>]
-                            [--output <path>]
+                            [--release <version>] [--output <path>]
+
+--release uses the published images of that version instead of building
+from source, for example --release 0.1.0.
 
 Writes <repository>/.env by default.
 USAGE
@@ -23,7 +26,7 @@ fail() {
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 output="$(cd "${script_dir}/../.." && pwd)/.env"
-domain="" admin_email="" admin_name="Administrator" timezone="UTC"
+domain="" admin_email="" admin_name="Administrator" timezone="UTC" release=""
 while [[ $# -gt 0 ]]; do
   [[ $# -ge 2 ]] || { usage; exit 2; }
   case "$1" in
@@ -31,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --admin-email) admin_email="$2" ;;
     --admin-name) admin_name="$2" ;;
     --timezone) timezone="$2" ;;
+    --release) release="${2#v}" ;;
     --output) output="$2" ;;
     *) usage; exit 2 ;;
   esac
@@ -40,6 +44,7 @@ done
 [[ "${domain}" =~ ^[A-Za-z0-9.-]+$ ]] || fail "--domain must be a host name such as bi.example.com"
 [[ "${admin_email}" == *@*.* ]] || fail "--admin-email must be an email address"
 [[ "${admin_name}" != *$'\n'* ]] || fail "--admin-name must be one line"
+[[ -z "${release}" || "${release}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "--release must be a version such as 0.1.0"
 [[ ! -e "${output}" ]] || fail "${output} already exists; move it away first"
 command -v openssl >/dev/null || fail "openssl is required"
 
@@ -66,6 +71,13 @@ DATAPIPETTE_S3_ACCESS_KEY_ID=datapipette-$(hex 6)
 DATAPIPETTE_S3_SECRET_ACCESS_KEY=$(hex 32)
 DATAPIPETTE_CONNECTION_ENCRYPTION_KEY=$(encryption_key)
 ENV
+if [[ -n "${release}" ]]; then
+  cat >>"${output}.partial" <<ENV
+DATAPIPETTE_BACKEND_IMAGE=ghcr.io/weagook/datapipette-backend
+DATAPIPETTE_FRONTEND_IMAGE=ghcr.io/weagook/datapipette-frontend
+DATAPIPETTE_IMAGE_TAG=${release}
+ENV
+fi
 mv "${output}.partial" "${output}"
 printf 'Wrote %s (mode 600).\n' "${output}"
 printf 'The first administrator signs in as %s with DATAPIPETTE_BOOTSTRAP_ADMIN_PASSWORD from that file.\n' "${admin_email}"

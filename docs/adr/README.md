@@ -82,3 +82,4 @@ ADRs record durable decisions and their consequences. They explain why the archi
 - [ADR-0052](0052-dashboard-filters.md): Dashboard filters mapped to chart fields
 - [ADR-0053](0053-single-server-production-compose.md): Single-server production Compose overlay
 - [ADR-0054](0054-host-health-checks-and-alerts.md): Host health checks and change-based alerts
+- [ADR-0055](0055-versioned-releases-and-published-images.md): Versioned releases and published images

@@ -1,7 +1,9 @@
 name: datapipette
 
+# Built from source by default. A release installation sets the image names to
+# ghcr.io/weagook/datapipette-backend and -frontend and the tag to the version.
 x-backend-image: &backend-image
-  image: datapipette/backend:${DATAPIPETTE_IMAGE_TAG:-local}
+  image: ${DATAPIPETTE_BACKEND_IMAGE:-datapipette/backend}:${DATAPIPETTE_IMAGE_TAG:-local}
 
 x-app-environment: &app-environment
   DATAPIPETTE_ENVIRONMENT: ${DATAPIPETTE_ENVIRONMENT:-development}
@@ -252,7 +254,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: datapipette/frontend:${DATAPIPETTE_IMAGE_TAG:-local}
+    image: ${DATAPIPETTE_FRONTEND_IMAGE:-datapipette/frontend}:${DATAPIPETTE_IMAGE_TAG:-local}
     build:
       context: ../..
       dockerfile: deploy/docker/frontend.Dockerfile

@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  # A manual run builds both images for both platforms without publishing,
+  # to check a release before tagging it.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PUBLISH: ${{ github.event_name == 'push' }}
+    steps:
+      - name: Check out the tagged revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check versions and changelog
+        run: |
+          if [[ "${PUBLISH}" == "true" ]]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="v$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          fi
+          python3 tools/check_release_version.py "${tag}"
+          echo "RELEASE_TAG=${tag}" >>"${GITHUB_ENV}"
+
+      - name: Prepare a multi-platform builder
+        run: |
+          docker run --privileged --rm tonistiigi/binfmt@sha256:1b804311fe87047a4c96d38b4b3ef6f62fca8cd125265917a9e3dc3c996c39e6 --install arm64
+          docker buildx create --name release --use
+
+      - name: Sign in to GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and publish images
+        run: |
+          version="${RELEASE_TAG#v}"
+          push=()
+          if [[ "${PUBLISH}" == "true" ]]; then push=(--push); fi
+          owner="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          for component in backend frontend; do
+            image="ghcr.io/${owner}/datapipette-${component}"
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --file "deploy/docker/${component}.Dockerfile" \
+              --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+              --label "org.opencontainers.image.version=${version}" \
+              --label "org.opencontainers.image.revision=${{ github.sha }}" \
+              --label "org.opencontainers.image.licenses=Apache-2.0" \
+              --tag "${image}:${version}" \
+              --tag "${image}:${version%.*}" \
+              --tag "${image}:latest" \
+              "${push[@]}" .
+          done
+
+      - name: Create the GitHub release
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          awk -v heading="## [${version}]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md >release-notes.md
+          gh release create "${RELEASE_TAG}" --title "DataPipette ${version}" --notes-file release-notes.md --verify-tag

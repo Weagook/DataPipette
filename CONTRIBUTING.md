@@ -157,6 +157,7 @@ Run the same essential checks as CI from the repository root:
 
 ```bash
 uv lock --check
+python3 tools/check_release_version.py "v$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
 uv run --package datapipette ruff format --check backend
 uv run --package datapipette ruff check backend
 uv run --package datapipette mypy
@@ -211,3 +212,18 @@ Do not open a public issue for a suspected vulnerability. Follow [SECURITY.md](S
 ## License of contributions
 
 By intentionally submitting a contribution for inclusion in DataPipette, you agree that it may be distributed under the Apache License 2.0, consistent with the repository license.
+
+## Releasing
+
+Releases follow [Semantic Versioning](https://semver.org/) and are recorded in [CHANGELOG.md](CHANGELOG.md).
+
+1. On a branch, set the same version in `pyproject.toml`, `backend/pyproject.toml`, `backend/src/datapipette/__init__.py`, `frontend/package.json`, and `clients/typescript/package.json`. Then add a dated `## [X.Y.Z] - YYYY-MM-DD` section at the top of `CHANGELOG.md`. List upgrade steps there whenever an upgrade needs more than pulling the new images.
+2. Check with `python3 tools/check_release_version.py vX.Y.Z` and merge after CI passes.
+3. Tag the merge commit on `main` and push the tag:
+
+   ```bash
+   git tag -a vX.Y.Z -m "DataPipette X.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+The `Release` workflow checks the versions again, builds `linux/amd64` and `linux/arm64` images, publishes `ghcr.io/weagook/datapipette-backend` and `ghcr.io/weagook/datapipette-frontend` as `X.Y.Z`, `X.Y`, and `latest`, and creates the GitHub release from the changelog section.

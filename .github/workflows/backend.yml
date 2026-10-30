@@ -10,7 +10,10 @@ on:
       - "deploy/compose/**"
       - "docs/openapi.json"
       - "pyproject.toml"
-      - "tools/export_openapi.py"
+      - "tools/**"
+      - "CHANGELOG.md"
+      - "frontend/package.json"
+      - "clients/typescript/package.json"
       - "uv.lock"
       - ".python-version"
       - ".github/workflows/backend.yml"
@@ -24,7 +27,10 @@ on:
       - "deploy/compose/**"
       - "docs/openapi.json"
       - "pyproject.toml"
-      - "tools/export_openapi.py"
+      - "tools/**"
+      - "CHANGELOG.md"
+      - "frontend/package.json"
+      - "clients/typescript/package.json"
       - "uv.lock"
       - ".python-version"
       - ".github/workflows/backend.yml"
@@ -85,6 +91,11 @@ jobs:
 
       - name: Test benchmark tooling
         run: uv run python -m unittest discover -s benchmarks/tests
+
+      - name: Check package versions and changelog
+        run: |
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          python3 tools/check_release_version.py "v${version}"
 
       - name: Check deployment scripts
         run: shellcheck deploy/compose/backup.sh deploy/compose/new-env.sh deploy/compose/healthcheck.sh

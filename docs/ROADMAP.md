@@ -90,6 +90,7 @@ Outcome: another application can securely embed DataPipette backend capabilities
 - [x] Host health checks with Telegram/webhook alerts and a dashboard-viewer capacity benchmark
 - Operational metrics dashboards (Prometheus/Grafana or similar)
 - [x] Threat-model review and release-candidate security hardening ([review](SECURITY_REVIEW_2026-10-29.md))
+- [x] Versioned releases with a changelog and published multi-platform images
 - [x] Single-server production Compose overlay with automatic HTTPS, closed internal ports, generated secrets, encryption-key rotation, and scheduled backups
 
 ## Phase 6 — Official frontend
