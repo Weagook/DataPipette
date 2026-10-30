@@ -784,7 +784,7 @@ def run_dashboard(args: argparse.Namespace) -> None:
             )
 
         pool = ThreadPoolExecutor(
-            max_workers=min(BROWSER_CONNECTIONS_PER_HOST, len(items)),
+            max_workers=min(args.parallel_charts, len(items)),
             thread_name_prefix=f"viewer-{viewer_id}",
         )
         barrier.wait()
@@ -872,6 +872,7 @@ def run_dashboard(args: argparse.Namespace) -> None:
         "warmup_seconds": args.warmup,
         "duration_seconds": args.duration,
         "browser_retries": args.browser_retries,
+        "parallel_charts": args.parallel_charts,
         "retried_attempts": sum(sample.scenario == "retried" for sample in samples),
         "dashboard_views": summarize_samples(views, args.duration),
         "requests": summarize_samples(requests, args.duration),
@@ -979,6 +980,13 @@ def parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--request-timeout", type=float, default=30.0)
     dashboard.add_argument("--seed", type=int, default=20261029)
     dashboard.add_argument("--browser-retries", type=int, choices=range(0, 6), default=2)
+    dashboard.add_argument(
+        "--parallel-charts",
+        type=int,
+        choices=range(1, BROWSER_CONNECTIONS_PER_HOST + 1),
+        default=4,
+        help="Chart queries one page keeps in flight (the frontend paces at 4)",
+    )
     dashboard.add_argument("--output")
     dashboard.set_defaults(func=run_dashboard)
 
