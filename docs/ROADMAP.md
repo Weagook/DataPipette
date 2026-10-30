@@ -27,7 +27,7 @@ Outcome: an administrator connects PostgreSQL and an analyst publishes and brows
 - [x] Publish a validated one-table definition through Celery
 - [x] Stream rows into validated local Parquet storage
 - [x] Query snapshot rows with DuckDB, typed filters, deterministic cursor pagination, and bounded responses
-- [x] Expose freshness and refresh errors through the headless API (official UI deferred until frontend scaffolding)
+- [x] Expose freshness and refresh errors through the headless API (official UI delivered in Phase 6)
 
 ## Phase 2 — Governed dataset engine
 
@@ -85,7 +85,8 @@ Outcome: another application can securely embed DataPipette backend capabilities
 - [x] Service accounts and scoped expiring/non-expiring API tokens (`dashboards:read` initial scope)
 - [x] Generated TypeScript client and service-token dashboard integration example
 - [x] Self-contained one-command evaluation Compose topology
-- Rate limiting, idempotency, optimistic concurrency, and deprecation policy
+- General API rate limiting and a documented deprecation policy (idempotency keys and optimistic ETags already protect job creation and document replacement)
+- Off-host backup replication
 - [x] Backup and restore procedures for the Compose installation (off-host replication and point-in-time recovery remain production work)
 - [x] Host health checks with Telegram/webhook alerts and a dashboard-viewer capacity benchmark
 - Operational metrics dashboards (Prometheus/Grafana or similar)

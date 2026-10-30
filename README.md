@@ -204,7 +204,7 @@ Do not report vulnerabilities in a public issue. Follow the repository [security
 
 ## Contributing
 
-DataPipette is pre-alpha, so focused changes aligned with the approved product boundary are preferred over broad feature additions. Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change.
+DataPipette is in early 0.x releases, so focused changes aligned with the approved product boundary are preferred over broad feature additions. Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change.
 
 ## License
 
