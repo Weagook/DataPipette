@@ -93,7 +93,7 @@ The report separates successful latency from `503` admission responses. Capacity
 
 The `dashboard` workload measures what people experience on a dashboard rather than single queries. Each virtual viewer repeats a browser's work:
 
-1. loads the dashboard layout, then queries every chart at once over at most six connections, the browser limit per host;
+1. loads the dashboard layout, then queries its charts with at most four in flight, as the official frontend paces them (`--parallel-charts 6` reproduces the browser's own six-connection limit without pacing);
 2. in about half of the views, picks random values for the dashboard's list filters and a whole month for date filters, sending each chart only the filters that target it;
 3. retries a chart twice, one second apart, after a `503` or other server error, as the official frontend does;
 4. pauses between views for a random time around `--think-time` seconds.

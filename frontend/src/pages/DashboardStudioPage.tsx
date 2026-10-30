@@ -63,6 +63,7 @@ import {
   removeItem,
   updateItem,
 } from "../lib/dashboardLayout";
+import { paceChartQuery } from "../lib/chartQueryPacing";
 import { formatDateTime } from "../lib/format";
 import { randomUuid } from "../lib/id";
 import { useI18n } from "../lib/i18n";
@@ -453,7 +454,7 @@ function TilePreview({ chart }: { chart?: Chart }) {
   const { t } = useI18n();
   const preview = useQuery({
     queryKey: queryKeys.chartPreview(chart?.id ?? "none", chart?.revision ?? 0),
-    queryFn: () => queryChart(chart!.id),
+    queryFn: ({ signal }) => paceChartQuery(() => queryChart(chart!.id), signal),
     enabled: Boolean(chart),
   });
   if (!chart || preview.isError)

@@ -3,6 +3,7 @@ import { AlertTriangle, Clock3, DatabaseZap, MoreHorizontal, RotateCcw } from "l
 import { lazy, Suspense } from "react";
 
 import { problemMessage, queryDashboardItem, type Dashboard } from "../lib/api";
+import { paceChartQuery } from "../lib/chartQueryPacing";
 import type { FilterSelection } from "../lib/dashboardFilters";
 import { formatDateTime, relativeTime } from "../lib/format";
 import { useI18n } from "../lib/i18n";
@@ -17,7 +18,7 @@ export function DashboardItemCard({ dashboardId, item, filters = [] }: { dashboa
   const { locale, t } = useI18n();
   const query = useQuery({
     queryKey: queryKeys.dashboardItem(dashboardId, item.id, filters),
-    queryFn: () => queryDashboardItem(dashboardId, item.id, filters),
+    queryFn: ({ signal }) => paceChartQuery(() => queryDashboardItem(dashboardId, item.id, filters), signal),
     placeholderData: (previous) => previous,
   });
 
